@@ -34,9 +34,6 @@ jobs:
       - name: Integration
         run: pnpm test:integration
 
-      - name: Install Playwright deps
-        run: pnpm exec playwright install --with-deps
-
       - name: E2E
         run: pnpm test:e2e
 
