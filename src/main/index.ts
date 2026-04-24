@@ -112,6 +112,12 @@ function installApplicationMenu() {
 
 function registerIpcHandlers() {
   ipcMain.handle('flowmaptool:openDocument', async () => {
+    const testOpenPath = process.env.FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH;
+    if (testOpenPath) {
+      const content = await readFile(testOpenPath, 'utf-8');
+      return { filePath: testOpenPath, content };
+    }
+
     const win = BrowserWindow.getFocusedWindow();
     const options: OpenDialogOptions = {
       properties: ['openFile'],

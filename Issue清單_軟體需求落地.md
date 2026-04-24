@@ -182,10 +182,12 @@
 ### ISSUE 3-4：大圖效能壓測
 - 類型：Performance
 - 優先級：P1
+- 狀態：已完成基本自動化壓測
 - 驗收：
-  - 500 nodes / 1000 edges fixture 可載入
-  - 基本操作不長時間凍結
-  - 壓測結果記錄在測試輸出或文件中
+  - 已新增 Playwright e2e fixture：500 nodes / 1000 edges 可載入
+  - 載入後檢查 500 個 node 與 1000 條 edge 均渲染到 DOM
+  - 載入後仍可點選 Root node，驗證基本互動沒有凍結
+  - 測試命令：`pnpm exec playwright test large-graph-performance`
 
 ---
 
