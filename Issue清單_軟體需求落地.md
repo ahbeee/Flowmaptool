@@ -18,7 +18,20 @@
 - 新專案 bootstrap（架構、檔案格式、版本策略）
 - Flow 邊的「選取/刪除」完整互動（舊清單只有描述，缺實作拆解）
 - 自動化測試基礎（Model + Layout + E2E + 匯出 smoke）
-- CI 與 release pipeline（讓你不需手動回歸）
+- Windows portable app / installer 打包
+- PNG 匯出完整視覺驗收
+- 500 nodes / 1000 edges 大圖壓測
+- 壞檔案、舊版本檔案、格式錯誤提示 UX
+- 更完整的手動 Edge 路由、避讓、拖拉線段固定路徑
+
+### A3. 明確不做（已由需求決策移除）
+
+- 搜尋節點內容
+- Node notes / off-canvas notes
+- Task 狀態（todo / doing / done）
+- Rich content（連結、圖片、清單、Markdown）
+- Outliner / 左側大綱視圖
+- GitHub Actions CI（已依需求移除，測試以本機執行為主）
 
 ---
 
@@ -43,7 +56,14 @@
 - 優先級：P0
 - 驗收：
   - `test:unit`、`test:integration`、`test:e2e` 可執行
-  - CI 可在 Windows runner 跑通
+  - 本機可自動跑完整回歸，不依賴手動逐項驗證
+
+### ISSUE 0-4：Windows portable app / installer 打包
+- 類型：Release
+- 優先級：P1
+- 驗收：
+  - 可在 Windows 產出 portable app 或 installer
+  - 打包後可啟動、開檔、存檔、匯出 PNG
 
 ---
 
@@ -116,6 +136,20 @@
   - 批次刪除後無孤兒邊
   - 仍可繼續編輯
 
+### ISSUE 2-6：手動 Edge 路由、避讓、拖拉線段
+- 類型：Feature
+- 優先級：P1
+- 驗收：
+  - 手動跨層或回接連線不應不必要地改變既有節點位置
+  - 連線路徑避免直接覆蓋節點
+  - 可拖拉線段調整路徑，並可 Reset Bend 回復自動路由
+
+### ISSUE 2-7：QuikFlow 級高階手動畫線效果
+- 類型：Feature
+- 優先級：P2
+- 驗收：
+  - 跨層回接、自動避讓與手動線路調整效果逐步對齊 QuikFlow
+
 ---
 
 ## EPIC 3：文件與輸出（P1）
@@ -126,37 +160,39 @@
 - 驗收：
   - 基本文件流程完整
 
-### ISSUE 3-2：PNG/PDF 匯出
+### ISSUE 3-2：PNG 匯出完整視覺驗收
 - 類型：Feature
 - 優先級：P1
 - 驗收：
-  - 可成功匯出並開啟
+  - 可成功匯出 PNG
+  - PNG 不裁切、不糊化，完整包含畫布內容
+  - 有自動化 smoke 測試與人工視覺驗收樣本
 
-### ISSUE 3-3：列印與列印預覽
+### ISSUE 3-3：壞檔案、舊版本檔案、格式錯誤提示 UX
 - 類型：Feature
 - 優先級：P1
 - 驗收：
-  - 預覽與實際輸出一致性可接受
+  - 開啟壞 JSON 時顯示可理解錯誤
+  - 開啟版本不符檔案時顯示可理解錯誤
+  - 開啟可 migration 的舊版檔案時正常升級
+
+### ISSUE 3-4：大圖效能壓測
+- 類型：Performance
+- 優先級：P1
+- 驗收：
+  - 500 nodes / 1000 edges fixture 可載入
+  - 基本操作不長時間凍結
+  - 壓測結果記錄在測試輸出或文件中
 
 ---
 
-## EPIC 4：內容與效率（P1）
+## EPIC 4：已取消內容功能（本階段不做）
 
-### ISSUE 4-1：搜尋（標題/內容）
-- 類型：Feature
-- 優先級：P1
-
-### ISSUE 4-2：Rich node content（分階段）
-- 類型：Feature
-- 優先級：P1
-
-### ISSUE 4-3：Interactive tasks
-- 類型：Feature
-- 優先級：P1
-
-### ISSUE 4-4：Notes（off-canvas）
-- 類型：Feature
-- 優先級：P1
+- 搜尋節點內容
+- Rich node content
+- Interactive tasks
+- Notes / off-canvas notes
+- Outliner / 左側大綱視圖
 
 ---
 
@@ -180,19 +216,18 @@
 - 驗收：
   - 建立節點、建立邊、刪邊、儲存重開全自動通過
 
-### ISSUE 5-4：CI Pipeline（Windows only）
-- 類型：DevOps
-- 優先級：P0
+### ISSUE 5-4：本機完整測試指令維護
+- 類型：Test
+- 優先級：P1
 - 驗收：
-  - PR 自動跑 lint + tests + build
-  - 失敗可回傳 log/截圖 artifact
+  - `pnpm test:all` 可涵蓋 lint、unit、integration、e2e
+  - 不依賴 GitHub Actions CI
 
 ---
 
 ## 建議里程碑
 
-- M1（1.5~2 週）：EPIC 0 + EPIC 1
-- M2（2~3 週）：EPIC 2 + EPIC 3-1
-- M3（1~2 週）：EPIC 3-2/3-3 + EPIC 5
-- M4（彈性）：EPIC 4
-
+- M1：EPIC 0 + EPIC 1
+- M2：EPIC 2 + EPIC 3-1
+- M3：PNG 視覺驗收 + 壞檔 UX + 大圖壓測 + 打包
+- M4：手動 Edge 路由與 QuikFlow 級高階線路效果

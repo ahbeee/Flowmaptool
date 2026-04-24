@@ -41,7 +41,7 @@
 - 架構：Desktop App（Electron）
 - 儲存：本機檔案（離線）
 - 格式：自有 JSON 檔案格式（副檔名 `.qflow`）
-- 編輯模式：Mind-map style flow editing + Outliner（後續）
+- 編輯模式：Mind-map style flow editing
 
 ### 4.2 Out of Scope（本階段不做）
 
@@ -50,6 +50,11 @@
 - 帳號系統 / 登入
 - 訂閱與付費牆
 - 行動版（iOS / Android）
+- 搜尋節點
+- Node notes / off-canvas notes
+- 任務狀態（todo / doing / done）
+- Rich content（連結、圖片、清單、Markdown）
+- Outliner / 左側大綱視圖
 
 ---
 
@@ -68,6 +73,10 @@
 - FR-006：邊可被選取（高亮狀態可見）。
 - FR-007：可刪除指定邊，不影響其他邊。
 - FR-008：大量交錯邊仍可操作（不因遮擋而無法點選）。
+- FR-025：手動建立跨層或回接連線時，需避免不必要地改變既有節點位置。
+- FR-026：手動連線需具備基本自動避讓，避免線段直接覆蓋節點。
+- FR-027：手動線段可拖拉調整路徑，並可用 Reset Bend 回復自動路由。
+- FR-028：保留 QuikFlow 級高階手動畫線路由效果作為長期對齊目標。
 
 ### 5.3 自動排版
 
@@ -79,22 +88,16 @@
 ### 5.4 編輯內容
 
 - FR-013：節點標題與基本文字內容編輯。
-- FR-014：節點支援 rich content（清單/連結/圖片）分階段交付。
-- FR-015：支援 notes（畫布外補充資訊）。
-- FR-016：支援任務節點狀態（todo / doing / done）。
 
 ### 5.5 輸出與分享
 
 - FR-017：匯出 PNG。
-- FR-018：匯出 PDF。
-- FR-019：列印（Print/Print Preview）。
-- FR-020：輸出品質需可讀（避免裁切與糊化）。
+- FR-020：PNG 輸出品質需可讀（避免裁切與糊化），並需完成視覺驗收。
 
 ### 5.6 一般編輯能力
 
 - FR-021：新建、開啟、儲存、另存。
 - FR-022：Undo / Redo。
-- FR-023：搜尋節點。
 - FR-024：主題樣式與模板（後續分期）。
 
 ---
@@ -105,7 +108,8 @@
 - NFR-002：500 節點 / 1000 邊情境可編輯，不可長時間凍結。
 - NFR-003：異常不得直接崩潰，需回報可恢復錯誤訊息。
 - NFR-004：檔案損壞或版本不符時，需可判斷並提示。
-- NFR-005：測試需可在無 GUI 互動情境下自動執行（CI 可跑）。
+- NFR-005：測試需可在本機自動執行，不依賴使用者手動逐項驗證。
+- NFR-006：需可產出 Windows portable app 或 installer。
 
 ---
 
@@ -115,16 +119,19 @@
 - AC-002：可選取單一邊並刪除，其他邊不受影響。
 - AC-003：新增節點、改連線後，版面自動更新且維持可讀性。
 - AC-004：可切換 Horizontal / Vertical 並即時生效。
-- AC-005：可匯出 PNG/PDF，內容不裁切且可讀。
+- AC-005：可匯出 PNG，內容不裁切且可讀，並完成視覺驗收。
 - AC-006：整體流程在 Windows 單機離線可完整運作。
+- AC-007：500 節點 / 1000 邊壓測可完成，且操作不長時間凍結。
+- AC-008：壞檔案、舊版本檔案、格式錯誤檔案會顯示可理解錯誤訊息。
+- AC-009：可產出 Windows portable app 或 installer。
 
 ---
 
 ## 8. 需求優先級
 
-- P0：FR-001~FR-012、FR-021~FR-023、AC-001~AC-004
-- P1：FR-017~FR-020（輸出品質）、FR-013~FR-016（rich content/tasks）
-- P2：模板、進階樣式、文字格式匯出（Markdown/Mermaid 等）
+- P0：FR-001~FR-013、FR-021~FR-022、AC-001~AC-004
+- P1：FR-017、FR-020、FR-025~FR-027、NFR-002、NFR-004、NFR-006、AC-005、AC-007~AC-009
+- P2：FR-024、FR-028、模板、進階樣式
 
 ---
 
@@ -138,4 +145,3 @@
   - “Export ... PDF and PNG”
   - “Multiple inputs and outputs per node”
   - “Horizontal / Vertical layout directions”
-
