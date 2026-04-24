@@ -158,6 +158,16 @@ function registerIpcHandlers() {
         filters?: FileFilter[];
       }
     ) => {
+      const testSavePath = process.env.FLOWMAPTOOL_TEST_SAVE_BINARY_PATH;
+      if (testSavePath) {
+        const normalizedPath = normalizeFilePath(
+          testSavePath,
+          inferExtension(payload.defaultPath, payload.filters)
+        );
+        const buffer = Buffer.from(payload.dataBase64, 'base64');
+        await writeFile(normalizedPath, buffer);
+        return { filePath: normalizedPath };
+      }
       const result = await showSaveDialogWithFocusedWindow({
         defaultPath: payload.defaultPath,
         filters: payload.filters || PNG_FILTER

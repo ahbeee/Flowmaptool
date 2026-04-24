@@ -1242,12 +1242,51 @@ export function App() {
     return { nodes, edges };
   }, [doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
 
-  const buildCanvasSvg = React.useCallback(() => {
+  const buildCanvasSvg = React.useCallback((fitToContent = false) => {
     const snapshot = buildSvgSnapshot();
+    let offsetX = 0;
+    let offsetY = 0;
+    let svgWidth = canvasSize.width;
+    let svgHeight = canvasSize.height;
+
+    if (fitToContent && (snapshot.nodes.length > 0 || snapshot.edges.length > 0)) {
+      const padding = 48;
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+
+      for (const node of snapshot.nodes) {
+        minX = Math.min(minX, node.x);
+        minY = Math.min(minY, node.y);
+        maxX = Math.max(maxX, node.x + node.width);
+        maxY = Math.max(maxY, node.y + node.height);
+      }
+
+      for (const edge of snapshot.edges) {
+        minX = Math.min(minX, edge.from.x, edge.to.x, edge.bend?.x ?? edge.from.x);
+        minY = Math.min(minY, edge.from.y, edge.to.y, edge.bend?.y ?? edge.from.y);
+        maxX = Math.max(maxX, edge.from.x, edge.to.x, edge.bend?.x ?? edge.to.x);
+        maxY = Math.max(maxY, edge.from.y, edge.to.y, edge.bend?.y ?? edge.to.y);
+      }
+
+      if (Number.isFinite(minX) && Number.isFinite(minY)) {
+        offsetX = padding - minX;
+        offsetY = padding - minY;
+        svgWidth = Math.ceil(maxX - minX + padding * 2);
+        svgHeight = Math.ceil(maxY - minY + padding * 2);
+      }
+    }
+
+    const shiftPoint = (point: Point): Point => ({ x: point.x + offsetX, y: point.y + offsetY });
     const edgeMarkup = snapshot.edges
       .map(
-        edge =>
-          `<path d="${edgePath(edge.from, edge.to, edge.lane, layoutDirection, edge.fromSize, edge.toSize, edge.forceBend, edge.bend)}" stroke="${activeTheme.edge}" stroke-width="2" fill="none" stroke-linecap="round" />`
+        edge => {
+          const from = shiftPoint(edge.from);
+          const to = shiftPoint(edge.to);
+          const bend = edge.bend ? shiftPoint(edge.bend) : undefined;
+          return `<path d="${edgePath(from, to, edge.lane, layoutDirection, edge.fromSize, edge.toSize, edge.forceBend, bend)}" stroke="${activeTheme.edge}" stroke-width="2" fill="none" stroke-linecap="round" />`;
+        }
       )
       .join('');
     const nodeMarkup = snapshot.nodes
@@ -1273,19 +1312,21 @@ export function App() {
                 : NODE_PADDING_X;
           const textY = Math.round(node.height / 2 + fontSize * 0.35);
           const textMarkup = `<text x="${textX}" y="${textY}" text-anchor="${textAnchor}" font-family="${escapeXml(style.fontFamily || DEFAULT_FONT_FAMILY)}, sans-serif" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" fill="${textColor}">${escapeXml(text)}</text>`;
+          const x = node.x + offsetX;
+          const y = node.y + offsetY;
           if (shape === 'underline') {
-            return `<g transform="translate(${node.x},${node.y})"><line x1="0" y1="${node.height - 1}" x2="${node.width}" y2="${node.height - 1}" stroke="${activeTheme.edge}" stroke-width="2" />${textMarkup}</g>`;
+            return `<g transform="translate(${x},${y})"><line x1="0" y1="${node.height - 1}" x2="${node.width}" y2="${node.height - 1}" stroke="${activeTheme.edge}" stroke-width="2" />${textMarkup}</g>`;
           }
           if (shape === 'plain') {
-            return `<g transform="translate(${node.x},${node.y})">${textMarkup}</g>`;
+            return `<g transform="translate(${x},${y})">${textMarkup}</g>`;
           }
-          return `<g transform="translate(${node.x},${node.y})"><rect rx="${radius}" ry="${radius}" width="${node.width}" height="${node.height}" fill="${fill}" stroke="${activeTheme.edge}" />${textMarkup}</g>`;
+          return `<g transform="translate(${x},${y})"><rect rx="${radius}" ry="${radius}" width="${node.width}" height="${node.height}" fill="${fill}" stroke="${activeTheme.edge}" />${textMarkup}</g>`;
         }
       )
       .join('');
     return [
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasSize.width}" height="${canvasSize.height}" viewBox="0 0 ${canvasSize.width} ${canvasSize.height}">`,
-      `<rect x="0" y="0" width="${canvasSize.width}" height="${canvasSize.height}" fill="${activeTheme.canvas}" />`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}">`,
+      `<rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" fill="${activeTheme.canvas}" />`,
       edgeMarkup,
       nodeMarkup,
       '</svg>'
@@ -2124,7 +2165,7 @@ export function App() {
 
   const exportPng = React.useCallback(async () => {
     try {
-      const snapshot = buildCanvasSvg();
+      const snapshot = buildCanvasSvg(true);
       const svgBlob = new Blob([snapshot], { type: 'image/svg+xml;charset=utf-8' });
       const svgUrl = URL.createObjectURL(svgBlob);
       const image = new Image();
@@ -2135,13 +2176,15 @@ export function App() {
       });
       const scale = 2;
       const canvas = document.createElement('canvas');
-      canvas.width = canvasSize.width * scale;
-      canvas.height = canvasSize.height * scale;
+      const exportWidth = image.naturalWidth || image.width || canvasSize.width;
+      const exportHeight = image.naturalHeight || image.height || canvasSize.height;
+      canvas.width = exportWidth * scale;
+      canvas.height = exportHeight * scale;
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Canvas context unavailable');
       context.scale(scale, scale);
       context.fillStyle = '#f8fafc';
-      context.fillRect(0, 0, canvasSize.width, canvasSize.height);
+      context.fillRect(0, 0, exportWidth, exportHeight);
       context.drawImage(image, 0, 0);
       URL.revokeObjectURL(svgUrl);
       const pngBlob = await new Promise<Blob>((resolve, reject) => {
