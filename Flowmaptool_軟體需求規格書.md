@@ -1,21 +1,21 @@
-# QuickFlow 軟體需求規格書（重啟版）
+# Flowmaptool 軟體需求規格書（重啟版）
 
 文件版本：v0.1  
 文件日期：2026-04-23  
-專案代號：`quickflow`  
+專案代號：`flowmaptool`  
 主要參考：[QuikFlow 官網](https://www.quikflow.app/en)
 
 ---
 
 ## 1. 文件目的
 
-本文件定義新專案 `quickflow` 的需求範圍、功能需求與驗收標準，作為開發與測試的唯一依據。
+本文件定義新專案 `flowmaptool` 的需求範圍、功能需求與驗收標準，作為開發與測試的唯一依據。
 
 ---
 
 ## 2. 產品定位
 
-`quickflow` 是一款 **Windows 單機桌面流程編輯器**，核心體驗是：
+`flowmaptool` 是一款 **Windows 單機桌面流程編輯器**，核心體驗是：
 
 - 用 mind map 一樣直覺的互動建立 flow
 - 非樹狀限制（支援匯流與回圈）

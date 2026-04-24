@@ -901,7 +901,7 @@ export function App() {
 
   const openDocument = React.useCallback(async () => {
     try {
-      const result = await window.quickflow.openDocument();
+      const result = await window.flowmaptool.openDocument();
       if (!result) return;
       const loaded = parsePersistedQflow(result.content);
       const id = `tab-${tabCounter}`;
@@ -929,7 +929,7 @@ export function App() {
   const saveDocument = React.useCallback(
     async (saveAs: boolean) => {
       try {
-        const result = await window.quickflow.saveDocument({
+        const result = await window.flowmaptool.saveDocument({
           filePath: activeTab.currentFilePath,
           content: serializePersistedQflow(activeTab),
           saveAs
@@ -2148,7 +2148,7 @@ export function App() {
         canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('PNG encode failed'))), 'image/png');
       });
       const bytes = new Uint8Array(await pngBlob.arrayBuffer());
-      const result = await window.quickflow.saveBinary({
+      const result = await window.flowmaptool.saveBinary({
         dataBase64: bytesToBase64(bytes),
         defaultPath: `${activeTab.title.replace('.qflow', '')}.png`,
         filters: PNG_FILTER
@@ -2163,7 +2163,7 @@ export function App() {
 
   const exportPdf = React.useCallback(async () => {
     try {
-      const result = await window.quickflow.exportPdfFromSvg({
+      const result = await window.flowmaptool.exportPdfFromSvg({
         svg: buildCanvasSvg(),
         defaultPath: `${activeTab.title.replace('.qflow', '')}.pdf`,
         width: canvasSize.width,
@@ -2179,7 +2179,7 @@ export function App() {
 
   const printDiagram = React.useCallback(async () => {
     try {
-      const result = await window.quickflow.printSvg({ svg: buildCanvasSvg() });
+      const result = await window.flowmaptool.printSvg({ svg: buildCanvasSvg() });
       setFileMessage(result.success ? 'Print completed' : 'Print canceled');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Print failed';
@@ -2204,7 +2204,7 @@ export function App() {
   );
 
   React.useEffect(() => {
-    return window.quickflow.onMenuAction(action => {
+    return window.flowmaptool.onMenuAction(action => {
       if (action === 'file:new') void createNewDocument();
       if (action === 'file:open') void openDocument();
       if (action === 'file:save') void saveDocument(false);

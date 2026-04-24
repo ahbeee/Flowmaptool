@@ -1,4 +1,4 @@
-name: quickflow-windows-ci
+name: flowmaptool-windows-ci
 
 on:
   push:
@@ -11,16 +11,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24.15.0
           cache: pnpm
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.3
 
       - name: Install
         run: pnpm install --frozen-lockfile=false

@@ -35,7 +35,7 @@ type MenuAction =
 function sendMenuAction(action: MenuAction) {
   const win = BrowserWindow.getFocusedWindow();
   if (!win || win.isDestroyed()) return;
-  win.webContents.send('quickflow:menuAction', action);
+  win.webContents.send('flowmaptool:menuAction', action);
 }
 
 function normalizeFilePath(filePath: string, extension: string) {
@@ -111,7 +111,7 @@ function installApplicationMenu() {
 }
 
 function registerIpcHandlers() {
-  ipcMain.handle('quickflow:openDocument', async () => {
+  ipcMain.handle('flowmaptool:openDocument', async () => {
     const win = BrowserWindow.getFocusedWindow();
     const options: OpenDialogOptions = {
       properties: ['openFile'],
@@ -127,7 +127,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(
-    'quickflow:saveDocument',
+    'flowmaptool:saveDocument',
     async (_event, payload: { filePath: string | null; content: string; saveAs?: boolean }) => {
       const win = BrowserWindow.getFocusedWindow();
       let targetPath = payload.filePath;
@@ -149,7 +149,7 @@ function registerIpcHandlers() {
   );
 
   ipcMain.handle(
-    'quickflow:saveBinary',
+    'flowmaptool:saveBinary',
     async (
       _event,
       payload: {
@@ -174,7 +174,7 @@ function registerIpcHandlers() {
   );
 
   ipcMain.handle(
-    'quickflow:exportPdfFromSvg',
+    'flowmaptool:exportPdfFromSvg',
     async (
       _event,
       payload: {
@@ -208,7 +208,7 @@ function registerIpcHandlers() {
   );
 
   ipcMain.handle(
-    'quickflow:printSvg',
+    'flowmaptool:printSvg',
     async (_event, payload: { svg: string }) => {
       const printWindow = await createPrintWindowWithSvg(payload.svg);
       try {
@@ -244,7 +244,7 @@ function createWindow() {
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (isDev && devServerUrl) {
     win.loadURL(devServerUrl);
-    if (process.env.QUICKFLOW_OPEN_DEVTOOLS === '1') {
+    if (process.env.FLOWMAPTOOL_OPEN_DEVTOOLS === '1') {
       win.webContents.openDevTools({ mode: 'detach' });
     }
     return;

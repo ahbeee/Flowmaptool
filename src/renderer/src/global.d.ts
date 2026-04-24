@@ -2,7 +2,7 @@ export {};
 
 declare global {
   interface Window {
-    quickflow: {
+    flowmaptool: {
       versions: {
         chrome: string;
         electron: string;
