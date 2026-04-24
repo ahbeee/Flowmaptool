@@ -1,0 +1,53 @@
+name: quickflow-windows-ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit
+        run: pnpm test:unit
+
+      - name: Integration
+        run: pnpm test:integration
+
+      - name: Install Playwright deps
+        run: pnpm exec playwright install --with-deps
+
+      - name: E2E
+        run: pnpm test:e2e
+
+      - name: Build
+        run: pnpm build
+
+      - name: Upload playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report
+            test-results
