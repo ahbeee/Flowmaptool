@@ -174,10 +174,13 @@
 ### ISSUE 3-3：壞檔案、舊版本檔案、格式錯誤提示 UX
 - 類型：Feature
 - 優先級：P1
+- 狀態：已完成基本錯誤提示與 legacy migration 驗證
 - 驗收：
-  - 開啟壞 JSON 時顯示可理解錯誤
-  - 開啟版本不符檔案時顯示可理解錯誤
+  - 開啟壞 JSON 時顯示可理解錯誤，且保留目前文件不被覆蓋
+  - 開啟非 Flowmaptool JSON 時顯示可理解錯誤
+  - 開啟未來版本檔案時顯示可理解錯誤
   - 開啟可 migration 的舊版檔案時正常升級
+  - 測試命令：`pnpm exec playwright test tests/e2e/open-file-errors.spec.ts`
 
 ### ISSUE 3-4：大圖效能壓測
 - 類型：Performance

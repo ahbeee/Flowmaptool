@@ -111,6 +111,23 @@ select {
   background: #f8fafc;
 }
 
+.file-status {
+  align-self: flex-start;
+  max-width: min(900px, 100%);
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.file-status-error {
+  border-color: #fca5a5;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
 .canvas-panel {
   min-height: 560px;
   flex: 1;

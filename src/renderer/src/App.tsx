@@ -14,6 +14,7 @@ import {
   updateSettings,
   upsertTag,
   validateEdge,
+  SCHEMA_VERSION,
   type FlowEdge,
   type FlowTag,
   type FlowDoc,
@@ -271,17 +272,58 @@ function sanitizeEdgeBendMap(value: unknown, validEdgeIds: Set<string>): EdgeBen
   return result;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseJsonFile(raw: string): unknown {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error('The selected file is not valid JSON.');
+  }
+}
+
+function assertSupportedFileVersion(value: unknown) {
+  if (!isRecord(value)) return;
+  const version = value.schemaVersion;
+  if (typeof version === 'number' && version > SCHEMA_VERSION) {
+    throw new Error('This file was created by a newer Flowmaptool version.');
+  }
+}
+
+function assertFlowDocShape(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
+    throw new Error('The selected file is not a Flowmaptool document.');
+  }
+}
+
+function getPersistedSourceDoc(parsed: unknown): { sourceDoc: unknown; rawUi?: PersistedUiState } {
+  if (!isRecord(parsed)) {
+    throw new Error('The selected file is not a Flowmaptool document.');
+  }
+
+  assertSupportedFileVersion(parsed);
+  if ('doc' in parsed) {
+    const sourceDoc = parsed.doc;
+    if (!isRecord(sourceDoc)) {
+      throw new Error('The selected file is not a Flowmaptool document.');
+    }
+    assertSupportedFileVersion(sourceDoc);
+    assertFlowDocShape(sourceDoc);
+    return { sourceDoc, rawUi: isRecord(parsed.ui) ? (parsed.ui as PersistedUiState) : undefined };
+  }
+
+  assertFlowDocShape(parsed);
+  return { sourceDoc: parsed };
+}
+
 function parsePersistedQflow(raw: string): { doc: FlowDoc; ui: PersistedUiState } {
-  const parsed = JSON.parse(raw) as unknown;
-  const maybeWrapper = parsed as Partial<PersistedQflowFile>;
-  const sourceDoc =
-    parsed && typeof parsed === 'object' && 'doc' in (parsed as Record<string, unknown>)
-      ? maybeWrapper.doc
-      : parsed;
+  const parsed = parseJsonFile(raw);
+  const { sourceDoc, rawUi } = getPersistedSourceDoc(parsed);
   const doc = ensureDocHasNode(deserialize(JSON.stringify(sourceDoc)));
   const validNodeIds = new Set(doc.nodes.map(node => node.id));
   const validEdgeIds = new Set(doc.edges.map(edge => edge.id));
-  const rawUi = maybeWrapper?.ui;
   const layoutDirection = rawUi?.layoutDirection === 'vertical' ? 'vertical' : 'horizontal';
   const nodeOffsetsByDirection: NodeOffsetsByDirection = {
     horizontal: sanitizeNodeOffsetMap(rawUi?.nodeOffsetsByDirection?.horizontal, validNodeIds),
@@ -2560,6 +2602,16 @@ export function App() {
           {activeTab.toolbarVisible ? '▧' : '▨'}
         </button>
       </header>
+
+      {fileMessage !== 'Ready' ? (
+        <div
+          className={fileMessage.includes('failed') || fileMessage.includes('blocked') ? 'file-status file-status-error' : 'file-status'}
+          data-testid="file-status"
+          role="status"
+        >
+          {fileMessage}
+        </div>
+      ) : null}
 
       <section className="panel canvas-panel">
         <div className="canvas-workspace">
