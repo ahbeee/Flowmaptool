@@ -447,12 +447,24 @@ function edgeIntersectsNodeCorridor(
   toId: NodeId,
   nodeBoxes: Map<NodeId, NodeBox>
 ) {
+  return edgeCorridorObstacleBoxes(from, to, direction, fromId, toId, nodeBoxes).length > 0;
+}
+
+function edgeCorridorObstacleBoxes(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>
+): NodeBox[] {
   const minX = Math.min(from.x, to.x);
   const maxX = Math.max(from.x, to.x);
   const minY = Math.min(from.y, to.y);
   const maxY = Math.max(from.y, to.y);
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
+  const obstacles: NodeBox[] = [];
 
   for (const [nodeId, box] of nodeBoxes.entries()) {
     if (nodeId === fromId || nodeId === toId) continue;
@@ -466,7 +478,7 @@ function edgeIntersectsNodeCorridor(
       const corridorBottom = maxY + 14;
       const intersectsX = box.left < corridorRight && box.right > corridorLeft;
       const intersectsY = box.top < corridorBottom && box.bottom > corridorTop;
-      if (intersectsX && intersectsY) return true;
+      if (intersectsX && intersectsY) obstacles.push(box);
       continue;
     }
 
@@ -478,10 +490,58 @@ function edgeIntersectsNodeCorridor(
     const corridorRight = maxX + 14;
     const intersectsX = box.left < corridorRight && box.right > corridorLeft;
     const intersectsY = box.top < corridorBottom && box.bottom > corridorTop;
-    if (intersectsX && intersectsY) return true;
+    if (intersectsX && intersectsY) obstacles.push(box);
   }
 
-  return false;
+  return obstacles;
+}
+
+function computeAutoEdgeBend(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>
+): EdgeBend | undefined {
+  const obstacles = edgeCorridorObstacleBoxes(from, to, direction, fromId, toId, nodeBoxes);
+  const isBackEdge = direction === 'horizontal' ? to.x < from.x : to.y < from.y;
+  if (!isBackEdge && obstacles.length === 0) return undefined;
+
+  const midpoint = edgeMidpoint(from, to);
+  const clearance = 48;
+
+  if (direction === 'horizontal') {
+    const top = obstacles.length > 0
+      ? Math.min(...obstacles.map(box => box.top), from.y, to.y)
+      : Math.min(from.y, to.y);
+    const bottom = obstacles.length > 0
+      ? Math.max(...obstacles.map(box => box.bottom), from.y, to.y)
+      : Math.max(from.y, to.y);
+    const upperY = top - clearance;
+    const lowerY = bottom + clearance;
+    const y = isBackEdge && obstacles.length === 0
+      ? upperY
+      : Math.abs(midpoint.y - upperY) <= Math.abs(midpoint.y - lowerY)
+        ? upperY
+        : lowerY;
+    return { x: midpoint.x, y };
+  }
+
+  const left = obstacles.length > 0
+    ? Math.min(...obstacles.map(box => box.left), from.x, to.x)
+    : Math.min(from.x, to.x);
+  const right = obstacles.length > 0
+    ? Math.max(...obstacles.map(box => box.right), from.x, to.x)
+    : Math.max(from.x, to.x);
+  const leftX = left - clearance;
+  const rightX = right + clearance;
+  const x = isBackEdge && obstacles.length === 0
+    ? leftX
+    : Math.abs(midpoint.x - leftX) <= Math.abs(midpoint.x - rightX)
+      ? leftX
+      : rightX;
+  return { x, y: midpoint.y };
 }
 
 function edgePath(
@@ -495,20 +555,7 @@ function edgePath(
   manualBend?: EdgeBend
 ): string {
   if (manualBend) {
-    const midpoint = edgeMidpoint(from, to);
-    const dx = manualBend.x - midpoint.x;
-    const dy = manualBend.y - midpoint.y;
-    const maxPrimary = Math.max(72, Math.abs(to.x - from.x) * 0.4);
-    const maxSecondary = Math.max(84, Math.abs(to.y - from.y) + 36);
-    const clampedDx =
-      direction === 'horizontal'
-        ? clamp(dx, -maxPrimary, maxPrimary)
-        : clamp(dx, -maxSecondary, maxSecondary);
-    const clampedDy =
-      direction === 'horizontal'
-        ? clamp(dy, -maxSecondary, maxSecondary)
-        : clamp(dy, -maxPrimary, maxPrimary);
-    return `M ${from.x} ${from.y} Q ${midpoint.x + clampedDx} ${midpoint.y + clampedDy} ${to.x} ${to.y}`;
+    return `M ${from.x} ${from.y} Q ${manualBend.x} ${manualBend.y} ${to.x} ${to.y}`;
   }
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -1062,6 +1109,23 @@ export function App() {
     return map;
   }, [doc.edges, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
 
+  const autoEdgeBendMap = React.useMemo(() => {
+    const map = new Map<string, EdgeBend>();
+    for (const edge of doc.edges) {
+      if (edgeBends[edge.id]) continue;
+      if (!edgeForceBendMap.get(edge.id)) continue;
+      const fromPos = renderedPositionMap.get(edge.from);
+      const toPos = renderedPositionMap.get(edge.to);
+      if (!fromPos || !toPos) continue;
+      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const bend = computeAutoEdgeBend(endpoints.from, endpoints.to, layoutDirection, edge.from, edge.to, nodeBoxMap);
+      if (bend) map.set(edge.id, bend);
+    }
+    return map;
+  }, [doc.edges, edgeBends, edgeForceBendMap, layoutDirection, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
+
   const edgeLaneMap = React.useMemo(() => {
     const laneByEdgeId = new Map<string, number>();
     const byFrom = new Map<NodeId, { id: string; delta: number; needsBend: boolean }[]>();
@@ -1269,7 +1333,7 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-      const bend = edgeBends[edge.id];
+      const bend = edgeBends[edge.id] || autoEdgeBendMap.get(edge.id);
       edges.push({
         id: edge.id,
         from: endpoints.from,
@@ -1282,7 +1346,7 @@ export function App() {
       });
     }
     return { nodes, edges };
-  }, [doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
+  }, [autoEdgeBendMap, doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
 
   const buildCanvasSvg = React.useCallback((fitToContent = false) => {
     const snapshot = buildSvgSnapshot();
@@ -2646,7 +2710,7 @@ export function App() {
                     const lane = edgeLaneMap.get(edge.id) || 0;
                     const forceBend = edgeForceBendMap.get(edge.id) || false;
                     const selected = edge.id === selectedEdgeId;
-                    const bend = edgeBends[edge.id];
+                    const bend = edgeBends[edge.id] || autoEdgeBendMap.get(edge.id);
                     return (
                       <path
                         key={edge.id}
@@ -2680,7 +2744,7 @@ export function App() {
                     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
                     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
                     const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-                    const bend = edgeBends[edge.id] || edgeMidpoint(endpoints.from, endpoints.to);
+                    const bend = edgeBends[edge.id] || autoEdgeBendMap.get(edge.id) || edgeMidpoint(endpoints.from, endpoints.to);
                     return (
                       <circle
                         key={`bend-${edge.id}`}

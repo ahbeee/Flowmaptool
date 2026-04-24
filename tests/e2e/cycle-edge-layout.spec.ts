@@ -45,6 +45,14 @@ test('manual cycle edge does not reflow existing node positions', async () => {
     const values = Array.from(d.matchAll(/-?\d+(?:\.\d+)?/g)).map(match => Number(match[0]));
     return { x: values[values.length - 2], y: values[values.length - 1] };
   });
+  const cycleEdgePath = await window.getByTestId('edge-path-e4').evaluate(element => {
+    const d = element.getAttribute('d') || '';
+    const values = Array.from(d.matchAll(/-?\d+(?:\.\d+)?/g)).map(match => Number(match[0]));
+    return { d, values };
+  });
+  expect(cycleEdgePath.d).toContain('Q');
+  expect(cycleEdgePath.values).toHaveLength(6);
+  expect(cycleEdgePath.values[3]).toBeLessThan(cycleEdgePath.values[1] - 20);
   const targetNodeMetrics = await window.getByTestId('node-n2').evaluate(element => {
     const node = element as HTMLElement;
     return {
@@ -78,6 +86,13 @@ test('manual cycle edge does not reflow existing node positions', async () => {
     const values = Array.from(d.matchAll(/-?\d+(?:\.\d+)?/g)).map(match => Number(match[0]));
     return { x: values[values.length - 2], y: values[values.length - 1] };
   });
+  const rootBackEdgePath = await window.getByTestId('edge-path-e5').evaluate(element => {
+    const d = element.getAttribute('d') || '';
+    const values = Array.from(d.matchAll(/-?\d+(?:\.\d+)?/g)).map(match => Number(match[0]));
+    return { d, values };
+  });
+  expect(rootBackEdgePath.d).toContain('Q');
+  expect(rootBackEdgePath.values).toHaveLength(6);
   const rootNodeMetrics = await window.getByTestId('node-n1').evaluate(element => {
     const node = element as HTMLElement;
     return {

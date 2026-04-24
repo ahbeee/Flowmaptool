@@ -141,10 +141,13 @@
 ### ISSUE 2-6：手動 Edge 路由、避讓、拖拉線段
 - 類型：Feature
 - 優先級：P1
+- 狀態：已完成第一階段
 - 驗收：
   - 手動跨層或回接連線不應不必要地改變既有節點位置
-  - 連線路徑避免直接覆蓋節點
+  - 連線路徑具備基本自動 bend 避讓，降低直接覆蓋節點的情況
   - 可拖拉線段調整路徑，並可 Reset Bend 回復自動路由
+  - 使用者手動 bend 優先於自動避讓 bend
+  - 測試命令：`pnpm exec playwright test tests/e2e/cycle-edge-layout.spec.ts tests/e2e/reset-bend.spec.ts tests/e2e/edge-bend-direction-persistence.spec.ts`
 
 ### ISSUE 2-7：QuikFlow 級高階手動畫線效果
 - 類型：Feature
