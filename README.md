@@ -25,6 +25,17 @@ pnpm test:e2e
 pnpm test:all
 ```
 
+## Windows packaging
+
+```powershell
+pnpm pack:win
+pnpm dist:win
+```
+
+- `pnpm pack:win` builds an unpacked Windows app for quick local checks.
+- `pnpm dist:win` builds x64 portable and NSIS installer artifacts under `release/`.
+- Current Windows artifacts are unsigned local builds.
+
 ## Current scope (Issue 0-1 bootstrap)
 
 - Electron app shell starts

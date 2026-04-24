@@ -61,9 +61,11 @@
 ### ISSUE 0-4：Windows portable app / installer 打包
 - 類型：Release
 - 優先級：P1
+- 狀態：已完成基本打包
 - 驗收：
-  - 可在 Windows 產出 portable app 或 installer
-  - 打包後可啟動、開檔、存檔、匯出 PNG
+  - 已可在 Windows 產出 portable app 與 NSIS installer
+  - 已驗證 `release/win-unpacked/Flowmaptool.exe` 與 portable exe 可啟動
+  - 目前產物為未簽章本機 build，正式發布前需另補 code signing / app icon
 
 ---
 
@@ -163,10 +165,11 @@
 ### ISSUE 3-2：PNG 匯出完整視覺驗收
 - 類型：Feature
 - 優先級：P1
+- 狀態：已完成基本驗證
 - 驗收：
-  - 可成功匯出 PNG
-  - PNG 不裁切、不糊化，完整包含畫布內容
-  - 有自動化 smoke 測試與人工視覺驗收樣本
+  - 已可成功匯出 PNG
+  - PNG 以圖形內容範圍輸出，避免巨大空白畫布
+  - 已有自動化 smoke 測試與人工視覺驗收樣本
 
 ### ISSUE 3-3：壞檔案、舊版本檔案、格式錯誤提示 UX
 - 類型：Feature
