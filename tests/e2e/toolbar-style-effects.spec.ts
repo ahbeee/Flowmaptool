@@ -8,6 +8,11 @@ function toolbarSelect(window: Page, label: string) {
     .locator('select');
 }
 
+async function chooseToolbarColor(window: Page, label: string, color: string) {
+  await window.getByLabel(label, { exact: true }).click();
+  await window.getByLabel(`${label} ${color}`).click();
+}
+
 test('node style toolbar applies visual changes to selected nodes', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
@@ -32,7 +37,7 @@ test('node style toolbar applies visual changes to selected nodes', async () => 
   const radius = await child.evaluate(element => parseFloat(getComputedStyle(element).borderTopLeftRadius));
   expect(radius).toBeGreaterThan(20);
 
-  await window.getByLabel('Node Color #f97316').click();
+  await chooseToolbarColor(window, 'Node Color', '#f97316');
   await expect(child).toHaveCSS('background-color', 'rgb(249, 115, 22)');
 
   await app.close();
@@ -69,7 +74,7 @@ test('line style toolbar applies default and selected edge changes', async () =>
   await expect(window.getByText('Mind Map Style')).toBeVisible();
   await toolbarSelect(window, 'Line Width').selectOption('4');
   await toolbarSelect(window, 'Line Type').selectOption('dashed');
-  await window.getByLabel('Line Color #ef4444').click();
+  await chooseToolbarColor(window, 'Line Color', '#ef4444');
 
   const root = window.getByTestId('node-n1');
   await root.click();
@@ -86,7 +91,7 @@ test('line style toolbar applies default and selected edge changes', async () =>
   await expect(window.getByText('Line Style', { exact: true })).toBeVisible();
   await toolbarSelect(window, 'Line Width').selectOption('2');
   await toolbarSelect(window, 'Line Type').selectOption('dotted');
-  await window.getByLabel('Line Color #0ea5e9').click();
+  await chooseToolbarColor(window, 'Line Color', '#0ea5e9');
 
   await expect(edge).toHaveCSS('stroke', 'rgb(14, 165, 233)');
   await expect(edge).toHaveCSS('stroke-dasharray', '1px, 6px');

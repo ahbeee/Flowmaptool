@@ -3131,14 +3131,31 @@ export function App() {
 
   const selectedFontFamily = sameSelectedValue(selectedNodes, style => style?.fontFamily);
   const selectedFontSize = sameSelectedValue(selectedNodes, style => style?.fontSize);
-  const selectedTextColor = sameSelectedValue(selectedNodes, style => style?.textColor);
-  const selectedBackgroundColor = sameSelectedValue(selectedNodes, style => style?.backgroundColor);
+  const selectedEffectiveTextColors = selectedNodes.map(node =>
+    node.style?.textColor || (rootNodeIds.has(node.id) ? activeTheme.rootText : activeTheme.nodeText)
+  );
+  const selectedTextColorMixed = new Set(selectedEffectiveTextColors).size > 1;
+  const selectedTextColor =
+    selectedEffectiveTextColors.length > 0 && !selectedTextColorMixed ? selectedEffectiveTextColors[0] : '';
+  const selectedEffectiveBackgroundColors = selectedNodes.map(node =>
+    node.style?.backgroundColor || (rootNodeIds.has(node.id) ? activeTheme.rootBg : activeTheme.nodeBg)
+  );
+  const selectedBackgroundColorMixed = new Set(selectedEffectiveBackgroundColors).size > 1;
+  const selectedBackgroundColor =
+    selectedEffectiveBackgroundColors.length > 0 && !selectedBackgroundColorMixed
+      ? selectedEffectiveBackgroundColors[0]
+      : '';
   const selectedTextAlign = sameSelectedValue(selectedNodes, style => style?.textAlign);
   const selectedShape = sameSelectedValue(selectedNodes, style => style?.shape);
   const selectedTagId = sameSelectedValue(selectedNodes, style => style?.tagId);
   const selectedEdgeWidth = sameSelectedEdgeValue(selectedStyleEdges, style => style?.width);
   const selectedEdgeLineType = sameSelectedEdgeValue(selectedStyleEdges, style => style?.lineType);
-  const selectedEdgeColor = sameSelectedEdgeValue(selectedStyleEdges, style => style?.color);
+  const selectedEffectiveEdgeColors = selectedStyleEdges.map(edge =>
+    effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle).color
+  );
+  const selectedEdgeColorMixed = new Set(selectedEffectiveEdgeColors).size > 1;
+  const selectedEdgeColor =
+    selectedEffectiveEdgeColors.length > 0 && !selectedEdgeColorMixed ? selectedEffectiveEdgeColors[0] : '';
   const isAnyBold = selectedNodes.some(node => node.style?.bold === true);
   const isAllBold = selectedNodes.length > 0 && selectedNodes.every(node => node.style?.bold === true);
   const isAnyItalic = selectedNodes.some(node => node.style?.italic === true);
@@ -3154,31 +3171,48 @@ export function App() {
     [doc.settings.tags]
   );
 
-  const renderColorSwatches = (
+  const renderColorDropdown = (
     label: string,
     value: string | '',
     fallback: string,
+    mixed: boolean,
     onSelect: (color: string) => void
-  ) => (
-    <div className="toolbar-field toolbar-field-block">
-      <span>{label}</span>
-      <div className="color-swatch-grid" role="group" aria-label={label}>
-        {COLOR_SWATCHES.map(color => {
-          const active = (value || fallback).toLowerCase() === color.toLowerCase();
-          return (
-            <button
-              key={color}
-              type="button"
-              className={active ? 'color-swatch color-swatch-active' : 'color-swatch'}
-              style={{ backgroundColor: color }}
-              aria-label={`${label} ${color}`}
-              onClick={() => onSelect(color)}
+  ) => {
+    const displayColor = value || fallback;
+    const isMixed = mixed;
+    return (
+      <div className="toolbar-field">
+        <span>{label}</span>
+        <details className="color-dropdown">
+          <summary aria-label={label}>
+            <span
+              className={isMixed ? 'color-preview color-preview-mixed' : 'color-preview'}
+              style={isMixed ? undefined : { backgroundColor: displayColor }}
             />
-          );
-        })}
+            <span className="color-dropdown-label">{isMixed ? 'Mixed' : displayColor.toUpperCase()}</span>
+          </summary>
+          <div className="color-swatch-grid" role="group" aria-label={`${label} options`}>
+            {COLOR_SWATCHES.map(color => {
+              const active = !isMixed && displayColor.toLowerCase() === color.toLowerCase();
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  className={active ? 'color-swatch color-swatch-active' : 'color-swatch'}
+                  style={{ backgroundColor: color }}
+                  aria-label={`${label} ${color}`}
+                  onClick={event => {
+                    onSelect(color);
+                    event.currentTarget.closest('details')?.removeAttribute('open');
+                  }}
+                />
+              );
+            })}
+          </div>
+        </details>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderEdgeStyleControls = (
     title: string,
@@ -3186,6 +3220,7 @@ export function App() {
     widthValue: number | '',
     lineTypeValue: EdgeLineType | '',
     colorValue: string | '',
+    colorMixed: boolean,
     fallback: Required<EdgeStyle>,
     onPatch: (patch: EdgeStyle) => void
   ) => (
@@ -3216,7 +3251,7 @@ export function App() {
           ))}
         </select>
       </label>
-      {renderColorSwatches('Line Color', colorValue, fallback.color, color => onPatch({ color }))}
+      {renderColorDropdown('Line Color', colorValue, fallback.color, colorMixed, color => onPatch({ color }))}
     </div>
   );
 
@@ -3282,6 +3317,7 @@ export function App() {
         doc.settings.defaultEdgeStyle.width || 2,
         doc.settings.defaultEdgeStyle.lineType || 'solid',
         doc.settings.defaultEdgeStyle.color || activeTheme.edge,
+        false,
         {
           width: doc.settings.defaultEdgeStyle.width || 2,
           lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
@@ -3389,8 +3425,8 @@ export function App() {
           </button>
         ))}
       </div>
-      {renderColorSwatches('Text Color', selectedTextColor, '#0f172a', color => applySelectedNodeStyle({ textColor: color }))}
-      {renderColorSwatches('Node Color', selectedBackgroundColor, '#ffffff', color => applySelectedNodeStyle({ backgroundColor: color }))}
+      {renderColorDropdown('Text Color', selectedTextColor, '#0f172a', selectedTextColorMixed, color => applySelectedNodeStyle({ textColor: color }))}
+      {renderColorDropdown('Node Color', selectedBackgroundColor, '#ffffff', selectedBackgroundColorMixed, color => applySelectedNodeStyle({ backgroundColor: color }))}
       <label className="toolbar-field">
         <span>Shape</span>
         <select
@@ -3414,6 +3450,7 @@ export function App() {
             selectedEdgeWidth,
             selectedEdgeLineType,
             selectedEdgeColor,
+            selectedEdgeColorMixed,
             {
               width: doc.settings.defaultEdgeStyle.width || 2,
               lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
@@ -3488,6 +3525,7 @@ export function App() {
         selectedEdgeWidth,
         selectedEdgeLineType,
         selectedEdgeColor,
+        selectedEdgeColorMixed,
         {
           width: doc.settings.defaultEdgeStyle.width || 2,
           lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',

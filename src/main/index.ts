@@ -102,9 +102,7 @@ function installApplicationMenu() {
         { role: 'quit' }
       ]
     },
-    { role: 'editMenu' },
     { role: 'viewMenu' },
-    { role: 'windowMenu' },
     { role: 'help', submenu: [] }
   ]);
   Menu.setApplicationMenu(menu);
