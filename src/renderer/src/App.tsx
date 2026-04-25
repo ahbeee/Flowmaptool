@@ -696,8 +696,7 @@ function edgePath(
       const bend = manualRoute.points[0];
       return `M ${from.x} ${from.y} Q ${bend.x} ${bend.y} ${to.x} ${to.y}`;
     }
-    const routePoints = manualRoute.points.map(point => `L ${point.x} ${point.y}`).join(' ');
-    return `M ${from.x} ${from.y} ${routePoints} L ${to.x} ${to.y}`;
+    return roundedRoutePath([from, ...manualRoute.points, to]);
   }
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -726,6 +725,60 @@ function edgePath(
   const sign = dx === 0 ? (lane % 2 === 0 ? -1 : 1) : Math.sign(dx);
   const bend = sign * (bendBase + Math.abs(lane) * 10);
   return `M ${from.x} ${from.y} C ${from.x} ${from.y + handleY} ${midX + bend} ${midY - handleY} ${midX + bend} ${midY} C ${midX + bend} ${midY + handleY} ${to.x} ${to.y - handleY} ${to.x} ${to.y}`;
+}
+
+function pointAlongSegment(from: Point, to: Point, distance: number): Point {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  if (length === 0) return to;
+  const ratio = Math.min(1, distance / length);
+  return {
+    x: to.x - dx * ratio,
+    y: to.y - dy * ratio
+  };
+}
+
+function pointAfterCorner(corner: Point, to: Point, distance: number): Point {
+  const dx = to.x - corner.x;
+  const dy = to.y - corner.y;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  if (length === 0) return corner;
+  const ratio = Math.min(1, distance / length);
+  return {
+    x: corner.x + dx * ratio,
+    y: corner.y + dy * ratio
+  };
+}
+
+function roundedRoutePath(points: Point[]): string {
+  if (points.length < 2) return '';
+  if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+
+  const cornerRadius = 28;
+  const commands = [`M ${points[0].x} ${points[0].y}`];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const prev = points[index - 1];
+    const corner = points[index];
+    const next = points[index + 1];
+    const prevDistance = Math.sqrt(distanceSquared(prev, corner));
+    const nextDistance = Math.sqrt(distanceSquared(corner, next));
+    const radius = Math.min(cornerRadius, prevDistance / 2, nextDistance / 2);
+
+    if (radius <= 1) {
+      commands.push(`L ${corner.x} ${corner.y}`);
+      continue;
+    }
+
+    const beforeCorner = pointAlongSegment(prev, corner, radius);
+    const afterCorner = pointAfterCorner(corner, next, radius);
+    commands.push(`L ${beforeCorner.x} ${beforeCorner.y}`);
+    commands.push(`Q ${corner.x} ${corner.y} ${afterCorner.x} ${afterCorner.y}`);
+  }
+
+  const last = points[points.length - 1];
+  commands.push(`L ${last.x} ${last.y}`);
+  return commands.join(' ');
 }
 
 function edgeMidpoint(from: Point, to: Point): EdgeBend {

@@ -51,8 +51,10 @@ test('manual cycle edge does not reflow existing node positions', async () => {
     return { d, values };
   });
   expect(cycleEdgePath.d).toContain('L');
+  expect(cycleEdgePath.d).toContain('Q');
   expect(cycleEdgePath.values.length).toBeGreaterThanOrEqual(10);
-  expect(cycleEdgePath.values[5]).toBeLessThan(cycleEdgePath.values[1] - 20);
+  const cycleEdgeYValues = cycleEdgePath.values.filter((_, index) => index % 2 === 1);
+  expect(Math.min(...cycleEdgeYValues)).toBeLessThan(cycleEdgePath.values[1] - 20);
   const targetNodeMetrics = await window.getByTestId('node-n2').evaluate(element => {
     const node = element as HTMLElement;
     return {
@@ -92,6 +94,7 @@ test('manual cycle edge does not reflow existing node positions', async () => {
     return { d, values };
   });
   expect(rootBackEdgePath.d).toContain('L');
+  expect(rootBackEdgePath.d).toContain('Q');
   expect(rootBackEdgePath.values.length).toBeGreaterThanOrEqual(10);
   const rootNodeMetrics = await window.getByTestId('node-n1').evaluate(element => {
     const node = element as HTMLElement;
