@@ -900,12 +900,17 @@ export function App() {
   const [canvasZoom, setCanvasZoom] = React.useState(1);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const dragDidMoveRef = React.useRef(false);
+  const suppressNextEdgeClickRef = React.useRef(false);
   const pendingRightConnectFromRef = React.useRef<NodeId | null>(null);
   const connectDragListenersRef = React.useRef<{
     onPointerMove: (event: PointerEvent) => void;
     onPointerUp: (event: PointerEvent) => void;
     onMouseMove: (event: MouseEvent) => void;
     onMouseUp: (event: MouseEvent) => void;
+  } | null>(null);
+  const edgeSegmentDragListenersRef = React.useRef<{
+    onPointerMove: (event: PointerEvent) => void;
+    onPointerUp: (event: PointerEvent) => void;
   } | null>(null);
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) || tabs[0];
@@ -944,8 +949,17 @@ export function App() {
     connectDragListenersRef.current = null;
   }, []);
 
+  const stopEdgeSegmentDragListeners = React.useCallback(() => {
+    const handlers = edgeSegmentDragListenersRef.current;
+    if (!handlers) return;
+    window.removeEventListener('pointermove', handlers.onPointerMove);
+    window.removeEventListener('pointerup', handlers.onPointerUp);
+    edgeSegmentDragListenersRef.current = null;
+  }, []);
+
   const resetTransientUiState = React.useCallback((defaultNodeId?: NodeId) => {
     stopConnectDragListeners();
+    stopEdgeSegmentDragListeners();
     setSelectedEdgeId('');
     setSelectedRoutePoint(null);
     setSelectedNodeIds(defaultNodeId ? [defaultNodeId] : []);
@@ -957,7 +971,7 @@ export function App() {
     setEdgeBendDrag(null);
     setConnectDrag(null);
     setDropParentTargetId(null);
-  }, [stopConnectDragListeners]);
+  }, [stopConnectDragListeners, stopEdgeSegmentDragListeners]);
 
   const setCurrentNodeOffsets = React.useCallback((updater: (prev: NodeOffsetMap) => NodeOffsetMap) => {
     updateActiveTab(tab => ({
@@ -2363,11 +2377,89 @@ export function App() {
     };
   }, [autoPanCanvas, doc.nodes, getCanvasContentPoint, marquee, nodeSizeMap, renderedPositionMap]);
 
+  const startEdgeSegmentDragAtPoint = (
+    edgeId: string,
+    endpoints: { from: Point; to: Point },
+    route: EdgeRoute | undefined,
+    start: Point
+  ) => {
+    stopEdgeSegmentDragListeners();
+    setSelectedEdgeId(edgeId);
+    setSelectedRoutePoint(null);
+    setSelectedNodeIds([]);
+    let pointIndex: number | null = null;
+    let currentRoute: EdgeRoute = route || { points: [] };
+    const onPointerMove = (nativeEvent: PointerEvent) => {
+      autoPanCanvas(nativeEvent);
+      const pointer = getCanvasContentPoint(nativeEvent.clientX, nativeEvent.clientY);
+      if (!pointer) return;
+
+      if (pointIndex === null) {
+        if (distanceSquared(start, pointer) < 16) return;
+        const inserted = insertRoutePointNearSegment(endpoints.from, endpoints.to, currentRoute, start);
+        const points = [...inserted.route.points];
+        points[inserted.pointIndex] = pointer;
+        currentRoute = { points };
+        pointIndex = inserted.pointIndex;
+        suppressNextEdgeClickRef.current = true;
+        setCurrentEdgeRoutes(prev => ({ ...prev, [edgeId]: currentRoute }));
+        setSelectedRoutePoint({ edgeId, pointIndex });
+        setCurrentEdgeBends(prev => {
+          const { [edgeId]: _removed, ...rest } = prev;
+          return rest;
+        });
+        return;
+      }
+
+      const points = currentRoute.points.length > 0 ? [...currentRoute.points] : [pointer];
+      points[pointIndex] = pointer;
+      currentRoute = { points };
+      setCurrentEdgeRoutes(prev => ({ ...prev, [edgeId]: currentRoute }));
+    };
+    const onPointerUp = () => stopEdgeSegmentDragListeners();
+    edgeSegmentDragListenersRef.current = { onPointerMove, onPointerUp };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  const findEdgeHitAtPoint = (point: Point) => {
+    let best:
+      | {
+          edgeId: string;
+          endpoints: { from: Point; to: Point };
+          route: EdgeRoute | undefined;
+          distance: number;
+        }
+      | null = null;
+    for (const edge of doc.edges) {
+      const fromPos = renderedPositionMap.get(edge.from);
+      const toPos = renderedPositionMap.get(edge.to);
+      if (!fromPos || !toPos) continue;
+      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id));
+      const fullRoute = [endpoints.from, ...(route?.points || []), endpoints.to];
+      for (let index = 0; index < fullRoute.length - 1; index += 1) {
+        const distance = distanceToSegmentSquared(point, fullRoute[index], fullRoute[index + 1]);
+        if (!best || distance < best.distance) {
+          best = { edgeId: edge.id, endpoints, route, distance };
+        }
+      }
+    }
+    return best && best.distance <= 18 * 18 ? best : null;
+  };
+
   const onCanvasPointerDown = (event: React.PointerEvent<Element>) => {
     if (event.target !== event.currentTarget) return;
     if (editingNodeId || connectDrag) return;
     const pointer = getCanvasContentPoint(event.clientX, event.clientY);
     if (!pointer) return;
+    const edgeHit = findEdgeHitAtPoint(pointer);
+    if (edgeHit && event.button === 0) {
+      startEdgeSegmentDragAtPoint(edgeHit.edgeId, edgeHit.endpoints, edgeHit.route, pointer);
+      return;
+    }
     const x = pointer.x;
     const y = pointer.y;
     setMarquee({ startX: x, startY: y, currentX: x, currentY: y });
@@ -2452,6 +2544,19 @@ export function App() {
     event.stopPropagation();
     setSelectedRoutePoint({ edgeId, pointIndex });
     setEdgeBendDrag({ edgeId, pointIndex });
+  };
+
+  const startEdgeSegmentDrag = (
+    event: React.PointerEvent<SVGPathElement>,
+    edgeId: string,
+    endpoints: { from: Point; to: Point },
+    route: EdgeRoute | undefined
+  ) => {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    const start = getCanvasContentPoint(event.clientX, event.clientY);
+    if (!start) return;
+    startEdgeSegmentDragAtPoint(edgeId, endpoints, route, start);
   };
 
   const beginConnectDrag = (nodeId: NodeId) => {
@@ -2639,8 +2744,11 @@ export function App() {
   }, [createNewDocument, exportPdf, exportPng, openDocument, printDiagram, saveDocument]);
 
   React.useEffect(() => {
-    return () => stopConnectDragListeners();
-  }, [stopConnectDragListeners]);
+    return () => {
+      stopConnectDragListeners();
+      stopEdgeSegmentDragListeners();
+    };
+  }, [stopConnectDragListeners, stopEdgeSegmentDragListeners]);
 
   const getNodeVisualStyle = React.useCallback(
     (nodeId: NodeId, style?: NodeStyle): React.CSSProperties => {
@@ -3012,12 +3120,15 @@ export function App() {
                         className={selected ? 'edge-path edge-path-selected' : 'edge-path'}
                         style={selected ? undefined : { stroke: activeTheme.edge }}
                         onPointerDown={event => {
-                          event.stopPropagation();
-                          setSelectedEdgeId(edge.id);
-                          setSelectedRoutePoint(null);
-                          setSelectedNodeIds([]);
+                          startEdgeSegmentDrag(event, edge.id, endpoints, route);
                         }}
-                        onClick={() => {
+                        onClick={event => {
+                          if (suppressNextEdgeClickRef.current) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            suppressNextEdgeClickRef.current = false;
+                            return;
+                          }
                           setSelectedEdgeId(edge.id);
                           setSelectedRoutePoint(null);
                           setSelectedNodeIds([]);
