@@ -1091,6 +1091,10 @@ function getNodeIdFromViewportPoint(clientX: number, clientY: number): NodeId | 
   return getNodeIdFromEventTarget(el);
 }
 
+function isNodeLabelInputTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest('.node-label-input'));
+}
+
 function isViewportPointOnConnectHandle(clientX: number, clientY: number, nodeId: NodeId, direction: LayoutDirection) {
   const nodeEl = document.querySelector(`[data-testid="node-${nodeId}"]`);
   if (!(nodeEl instanceof HTMLElement)) return false;
@@ -1124,6 +1128,8 @@ export function App() {
   const [copiedSelection, setCopiedSelection] = React.useState<CopiedSelection | null>(null);
   const [editingNodeId, setEditingNodeId] = React.useState<NodeId | null>(null);
   const [editingLabel, setEditingLabel] = React.useState('');
+  const editingNodeIdRef = React.useRef<NodeId | null>(null);
+  const editingLabelRef = React.useRef('');
   const [dragState, setDragState] = React.useState<DragState | null>(null);
   const [marquee, setMarquee] = React.useState<MarqueeState | null>(null);
   const [edgeBendDrag, setEdgeBendDrag] = React.useState<EdgeBendDragState | null>(null);
@@ -1199,6 +1205,8 @@ export function App() {
     setCopiedSelection(null);
     setEditingNodeId(null);
     setEditingLabel('');
+    editingNodeIdRef.current = null;
+    editingLabelRef.current = '';
     setMarquee(null);
     setDragState(null);
     setEdgeBendDrag(null);
@@ -1839,6 +1847,8 @@ export function App() {
     if (!doc.nodes.some(node => node.id === editingNodeId)) {
       setEditingNodeId(null);
       setEditingLabel('');
+      editingNodeIdRef.current = null;
+      editingLabelRef.current = '';
     }
   }, [doc.nodes, editingNodeId]);
 
@@ -1918,17 +1928,31 @@ export function App() {
   const startEditingNode = React.useCallback((nodeId: NodeId) => {
     const node = doc.nodes.find(item => item.id === nodeId);
     if (!node) return;
+    const label = clampNodeLabel(node.label);
+    editingNodeIdRef.current = nodeId;
+    editingLabelRef.current = label;
     setEditingNodeId(nodeId);
-    setEditingLabel(clampNodeLabel(node.label));
+    setEditingLabel(label);
   }, [doc.nodes]);
 
+  const updateEditingLabel = React.useCallback((value: string) => {
+    const label = clampNodeLabel(value);
+    editingLabelRef.current = label;
+    setEditingLabel(label);
+  }, []);
+
   const commitEditingNode = React.useCallback(() => {
-    if (!editingNodeId) return;
-    const nextLabel = clampNodeLabel(editingLabel).trim();
-    commitDoc(prev => updateNodeLabel(prev, editingNodeId, nextLabel));
+    const nodeId = editingNodeIdRef.current;
+    if (!nodeId) return;
+    const nextLabel = clampNodeLabel(editingLabelRef.current).trim();
+    editingNodeIdRef.current = null;
+    editingLabelRef.current = '';
     setEditingNodeId(null);
     setEditingLabel('');
-  }, [commitDoc, editingLabel, editingNodeId]);
+    const currentNode = doc.nodes.find(node => node.id === nodeId);
+    if (currentNode?.label === nextLabel) return;
+    commitDoc(prev => updateNodeLabel(prev, nodeId, nextLabel));
+  }, [commitDoc, doc.nodes]);
 
   const createLinkedNodeFromSelection = React.useCallback(() => {
     if (selectedNodeIds.length !== 1) return;
@@ -1947,6 +1971,8 @@ export function App() {
     }));
     setSelectedNodeIds([newNodeId]);
     setSelectedEdgeId('');
+    editingNodeIdRef.current = newNodeId;
+    editingLabelRef.current = newLabel;
     setEditingNodeId(newNodeId);
     setEditingLabel(newLabel);
   }, [commitDoc, doc.meta.nextNodeSeq, nodeOffsets, selectedNodeIds, setCurrentNodeOffsets]);
@@ -2690,7 +2716,9 @@ export function App() {
 
   const onCanvasPointerDown = (event: React.PointerEvent<Element>) => {
     if (event.target !== event.currentTarget) return;
-    if (editingNodeId || connectDrag) return;
+    if (isNodeLabelInputTarget(event.target)) return;
+    if (editingNodeIdRef.current) commitEditingNode();
+    if (connectDrag) return;
     const pointer = getCanvasContentPoint(event.clientX, event.clientY);
     if (!pointer) return;
     const edgeHit = findEdgeHitAtPoint(pointer);
@@ -2706,7 +2734,9 @@ export function App() {
   };
 
   const onNodePointerDown = (event: React.PointerEvent<HTMLButtonElement>, nodeId: NodeId) => {
-    if (editingNodeId || connectDrag) return;
+    if (isNodeLabelInputTarget(event.target)) return;
+    if (editingNodeIdRef.current) commitEditingNode();
+    if (connectDrag) return;
     if (event.button === 2) {
       event.preventDefault();
       event.stopPropagation();
@@ -2791,6 +2821,7 @@ export function App() {
     route: EdgeRoute | undefined
   ) => {
     if (event.button !== 0) return;
+    if (editingNodeIdRef.current) commitEditingNode();
     event.stopPropagation();
     const start = getCanvasContentPoint(event.clientX, event.clientY);
     if (!start) return;
@@ -3487,10 +3518,10 @@ export function App() {
                         <input
                           className="node-label-input"
                           value={editingLabel}
-                          onInput={event => setEditingLabel(clampNodeLabel(event.currentTarget.value))}
-                          onCompositionUpdate={event => setEditingLabel(clampNodeLabel(event.currentTarget.value))}
-                          onCompositionEnd={event => setEditingLabel(clampNodeLabel(event.currentTarget.value))}
-                          onChange={event => setEditingLabel(clampNodeLabel(event.currentTarget.value))}
+                          onInput={event => updateEditingLabel(event.currentTarget.value)}
+                          onCompositionUpdate={event => updateEditingLabel(event.currentTarget.value)}
+                          onCompositionEnd={event => updateEditingLabel(event.currentTarget.value)}
+                          onChange={event => updateEditingLabel(event.currentTarget.value)}
                           onBlur={commitEditingNode}
                           onKeyDown={event => {
                             if (event.key === 'Enter') {
@@ -3498,6 +3529,8 @@ export function App() {
                               commitEditingNode();
                             } else if (event.key === 'Escape') {
                               event.preventDefault();
+                              editingNodeIdRef.current = null;
+                              editingLabelRef.current = '';
                               setEditingNodeId(null);
                               setEditingLabel('');
                             }
