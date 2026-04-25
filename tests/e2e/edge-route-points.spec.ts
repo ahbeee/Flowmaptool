@@ -43,6 +43,20 @@ test('selected edge supports multiple editable route points', async () => {
   await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
   await expect(window.getByRole('button', { name: 'Delete Route Point' })).toBeDisabled();
 
+  const edgePoint = await window.getByTestId('edge-path-e2').evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() * 0.25);
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await window.mouse.dblclick(edgePoint.x, edgePoint.y);
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(2);
+  await expect(window.locator('.edge-bend-handle-selected')).toHaveCount(1);
+  await window.keyboard.press('Delete');
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+  await expect(window.getByTestId('edge-path-e2')).toBeVisible();
+
   await window.getByRole('button', { name: 'Add Route Point' }).click();
   await expect(window.locator('.edge-bend-handle')).toHaveCount(2);
   await expect(window.locator('.edge-bend-handle-selected')).toHaveCount(1);

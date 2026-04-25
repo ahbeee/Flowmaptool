@@ -648,6 +648,19 @@ function distanceSquared(a: Point, b: Point): number {
   return dx * dx + dy * dy;
 }
 
+function distanceToSegmentSquared(point: Point, start: Point, end: Point): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return distanceSquared(point, start);
+  const ratio = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared));
+  const projected = {
+    x: start.x + ratio * dx,
+    y: start.y + ratio * dy
+  };
+  return distanceSquared(point, projected);
+}
+
 function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRoute): { route: EdgeRoute; pointIndex: number } {
   const fullRoute = [from, ...route.points, to];
   let insertAt = 0;
@@ -664,6 +677,22 @@ function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRou
   const newPoint = edgeMidpoint(start, end);
   const points = [...route.points];
   points.splice(insertAt, 0, newPoint);
+  return { route: { points }, pointIndex: insertAt };
+}
+
+function insertRoutePointNearSegment(from: Point, to: Point, route: EdgeRoute, point: Point): { route: EdgeRoute; pointIndex: number } {
+  const fullRoute = [from, ...route.points, to];
+  let insertAt = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < fullRoute.length - 1; index += 1) {
+    const segmentDistance = distanceToSegmentSquared(point, fullRoute[index], fullRoute[index + 1]);
+    if (segmentDistance < nearestDistance) {
+      nearestDistance = segmentDistance;
+      insertAt = index;
+    }
+  }
+  const points = [...route.points];
+  points.splice(insertAt, 0, point);
   return { route: { points }, pointIndex: insertAt };
 }
 
@@ -1725,6 +1754,46 @@ export function App() {
     setCurrentEdgeRoutes
   ]);
 
+  const addRoutePointToEdgeAtPoint = React.useCallback(
+    (edgeId: string, point: Point) => {
+      const edge = doc.edges.find(item => item.id === edgeId);
+      if (!edge) return;
+      const fromPos = renderedPositionMap.get(edge.from);
+      const toPos = renderedPositionMap.get(edge.to);
+      if (!fromPos || !toPos) return;
+      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const fallbackRoute =
+        edgeRoutes[edgeId] ||
+        routeFromBend(edgeBends[edgeId] || autoEdgeBendMap.get(edgeId) || edgeMidpoint(endpoints.from, endpoints.to));
+      const inserted = insertRoutePointNearSegment(endpoints.from, endpoints.to, edgeRoutes[edgeId] || fallbackRoute, point);
+
+      setCurrentEdgeRoutes(prev => ({
+        ...prev,
+        [edgeId]: insertRoutePointNearSegment(endpoints.from, endpoints.to, prev[edgeId] || fallbackRoute, point).route
+      }));
+      setSelectedEdgeId(edgeId);
+      setSelectedRoutePoint({ edgeId, pointIndex: inserted.pointIndex });
+      setSelectedNodeIds([]);
+      setCurrentEdgeBends(prev => {
+        const { [edgeId]: _removed, ...rest } = prev;
+        return rest;
+      });
+    },
+    [
+      autoEdgeBendMap,
+      doc.edges,
+      edgeBends,
+      edgeRoutes,
+      layoutDirection,
+      nodeSizeMap,
+      renderedPositionMap,
+      setCurrentEdgeBends,
+      setCurrentEdgeRoutes
+    ]
+  );
+
   const deleteSelectedRoutePoint = React.useCallback(() => {
     if (!selectedRoutePoint || selectedRoutePoint.edgeId !== selectedEdgeId) return;
     setCurrentEdgeRoutes(prev => {
@@ -2294,7 +2363,7 @@ export function App() {
     };
   }, [autoPanCanvas, doc.nodes, getCanvasContentPoint, marquee, nodeSizeMap, renderedPositionMap]);
 
-  const onCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+  const onCanvasPointerDown = (event: React.PointerEvent<Element>) => {
     if (event.target !== event.currentTarget) return;
     if (editingNodeId || connectDrag) return;
     const pointer = getCanvasContentPoint(event.clientX, event.clientY);
@@ -2918,7 +2987,12 @@ export function App() {
                 onWheel={onCanvasWheel}
                 onContextMenu={event => event.preventDefault()}
               >
-                <svg className="edge-layer" aria-label="edge-layer" style={{ width: canvasSize.width, height: canvasSize.height }}>
+                <svg
+                  className="edge-layer"
+                  aria-label="edge-layer"
+                  style={{ width: canvasSize.width, height: canvasSize.height }}
+                  onPointerDown={onCanvasPointerDown}
+                >
                   {doc.edges.map(edge => {
                     const fromPos = renderedPositionMap.get(edge.from);
                     const toPos = renderedPositionMap.get(edge.to);
@@ -2947,6 +3021,13 @@ export function App() {
                           setSelectedEdgeId(edge.id);
                           setSelectedRoutePoint(null);
                           setSelectedNodeIds([]);
+                        }}
+                        onDoubleClick={event => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const point = getCanvasContentPoint(event.clientX, event.clientY);
+                          if (!point) return;
+                          addRoutePointToEdgeAtPoint(edge.id, point);
                         }}
                       />
                     );
