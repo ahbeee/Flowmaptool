@@ -641,6 +641,31 @@ function routeFromBend(bend?: EdgeBend): EdgeRoute | undefined {
   return bend ? { points: [bend] } : undefined;
 }
 
+function distanceSquared(a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return dx * dx + dy * dy;
+}
+
+function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRoute): EdgeRoute {
+  const fullRoute = [from, ...route.points, to];
+  let insertAt = 0;
+  let longestDistance = -1;
+  for (let index = 0; index < fullRoute.length - 1; index += 1) {
+    const segmentDistance = distanceSquared(fullRoute[index], fullRoute[index + 1]);
+    if (segmentDistance > longestDistance) {
+      longestDistance = segmentDistance;
+      insertAt = index;
+    }
+  }
+  const start = fullRoute[insertAt];
+  const end = fullRoute[insertAt + 1];
+  const newPoint = edgeMidpoint(start, end);
+  const points = [...route.points];
+  points.splice(insertAt, 0, newPoint);
+  return { points };
+}
+
 function escapeXml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -1646,6 +1671,41 @@ export function App() {
     });
   }, [selectedEdgeId, setCurrentEdgeBends, setCurrentEdgeRoutes]);
 
+  const addRoutePointToSelectedEdge = React.useCallback(() => {
+    if (!selectedEdgeId) return;
+    const edge = doc.edges.find(item => item.id === selectedEdgeId);
+    if (!edge) return;
+    const fromPos = renderedPositionMap.get(edge.from);
+    const toPos = renderedPositionMap.get(edge.to);
+    if (!fromPos || !toPos) return;
+    const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+    const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+    const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+    const fallbackRoute =
+      edgeRoutes[selectedEdgeId] ||
+      routeFromBend(edgeBends[selectedEdgeId] || autoEdgeBendMap.get(selectedEdgeId) || edgeMidpoint(endpoints.from, endpoints.to));
+
+    setCurrentEdgeRoutes(prev => ({
+      ...prev,
+      [selectedEdgeId]: insertRoutePointAtLongestSegment(endpoints.from, endpoints.to, prev[selectedEdgeId] || fallbackRoute)
+    }));
+    setCurrentEdgeBends(prev => {
+      const { [selectedEdgeId]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }, [
+    autoEdgeBendMap,
+    doc.edges,
+    edgeBends,
+    edgeRoutes,
+    layoutDirection,
+    nodeSizeMap,
+    renderedPositionMap,
+    selectedEdgeId,
+    setCurrentEdgeBends,
+    setCurrentEdgeRoutes
+  ]);
+
   const hasManualOffset = React.useMemo(
     () =>
       selectedNodeIds.some(nodeId => {
@@ -2571,6 +2631,9 @@ export function App() {
       <div className="toolbar-button-row">
         <button type="button" onClick={fitCanvasToView}>
           Fit
+        </button>
+        <button type="button" onClick={addRoutePointToSelectedEdge} disabled={!selectedEdgeId}>
+          Add Route Point
         </button>
         <button
           type="button"
