@@ -587,6 +587,100 @@ function computeAutoEdgeBend(
   return { x, y: midpoint.y };
 }
 
+function getNodeBoxesBounds(boxes: NodeBox[]): NodeBox | undefined {
+  if (boxes.length === 0) return undefined;
+  return {
+    left: Math.min(...boxes.map(box => box.left)),
+    right: Math.max(...boxes.map(box => box.right)),
+    top: Math.min(...boxes.map(box => box.top)),
+    bottom: Math.max(...boxes.map(box => box.bottom))
+  };
+}
+
+function routeFromPoints(points: Point[]): EdgeRoute | undefined {
+  return points.length > 0 ? { points } : undefined;
+}
+
+function computeAutoEdgeRoute(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>
+): EdgeRoute | undefined {
+  const obstacles = edgeCorridorObstacleBoxes(from, to, direction, fromId, toId, nodeBoxes);
+  const isBackEdge = direction === 'horizontal' ? to.x < from.x : to.y < from.y;
+  if (!isBackEdge && obstacles.length === 0) return undefined;
+
+  const clearance = 48;
+  const graphBounds = getNodeBoxesBounds([...nodeBoxes.values()]);
+
+  if (direction === 'horizontal') {
+    if (isBackEdge && graphBounds) {
+      const topLane = graphBounds.top - clearance;
+      const bottomLane = graphBounds.bottom + clearance;
+      const useTopLane =
+        Math.abs(from.y - topLane) + Math.abs(to.y - topLane) <=
+        Math.abs(from.y - bottomLane) + Math.abs(to.y - bottomLane);
+      const laneY = useTopLane ? topLane : bottomLane;
+      const outerX = Math.max(graphBounds.right + clearance, from.x + clearance, to.x + clearance);
+      return routeFromPoints([
+        { x: outerX, y: from.y },
+        { x: outerX, y: laneY },
+        { x: to.x, y: laneY }
+      ]);
+    }
+
+    const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
+    if (!bounds) return routeFromBend(computeAutoEdgeBend(from, to, direction, fromId, toId, nodeBoxes));
+    const topLane = bounds.top - clearance;
+    const bottomLane = bounds.bottom + clearance;
+    const midpoint = edgeMidpoint(from, to);
+    const laneY = Math.abs(midpoint.y - topLane) <= Math.abs(midpoint.y - bottomLane) ? topLane : bottomLane;
+    const dx = Math.max(80, Math.abs(to.x - from.x));
+    const entryX = from.x + Math.min(72, dx / 3);
+    const exitX = to.x - Math.min(72, dx / 3);
+    return routeFromPoints([
+      { x: entryX, y: from.y },
+      { x: entryX, y: laneY },
+      { x: exitX, y: laneY },
+      { x: exitX, y: to.y }
+    ]);
+  }
+
+  if (isBackEdge && graphBounds) {
+    const leftLane = graphBounds.left - clearance;
+    const rightLane = graphBounds.right + clearance;
+    const useLeftLane =
+      Math.abs(from.x - leftLane) + Math.abs(to.x - leftLane) <=
+      Math.abs(from.x - rightLane) + Math.abs(to.x - rightLane);
+    const laneX = useLeftLane ? leftLane : rightLane;
+    const outerY = Math.max(graphBounds.bottom + clearance, from.y + clearance, to.y + clearance);
+    return routeFromPoints([
+      { x: from.x, y: outerY },
+      { x: laneX, y: outerY },
+      { x: laneX, y: to.y }
+    ]);
+  }
+
+  const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
+  if (!bounds) return routeFromBend(computeAutoEdgeBend(from, to, direction, fromId, toId, nodeBoxes));
+  const leftLane = bounds.left - clearance;
+  const rightLane = bounds.right + clearance;
+  const midpoint = edgeMidpoint(from, to);
+  const laneX = Math.abs(midpoint.x - leftLane) <= Math.abs(midpoint.x - rightLane) ? leftLane : rightLane;
+  const dy = Math.max(80, Math.abs(to.y - from.y));
+  const entryY = from.y + Math.min(72, dy / 3);
+  const exitY = to.y - Math.min(72, dy / 3);
+  return routeFromPoints([
+    { x: from.x, y: entryY },
+    { x: laneX, y: entryY },
+    { x: laneX, y: exitY },
+    { x: to.x, y: exitY }
+  ]);
+}
+
 function edgePath(
   from: Point,
   to: Point,
@@ -1244,8 +1338,8 @@ export function App() {
     return map;
   }, [doc.edges, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
 
-  const autoEdgeBendMap = React.useMemo(() => {
-    const map = new Map<string, EdgeBend>();
+  const autoEdgeRouteMap = React.useMemo(() => {
+    const map = new Map<string, EdgeRoute>();
     for (const edge of doc.edges) {
       if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
       if (!edgeForceBendMap.get(edge.id)) continue;
@@ -1255,8 +1349,8 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-      const bend = computeAutoEdgeBend(endpoints.from, endpoints.to, layoutDirection, edge.from, edge.to, nodeBoxMap);
-      if (bend) map.set(edge.id, bend);
+      const route = computeAutoEdgeRoute(endpoints.from, endpoints.to, layoutDirection, edge.from, edge.to, nodeBoxMap);
+      if (route) map.set(edge.id, route);
     }
     return map;
   }, [doc.edges, edgeBends, edgeForceBendMap, edgeRoutes, layoutDirection, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
@@ -1468,7 +1562,7 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-      const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id));
+      const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
       edges.push({
         id: edge.id,
         from: endpoints.from,
@@ -1481,7 +1575,7 @@ export function App() {
       });
     }
     return { nodes, edges };
-  }, [autoEdgeBendMap, doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, edgeRoutes, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
+  }, [autoEdgeRouteMap, doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, edgeRoutes, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
 
   const buildCanvasSvg = React.useCallback((fitToContent = false) => {
     const snapshot = buildSvgSnapshot();
@@ -1743,7 +1837,9 @@ export function App() {
     const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
     const fallbackRoute =
       edgeRoutes[selectedEdgeId] ||
-      routeFromBend(edgeBends[selectedEdgeId] || autoEdgeBendMap.get(selectedEdgeId) || edgeMidpoint(endpoints.from, endpoints.to));
+      routeFromBend(edgeBends[selectedEdgeId]) ||
+      autoEdgeRouteMap.get(selectedEdgeId) ||
+      routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
     const inserted = insertRoutePointAtLongestSegment(endpoints.from, endpoints.to, edgeRoutes[selectedEdgeId] || fallbackRoute);
 
     setCurrentEdgeRoutes(prev => ({
@@ -1756,7 +1852,7 @@ export function App() {
       return rest;
     });
   }, [
-    autoEdgeBendMap,
+    autoEdgeRouteMap,
     doc.edges,
     edgeBends,
     edgeRoutes,
@@ -1780,7 +1876,9 @@ export function App() {
       const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
       const fallbackRoute =
         edgeRoutes[edgeId] ||
-        routeFromBend(edgeBends[edgeId] || autoEdgeBendMap.get(edgeId) || edgeMidpoint(endpoints.from, endpoints.to));
+        routeFromBend(edgeBends[edgeId]) ||
+        autoEdgeRouteMap.get(edgeId) ||
+        routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
       const inserted = insertRoutePointNearSegment(endpoints.from, endpoints.to, edgeRoutes[edgeId] || fallbackRoute, point);
 
       setCurrentEdgeRoutes(prev => ({
@@ -1796,7 +1894,7 @@ export function App() {
       });
     },
     [
-      autoEdgeBendMap,
+      autoEdgeRouteMap,
       doc.edges,
       edgeBends,
       edgeRoutes,
@@ -2313,7 +2411,8 @@ export function App() {
       const { x, y } = pointer;
       const fallbackRoute =
         edgeRoutes[edgeBendDrag.edgeId] ||
-        routeFromBend(edgeBends[edgeBendDrag.edgeId] || autoEdgeBendMap.get(edgeBendDrag.edgeId)) ||
+        routeFromBend(edgeBends[edgeBendDrag.edgeId]) ||
+        autoEdgeRouteMap.get(edgeBendDrag.edgeId) ||
         { points: [{ x, y }] };
       setCurrentEdgeRoutes(prev => {
         const current = prev[edgeBendDrag.edgeId] || fallbackRoute;
@@ -2333,7 +2432,7 @@ export function App() {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [autoEdgeBendMap, autoPanCanvas, edgeBendDrag, edgeBends, edgeRoutes, getCanvasContentPoint, setCurrentEdgeBends, setCurrentEdgeRoutes]);
+  }, [autoEdgeRouteMap, autoPanCanvas, edgeBendDrag, edgeBends, edgeRoutes, getCanvasContentPoint, setCurrentEdgeBends, setCurrentEdgeRoutes]);
 
   React.useEffect(() => {
     if (!marquee) return;
@@ -2438,7 +2537,7 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-      const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id));
+      const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
       const fullRoute = [endpoints.from, ...(route?.points || []), endpoints.to];
       for (let index = 0; index < fullRoute.length - 1; index += 1) {
         const distance = distanceToSegmentSquared(point, fullRoute[index], fullRoute[index + 1]);
@@ -3111,7 +3210,7 @@ export function App() {
                     const lane = edgeLaneMap.get(edge.id) || 0;
                     const forceBend = edgeForceBendMap.get(edge.id) || false;
                     const selected = edge.id === selectedEdgeId;
-                    const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id));
+                    const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
                     return (
                       <path
                         key={edge.id}
@@ -3159,7 +3258,8 @@ export function App() {
                     const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
                     const route =
                       edgeRoutes[edge.id] ||
-                      routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id) || edgeMidpoint(endpoints.from, endpoints.to));
+                      routeFromBend(edgeBends[edge.id]) ||
+                      routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
                     return route.points.map((point, pointIndex) => (
                       <circle
                         key={`bend-${edge.id}-${pointIndex}`}

@@ -440,7 +440,6 @@ h2 {
   cursor: crosshair;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease;
 }
 
 .flow-node:hover .node-connect-handle,
