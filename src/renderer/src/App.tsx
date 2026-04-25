@@ -9,6 +9,7 @@ import {
   removeEdge,
   removeNodes,
   resetNodeStyle,
+  updateEdgeStyle,
   updateNodeLabel,
   updateNodeStyle,
   updateSettings,
@@ -18,6 +19,8 @@ import {
   type FlowEdge,
   type FlowTag,
   type FlowDoc,
+  type EdgeLineType,
+  type EdgeStyle,
   type NodeId,
   type NodeShape,
   type NodeStyle,
@@ -72,6 +75,34 @@ const SPACING_MIN = 16;
 const SPACING_MAX = 320;
 const FONT_FAMILIES = ['Roboto', 'Segoe UI', 'Arial', 'Microsoft JhengHei', 'Noto Sans TC'];
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 32, 48, 64];
+const EDGE_WIDTHS = [1, 2, 3, 4, 5, 6, 7, 8];
+const EDGE_LINE_TYPES: Array<{ value: EdgeLineType; label: string }> = [
+  { value: 'solid', label: 'Solid' },
+  { value: 'dashed', label: 'Dashed' },
+  { value: 'dotted', label: 'Dotted' }
+];
+const COLOR_SWATCHES = [
+  '#111827',
+  '#6b7280',
+  '#b91c1c',
+  '#ef4444',
+  '#f97316',
+  '#facc15',
+  '#22c55e',
+  '#0ea5e9',
+  '#4f46e5',
+  '#a855f7',
+  '#ffffff',
+  '#e5e7eb',
+  '#c08457',
+  '#f9a8d4',
+  '#fbbf24',
+  '#f5e7a1',
+  '#a3e635',
+  '#67e8f9',
+  '#93c5fd',
+  '#c4b5fd'
+];
 const NODE_SHAPES: Array<{ value: NodeShape; label: string }> = [
   { value: 'plain', label: 'No Frame' },
   { value: 'rounded', label: 'Rounded' },
@@ -163,6 +194,7 @@ type SvgEdgeSnapshot = {
   fromSize: NodeSize;
   toSize: NodeSize;
   forceBend: boolean;
+  style: Required<EdgeStyle>;
   route?: EdgeRoute;
 };
 
@@ -1054,6 +1086,26 @@ function sameSelectedValue<T>(nodes: Array<{ style?: NodeStyle }>, selector: (st
   return nodes.every(node => selector(node.style) === first) ? first || '' : '';
 }
 
+function sameSelectedEdgeValue<T>(edges: FlowEdge[], selector: (style: EdgeStyle | undefined) => T | undefined): T | '' {
+  if (edges.length === 0) return '';
+  const first = selector(edges[0].style);
+  return edges.every(edge => selector(edge.style) === first) ? first || '' : '';
+}
+
+function effectiveEdgeStyle(edge: FlowEdge, defaultStyle: EdgeStyle): Required<EdgeStyle> {
+  return {
+    width: edge.style?.width || defaultStyle.width || 2,
+    lineType: edge.style?.lineType || defaultStyle.lineType || 'solid',
+    color: edge.style?.color || defaultStyle.color || '#64748b'
+  };
+}
+
+function edgeStrokeDasharray(lineType: EdgeLineType, width: number): string | undefined {
+  if (lineType === 'dashed') return `${width * 4} ${width * 3}`;
+  if (lineType === 'dotted') return `1 ${width * 3}`;
+  return undefined;
+}
+
 function collectConnectedComponent(doc: FlowDoc, startNodeId: NodeId): NodeId[] {
   const neighbors = new Map<NodeId, Set<NodeId>>();
   for (const node of doc.nodes) {
@@ -1173,6 +1225,12 @@ export function App() {
     () => doc.nodes.filter(node => selectedNodeIds.includes(node.id)),
     [doc.nodes, selectedNodeIds]
   );
+  const selectedStyleEdges = React.useMemo(() => {
+    if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
+    if (selectedNodeIds.length === 0) return [];
+    const selected = new Set(selectedNodeIds);
+    return doc.edges.filter(edge => selected.has(edge.from) || selected.has(edge.to));
+  }, [doc.edges, selectedEdgeId, selectedNodeIds]);
 
   const updateActiveTab = React.useCallback((recipe: (tab: TabDocument) => TabDocument) => {
     setTabs(prev => prev.map(tab => (tab.id === activeTabId ? recipe(tab) : tab)));
@@ -1718,11 +1776,12 @@ export function App() {
         fromSize,
         toSize,
         forceBend: edgeForceBendMap.get(edge.id) || false,
+        style: effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle),
         ...(route ? { route } : {})
       });
     }
     return { nodes, edges };
-  }, [autoEdgeRouteMap, doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, edgeRoutes, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
+  }, [autoEdgeRouteMap, doc.edges, doc.nodes, doc.settings.defaultEdgeStyle, edgeBends, edgeForceBendMap, edgeLaneMap, edgeRoutes, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
 
   const buildCanvasSvg = React.useCallback((fitToContent = false) => {
     const snapshot = buildSvgSnapshot();
@@ -1770,7 +1829,9 @@ export function App() {
           const route = edge.route
             ? { points: edge.route.points.map(point => shiftPoint(point)) }
             : undefined;
-          return `<path d="${edgePath(from, to, edge.lane, layoutDirection, edge.fromSize, edge.toSize, edge.forceBend, route)}" stroke="${activeTheme.edge}" stroke-width="2" fill="none" stroke-linecap="round" />`;
+          const dash = edgeStrokeDasharray(edge.style.lineType, edge.style.width);
+          const dashMarkup = dash ? ` stroke-dasharray="${dash}"` : '';
+          return `<path d="${edgePath(from, to, edge.lane, layoutDirection, edge.fromSize, edge.toSize, edge.forceBend, route)}" stroke="${edge.style.color}" stroke-width="${edge.style.width}"${dashMarkup} fill="none" stroke-linecap="round" />`;
         }
       )
       .join('');
@@ -2115,6 +2176,28 @@ export function App() {
       commitDoc(prev => updateNodeStyle(prev, selectedNodeIds, patch));
     },
     [commitDoc, selectedNodeIds]
+  );
+
+  const applySelectedEdgeStyle = React.useCallback(
+    (patch: EdgeStyle) => {
+      if (selectedStyleEdges.length === 0) return;
+      commitDoc(prev => updateEdgeStyle(prev, selectedStyleEdges.map(edge => edge.id), patch));
+    },
+    [commitDoc, selectedStyleEdges]
+  );
+
+  const applyDefaultEdgeStyle = React.useCallback(
+    (patch: EdgeStyle) => {
+      commitDoc(prev =>
+        updateSettings(prev, {
+          defaultEdgeStyle: {
+            ...prev.settings.defaultEdgeStyle,
+            ...patch
+          }
+        })
+      );
+    },
+    [commitDoc]
   );
 
   const clearSelectedNodeStyle = React.useCallback(() => {
@@ -3053,6 +3136,9 @@ export function App() {
   const selectedTextAlign = sameSelectedValue(selectedNodes, style => style?.textAlign);
   const selectedShape = sameSelectedValue(selectedNodes, style => style?.shape);
   const selectedTagId = sameSelectedValue(selectedNodes, style => style?.tagId);
+  const selectedEdgeWidth = sameSelectedEdgeValue(selectedStyleEdges, style => style?.width);
+  const selectedEdgeLineType = sameSelectedEdgeValue(selectedStyleEdges, style => style?.lineType);
+  const selectedEdgeColor = sameSelectedEdgeValue(selectedStyleEdges, style => style?.color);
   const isAnyBold = selectedNodes.some(node => node.style?.bold === true);
   const isAllBold = selectedNodes.length > 0 && selectedNodes.every(node => node.style?.bold === true);
   const isAnyItalic = selectedNodes.some(node => node.style?.italic === true);
@@ -3066,6 +3152,72 @@ export function App() {
   const tagNameById = React.useMemo(
     () => new Map(doc.settings.tags.map(tag => [tag.id, tag.name])),
     [doc.settings.tags]
+  );
+
+  const renderColorSwatches = (
+    label: string,
+    value: string | '',
+    fallback: string,
+    onSelect: (color: string) => void
+  ) => (
+    <div className="toolbar-field toolbar-field-block">
+      <span>{label}</span>
+      <div className="color-swatch-grid" role="group" aria-label={label}>
+        {COLOR_SWATCHES.map(color => {
+          const active = (value || fallback).toLowerCase() === color.toLowerCase();
+          return (
+            <button
+              key={color}
+              type="button"
+              className={active ? 'color-swatch color-swatch-active' : 'color-swatch'}
+              style={{ backgroundColor: color }}
+              aria-label={`${label} ${color}`}
+              onClick={() => onSelect(color)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderEdgeStyleControls = (
+    title: string,
+    edgeCount: number,
+    widthValue: number | '',
+    lineTypeValue: EdgeLineType | '',
+    colorValue: string | '',
+    fallback: Required<EdgeStyle>,
+    onPatch: (patch: EdgeStyle) => void
+  ) => (
+    <div className="edge-style-controls">
+      <div className="toolbar-section-title">
+        {title}{edgeCount > 0 ? ` (${edgeCount})` : ''}
+      </div>
+      <label className="toolbar-field">
+        <span>Line Width</span>
+        <select value={widthValue || fallback.width} onChange={event => onPatch({ width: Number(event.target.value) })}>
+          {EDGE_WIDTHS.map(width => (
+            <option key={width} value={width}>
+              {width}px
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="toolbar-field">
+        <span>Line Type</span>
+        <select
+          value={lineTypeValue || fallback.lineType}
+          onChange={event => onPatch({ lineType: event.target.value as EdgeLineType })}
+        >
+          {EDGE_LINE_TYPES.map(lineType => (
+            <option key={lineType.value} value={lineType.value}>
+              {lineType.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {renderColorSwatches('Line Color', colorValue, fallback.color, color => onPatch({ color }))}
+    </div>
   );
 
   const renderMapToolbar = () => (
@@ -3124,6 +3276,19 @@ export function App() {
           ))}
         </select>
       </label>
+      {renderEdgeStyleControls(
+        'Default Line',
+        0,
+        doc.settings.defaultEdgeStyle.width || 2,
+        doc.settings.defaultEdgeStyle.lineType || 'solid',
+        doc.settings.defaultEdgeStyle.color || activeTheme.edge,
+        {
+          width: doc.settings.defaultEdgeStyle.width || 2,
+          lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
+          color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
+        },
+        applyDefaultEdgeStyle
+      )}
       <div className="toolbar-button-row">
         <button type="button" onClick={fitCanvasToView}>
           Fit
@@ -3224,22 +3389,8 @@ export function App() {
           </button>
         ))}
       </div>
-      <label className="toolbar-field">
-        <span>Text Color</span>
-        <input
-          type="color"
-          value={selectedTextColor || '#0f172a'}
-          onChange={event => applySelectedNodeStyle({ textColor: event.target.value })}
-        />
-      </label>
-      <label className="toolbar-field">
-        <span>Node Color</span>
-        <input
-          type="color"
-          value={selectedBackgroundColor || '#ffffff'}
-          onChange={event => applySelectedNodeStyle({ backgroundColor: event.target.value })}
-        />
-      </label>
+      {renderColorSwatches('Text Color', selectedTextColor, '#0f172a', color => applySelectedNodeStyle({ textColor: color }))}
+      {renderColorSwatches('Node Color', selectedBackgroundColor, '#ffffff', color => applySelectedNodeStyle({ backgroundColor: color }))}
       <label className="toolbar-field">
         <span>Shape</span>
         <select
@@ -3256,6 +3407,21 @@ export function App() {
           ))}
         </select>
       </label>
+      {selectedStyleEdges.length > 0
+        ? renderEdgeStyleControls(
+            'Related Lines',
+            selectedStyleEdges.length,
+            selectedEdgeWidth,
+            selectedEdgeLineType,
+            selectedEdgeColor,
+            {
+              width: doc.settings.defaultEdgeStyle.width || 2,
+              lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
+              color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
+            },
+            applySelectedEdgeStyle
+          )
+        : null}
       <label className="toolbar-field">
         <span>Tag</span>
         <select
@@ -3279,10 +3445,15 @@ export function App() {
         </div>
         {doc.settings.tags.map(tag => (
           <div key={tag.id} className="tag-row">
-            <input
-              type="color"
-              value={tag.color}
-              onChange={event => recolorTag(tag, event.target.value)}
+            <button
+              type="button"
+              className="tag-color-button"
+              aria-label={`Change tag color ${tag.name}`}
+              style={{ backgroundColor: tag.color }}
+              onClick={() => {
+                const currentIndex = COLOR_SWATCHES.findIndex(color => color.toLowerCase() === tag.color.toLowerCase());
+                recolorTag(tag, COLOR_SWATCHES[(currentIndex + 1) % COLOR_SWATCHES.length]);
+              }}
             />
             <input value={tag.name} onChange={event => renameTag(tag, event.target.value)} />
             <button type="button" aria-label={`Delete tag ${tag.name}`} onClick={() => removeTagById(tag.id)}>
@@ -3294,6 +3465,59 @@ export function App() {
       <button type="button" onClick={clearSelectedNodeStyle}>
         Reset Node Style
       </button>
+    </>
+  );
+
+  const renderEdgeToolbar = () => (
+    <>
+      <div className="toolbar-title">Line Style</div>
+      <label className="toolbar-field">
+        <span>Layout</span>
+        <select
+          aria-label="Layout"
+          value={layoutDirection}
+          onChange={event => switchLayoutDirection(event.target.value as LayoutDirection)}
+        >
+          <option value="horizontal">Horizontal</option>
+          <option value="vertical">Vertical</option>
+        </select>
+      </label>
+      {renderEdgeStyleControls(
+        'Selected Line',
+        selectedStyleEdges.length,
+        selectedEdgeWidth,
+        selectedEdgeLineType,
+        selectedEdgeColor,
+        {
+          width: doc.settings.defaultEdgeStyle.width || 2,
+          lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
+          color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
+        },
+        applySelectedEdgeStyle
+      )}
+      <div className="toolbar-button-row">
+        <button type="button" onClick={addRoutePointToSelectedEdge} disabled={!selectedEdgeId}>
+          Add Route Point
+        </button>
+        <button
+          type="button"
+          onClick={deleteSelectedRoutePoint}
+          disabled={
+            !selectedRoutePoint ||
+            selectedRoutePoint.edgeId !== selectedEdgeId ||
+            !edgeRoutes[selectedRoutePoint.edgeId]?.points[selectedRoutePoint.pointIndex]
+          }
+        >
+          Delete Route Point
+        </button>
+        <button
+          type="button"
+          onClick={resetSelectedEdgeBend}
+          disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
+        >
+          Reset Bend
+        </button>
+      </div>
     </>
   );
 
@@ -3381,13 +3605,19 @@ export function App() {
                     const forceBend = edgeForceBendMap.get(edge.id) || false;
                     const selected = edge.id === selectedEdgeId;
                     const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
+                    const edgeStyle = effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle);
+                    const strokeDasharray = edgeStrokeDasharray(edgeStyle.lineType, edgeStyle.width);
                     return (
                       <path
                         key={edge.id}
                         data-testid={`edge-path-${edge.id}`}
                         d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
                         className={selected ? 'edge-path edge-path-selected' : 'edge-path'}
-                        style={selected ? undefined : { stroke: activeTheme.edge }}
+                        style={{
+                          stroke: edgeStyle.color,
+                          strokeWidth: selected ? edgeStyle.width + 1 : edgeStyle.width,
+                          strokeDasharray
+                        }}
                         onPointerDown={event => {
                           startEdgeSegmentDrag(event, edge.id, endpoints, route);
                         }}
@@ -3566,7 +3796,7 @@ export function App() {
           {activeTab.toolbarVisible ? (
             <aside className="right-toolbar-rail">
               <div className="right-toolbar right-toolbar-vertical">
-                {hasNodeSelection ? renderNodeToolbar() : renderMapToolbar()}
+                {hasNodeSelection ? renderNodeToolbar() : selectedEdgeId ? renderEdgeToolbar() : renderMapToolbar()}
               </div>
             </aside>
           ) : null}

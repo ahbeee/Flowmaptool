@@ -13,6 +13,7 @@ export type FlowEdge = {
   id: EdgeId;
   from: NodeId;
   to: NodeId;
+  style?: EdgeStyle;
 };
 
 export type FlowDocMeta = {
@@ -22,6 +23,13 @@ export type FlowDocMeta = {
 
 export type NodeShape = 'plain' | 'rounded' | 'pill' | 'underline' | 'square';
 export type TextAlign = 'left' | 'center' | 'right';
+export type EdgeLineType = 'solid' | 'dashed' | 'dotted';
+
+export type EdgeStyle = {
+  width?: number;
+  lineType?: EdgeLineType;
+  color?: string;
+};
 
 export type NodeStyle = {
   fontFamily?: string;
@@ -49,6 +57,7 @@ export type FlowSettings = {
     vertical: number;
   };
   defaultShape: NodeShape;
+  defaultEdgeStyle: EdgeStyle;
   tags: FlowTag[];
 };
 
@@ -80,6 +89,8 @@ const DEFAULT_TAGS: FlowTag[] = [
 ];
 const SPACING_MIN = 16;
 const SPACING_MAX = 320;
+const EDGE_WIDTH_MIN = 1;
+const EDGE_WIDTH_MAX = 8;
 
 export function createDefaultSettings(): FlowSettings {
   return {
@@ -89,6 +100,11 @@ export function createDefaultSettings(): FlowSettings {
       vertical: 24
     },
     defaultShape: 'plain',
+    defaultEdgeStyle: {
+      width: 2,
+      lineType: 'solid',
+      color: '#64748b'
+    },
     tags: DEFAULT_TAGS.map(tag => ({ ...tag }))
   };
 }
@@ -229,6 +245,18 @@ function sanitizeNodeStyle(input: unknown, validTagIds?: Set<string>): NodeStyle
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+function sanitizeEdgeStyle(input: unknown): EdgeStyle | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as EdgeStyle;
+  const next: EdgeStyle = {};
+  if (typeof raw.width === 'number' && Number.isFinite(raw.width)) {
+    next.width = Math.max(EDGE_WIDTH_MIN, Math.min(EDGE_WIDTH_MAX, Math.round(raw.width)));
+  }
+  if (raw.lineType === 'solid' || raw.lineType === 'dashed' || raw.lineType === 'dotted') next.lineType = raw.lineType;
+  if (typeof raw.color === 'string') next.color = sanitizeHexColor(raw.color, '#64748b');
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
 function sanitizeSettings(input: unknown): FlowSettings {
   const defaults = createDefaultSettings();
   if (!input || typeof input !== 'object') return defaults;
@@ -257,6 +285,7 @@ function sanitizeSettings(input: unknown): FlowSettings {
       raw.defaultShape === 'square'
         ? raw.defaultShape
         : defaults.defaultShape,
+    defaultEdgeStyle: sanitizeEdgeStyle(raw.defaultEdgeStyle) || defaults.defaultEdgeStyle,
     tags
   };
 }
@@ -271,7 +300,11 @@ export function migrateToLatest(input: unknown): FlowDoc {
     return style ? { ...node, style } : node;
   });
   const validNodeIds = new Set(nodes.map(node => node.id));
-  const edges = sanitizeEdges(legacy.edges, validNodeIds);
+  const edges = sanitizeEdges(legacy.edges, validNodeIds).map(edge => {
+    const rawEdge = Array.isArray(legacy.edges) ? legacy.edges.find(item => item.id === edge.id) : undefined;
+    const style = sanitizeEdgeStyle(rawEdge?.style);
+    return style ? { ...edge, style } : edge;
+  });
   const meta = normalizeMeta(nodes, edges, legacy.meta);
 
   return {
@@ -319,6 +352,24 @@ export function updateNodeStyle(doc: FlowDoc, nodeIds: NodeId[], patch: NodeStyl
         if (value === undefined || value === '') delete (nextStyle as Record<string, unknown>)[key];
       }
       return Object.keys(nextStyle).length > 0 ? { ...node, style: nextStyle } : { id: node.id, label: node.label };
+    })
+  };
+}
+
+export function updateEdgeStyle(doc: FlowDoc, edgeIds: EdgeId[], patch: EdgeStyle): FlowDoc {
+  const targets = new Set(edgeIds);
+  for (const edgeId of targets) {
+    if (!doc.edges.some(edge => edge.id === edgeId)) throw new Error(`unknown edge id: ${edgeId}`);
+  }
+  return {
+    ...doc,
+    edges: doc.edges.map(edge => {
+      if (!targets.has(edge.id)) return edge;
+      const nextStyle = { ...(edge.style || {}), ...patch };
+      for (const [key, value] of Object.entries(nextStyle)) {
+        if (value === undefined || value === '') delete (nextStyle as Record<string, unknown>)[key];
+      }
+      return Object.keys(nextStyle).length > 0 ? { ...edge, style: nextStyle } : { id: edge.id, from: edge.from, to: edge.to };
     })
   };
 }
@@ -394,7 +445,8 @@ export function addEdge(doc: FlowDoc, from: NodeId, to: NodeId): FlowDoc {
   const edge: FlowEdge = {
     id: nextEdgeId(doc),
     from,
-    to
+    to,
+    style: { ...doc.settings.defaultEdgeStyle }
   };
   return {
     ...doc,

@@ -1,14 +1,11 @@
-import { _electron as electron, expect, type Locator, test } from '@playwright/test';
+import { _electron as electron, expect, type Page, test } from '@playwright/test';
 import { join } from 'node:path';
 
-async function setColor(locator: Locator, value: string) {
-  await locator.evaluate((element, nextValue) => {
-    const input = element as HTMLInputElement;
-    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-    descriptor?.set?.call(input, nextValue);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }, value);
+function toolbarSelect(window: Page, label: string) {
+  return window
+    .locator('label.toolbar-field')
+    .filter({ has: window.getByText(label, { exact: true }) })
+    .locator('select');
 }
 
 test('node style toolbar applies visual changes to selected nodes', async () => {
@@ -35,8 +32,8 @@ test('node style toolbar applies visual changes to selected nodes', async () => 
   const radius = await child.evaluate(element => parseFloat(getComputedStyle(element).borderTopLeftRadius));
   expect(radius).toBeGreaterThan(20);
 
-  await setColor(window.getByLabel('Node Color'), '#ff8800');
-  await expect(child).toHaveCSS('background-color', 'rgb(255, 136, 0)');
+  await window.getByLabel('Node Color #f97316').click();
+  await expect(child).toHaveCSS('background-color', 'rgb(249, 115, 22)');
 
   await app.close();
 });
@@ -60,6 +57,39 @@ test('map style toolbar applies theme and default shape to new nodes', async () 
   await expect(child).toBeVisible();
   const radius = await child.evaluate(element => parseFloat(getComputedStyle(element).borderTopLeftRadius));
   expect(radius).toBeGreaterThan(10);
+
+  await app.close();
+});
+
+test('line style toolbar applies default and selected edge changes', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  await expect(window.getByText('Mind Map Style')).toBeVisible();
+  await toolbarSelect(window, 'Line Width').selectOption('4');
+  await toolbarSelect(window, 'Line Type').selectOption('dashed');
+  await window.getByLabel('Line Color #ef4444').click();
+
+  const root = window.getByTestId('node-n1');
+  await root.click();
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+
+  const edge = window.getByTestId('edge-path-e1');
+  await expect(edge).toHaveCount(1);
+  await expect(edge).toHaveCSS('stroke', 'rgb(239, 68, 68)');
+  await expect(edge).toHaveCSS('stroke-width', '4px');
+  await expect(edge).toHaveCSS('stroke-dasharray', '16px, 12px');
+
+  await edge.click({ force: true });
+  await expect(window.getByText('Line Style', { exact: true })).toBeVisible();
+  await toolbarSelect(window, 'Line Width').selectOption('2');
+  await toolbarSelect(window, 'Line Type').selectOption('dotted');
+  await window.getByLabel('Line Color #0ea5e9').click();
+
+  await expect(edge).toHaveCSS('stroke', 'rgb(14, 165, 233)');
+  await expect(edge).toHaveCSS('stroke-dasharray', '1px, 6px');
 
   await app.close();
 });
