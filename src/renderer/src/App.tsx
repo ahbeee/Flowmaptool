@@ -1898,6 +1898,15 @@ export function App() {
         return;
       }
       if (key === 'delete' || key === 'backspace') {
+        if (
+          selectedRoutePoint &&
+          selectedRoutePoint.edgeId === selectedEdgeId &&
+          edgeRoutes[selectedRoutePoint.edgeId]?.points[selectedRoutePoint.pointIndex]
+        ) {
+          event.preventDefault();
+          deleteSelectedRoutePoint();
+          return;
+        }
         if (selectedEdgeId) {
           event.preventDefault();
           deleteSelectedEdge();
@@ -1923,12 +1932,15 @@ export function App() {
     createNewDocument,
     deleteSelectedEdge,
     deleteSelectedNodes,
+    deleteSelectedRoutePoint,
+    edgeRoutes,
     openDocument,
     pasteSelectedNodes,
     saveDocument,
     setCanvasZoom,
     selectedEdgeId,
     selectedNodeIds,
+    selectedRoutePoint,
     startEditingNode,
     fitCanvasToView,
     updateActiveTab

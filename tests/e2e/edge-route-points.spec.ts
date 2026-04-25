@@ -45,6 +45,13 @@ test('selected edge supports multiple editable route points', async () => {
 
   await window.getByRole('button', { name: 'Add Route Point' }).click();
   await expect(window.locator('.edge-bend-handle')).toHaveCount(2);
+  await expect(window.locator('.edge-bend-handle-selected')).toHaveCount(1);
+  await window.keyboard.press('Delete');
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+  await expect(window.getByTestId('edge-path-e2')).toBeVisible();
+
+  await window.getByRole('button', { name: 'Add Route Point' }).click();
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(2);
 
   const beforeDrag = await edgePathD();
   const center = await handleCenter(1);
