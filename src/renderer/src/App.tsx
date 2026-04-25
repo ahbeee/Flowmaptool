@@ -139,7 +139,10 @@ type MarqueeState = {
 type EdgeBend = { x: number; y: number };
 type EdgeBendMap = Record<string, EdgeBend>;
 type EdgeBendsByDirection = Record<LayoutDirection, EdgeBendMap>;
-type EdgeBendDragState = { edgeId: string };
+type EdgeRoute = { points: Point[] };
+type EdgeRouteMap = Record<string, EdgeRoute>;
+type EdgeRoutesByDirection = Record<LayoutDirection, EdgeRouteMap>;
+type EdgeBendDragState = { edgeId: string; pointIndex: number };
 type ConnectDragState = {
   fromNodeId: NodeId;
   start: Point;
@@ -159,7 +162,7 @@ type SvgEdgeSnapshot = {
   fromSize: NodeSize;
   toSize: NodeSize;
   forceBend: boolean;
-  bend?: EdgeBend;
+  route?: EdgeRoute;
 };
 
 type LayoutEdgeAnalysis = {
@@ -181,6 +184,7 @@ type PersistedUiState = {
   layoutDirection: LayoutDirection;
   nodeOffsetsByDirection: NodeOffsetsByDirection;
   edgeBendsByDirection: EdgeBendsByDirection;
+  edgeRoutesByDirection: EdgeRoutesByDirection;
   toolbarVisible: boolean;
 };
 type PersistedQflowFile = {
@@ -197,6 +201,7 @@ type TabDocument = {
   layoutDirection: LayoutDirection;
   nodeOffsetsByDirection: NodeOffsetsByDirection;
   edgeBendsByDirection: EdgeBendsByDirection;
+  edgeRoutesByDirection: EdgeRoutesByDirection;
   toolbarVisible: boolean;
 };
 
@@ -214,6 +219,10 @@ function emptyOffsetsByDirection(): NodeOffsetsByDirection {
 }
 
 function emptyEdgeBendsByDirection(): EdgeBendsByDirection {
+  return { horizontal: {}, vertical: {} };
+}
+
+function emptyEdgeRoutesByDirection(): EdgeRoutesByDirection {
   return { horizontal: {}, vertical: {} };
 }
 
@@ -235,6 +244,7 @@ function createTabDocument(id: string, title: string, doc?: FlowDoc): TabDocumen
     layoutDirection: 'horizontal',
     nodeOffsetsByDirection: emptyOffsetsByDirection(),
     edgeBendsByDirection: emptyEdgeBendsByDirection(),
+    edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
     toolbarVisible: true
   };
 }
@@ -268,6 +278,31 @@ function sanitizeEdgeBendMap(value: unknown, validEdgeIds: Set<string>): EdgeBen
     const y = asFiniteNumber((rawBend as { y?: unknown }).y);
     if (x === null || y === null) continue;
     result[id] = { x, y };
+  }
+  return result;
+}
+
+function sanitizeEdgeRouteMap(value: unknown, validEdgeIds: Set<string>): EdgeRouteMap {
+  if (!value || typeof value !== 'object') return {};
+  const result: EdgeRouteMap = {};
+  for (const [id, rawRoute] of Object.entries(value as Record<string, unknown>)) {
+    if (!validEdgeIds.has(id)) continue;
+    if (!rawRoute || typeof rawRoute !== 'object') continue;
+    const rawPoints = Array.isArray((rawRoute as { points?: unknown }).points)
+      ? (rawRoute as { points: unknown[] }).points
+      : Array.isArray(rawRoute)
+        ? (rawRoute as unknown[])
+        : [];
+    const points = rawPoints
+      .map(rawPoint => {
+        if (!rawPoint || typeof rawPoint !== 'object') return null;
+        const x = asFiniteNumber((rawPoint as { x?: unknown }).x);
+        const y = asFiniteNumber((rawPoint as { y?: unknown }).y);
+        return x === null || y === null ? null : { x, y };
+      })
+      .filter((point): point is Point => point !== null)
+      .slice(0, 12);
+    if (points.length > 0) result[id] = { points };
   }
   return result;
 }
@@ -334,6 +369,12 @@ function parsePersistedQflow(raw: string): { doc: FlowDoc; ui: PersistedUiState 
     horizontal: sanitizeEdgeBendMap(rawEdgeBendsByDirection?.horizontal, validEdgeIds),
     vertical: sanitizeEdgeBendMap(rawEdgeBendsByDirection?.vertical, validEdgeIds)
   };
+  const rawEdgeRoutesByDirection = (rawUi as { edgeRoutesByDirection?: Partial<EdgeRoutesByDirection> } | undefined)
+    ?.edgeRoutesByDirection;
+  const edgeRoutesByDirection: EdgeRoutesByDirection = {
+    horizontal: sanitizeEdgeRouteMap(rawEdgeRoutesByDirection?.horizontal, validEdgeIds),
+    vertical: sanitizeEdgeRouteMap(rawEdgeRoutesByDirection?.vertical, validEdgeIds)
+  };
   const legacyEdgeBends = sanitizeEdgeBendMap((rawUi as { edgeBends?: unknown } | undefined)?.edgeBends, validEdgeIds);
   if (Object.keys(legacyEdgeBends).length > 0) {
     edgeBendsByDirection[layoutDirection] = {
@@ -342,7 +383,7 @@ function parsePersistedQflow(raw: string): { doc: FlowDoc; ui: PersistedUiState 
     };
   }
   const toolbarVisible = rawUi?.toolbarVisible === false ? false : true;
-  return { doc, ui: { layoutDirection, nodeOffsetsByDirection, edgeBendsByDirection, toolbarVisible } };
+  return { doc, ui: { layoutDirection, nodeOffsetsByDirection, edgeBendsByDirection, edgeRoutesByDirection, toolbarVisible } };
 }
 
 function serializePersistedQflow(tab: TabDocument): string {
@@ -353,6 +394,7 @@ function serializePersistedQflow(tab: TabDocument): string {
       layoutDirection: tab.layoutDirection,
       nodeOffsetsByDirection: tab.nodeOffsetsByDirection,
       edgeBendsByDirection: tab.edgeBendsByDirection,
+      edgeRoutesByDirection: tab.edgeRoutesByDirection,
       toolbarVisible: tab.toolbarVisible
     }
   };
@@ -552,10 +594,15 @@ function edgePath(
   fromSize: NodeSize,
   toSize: NodeSize,
   forceBend = false,
-  manualBend?: EdgeBend
+  manualRoute?: EdgeRoute
 ): string {
-  if (manualBend) {
-    return `M ${from.x} ${from.y} Q ${manualBend.x} ${manualBend.y} ${to.x} ${to.y}`;
+  if (manualRoute && manualRoute.points.length > 0) {
+    if (manualRoute.points.length === 1) {
+      const bend = manualRoute.points[0];
+      return `M ${from.x} ${from.y} Q ${bend.x} ${bend.y} ${to.x} ${to.y}`;
+    }
+    const routePoints = manualRoute.points.map(point => `L ${point.x} ${point.y}`).join(' ');
+    return `M ${from.x} ${from.y} ${routePoints} L ${to.x} ${to.y}`;
   }
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -588,6 +635,10 @@ function edgePath(
 
 function edgeMidpoint(from: Point, to: Point): EdgeBend {
   return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+}
+
+function routeFromBend(bend?: EdgeBend): EdgeRoute | undefined {
+  return bend ? { points: [bend] } : undefined;
 }
 
 function escapeXml(value: string): string {
@@ -806,6 +857,7 @@ export function App() {
   const layoutDirection = activeTab.layoutDirection;
   const nodeOffsets = activeTab.nodeOffsetsByDirection[layoutDirection];
   const edgeBends = activeTab.edgeBendsByDirection[layoutDirection];
+  const edgeRoutes = activeTab.edgeRoutesByDirection[layoutDirection];
   const activeTheme = getTheme(doc.settings.themeId);
   const layoutEdgeAnalysis = React.useMemo(() => analyzeLayoutEdges(doc), [doc]);
   const layoutDoc = React.useMemo(
@@ -886,6 +938,16 @@ export function App() {
       edgeBendsByDirection: {
         ...tab.edgeBendsByDirection,
         [tab.layoutDirection]: updater(tab.edgeBendsByDirection[tab.layoutDirection])
+      }
+    }));
+  }, [updateActiveTab]);
+
+  const setCurrentEdgeRoutes = React.useCallback((updater: (prev: EdgeRouteMap) => EdgeRouteMap) => {
+    updateActiveTab(tab => ({
+      ...tab,
+      edgeRoutesByDirection: {
+        ...tab.edgeRoutesByDirection,
+        [tab.layoutDirection]: updater(tab.edgeRoutesByDirection[tab.layoutDirection])
       }
     }));
   }, [updateActiveTab]);
@@ -982,6 +1044,7 @@ export function App() {
       title: tab.title.startsWith('Untitled') ? tab.title : `Untitled ${tabCounter}`,
       nodeOffsetsByDirection: emptyOffsetsByDirection(),
       edgeBendsByDirection: emptyEdgeBendsByDirection(),
+      edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
       toolbarVisible: true
     }));
     setFileMessage('New document');
@@ -1002,6 +1065,7 @@ export function App() {
           layoutDirection: loaded.ui.layoutDirection,
           nodeOffsetsByDirection: loaded.ui.nodeOffsetsByDirection,
           edgeBendsByDirection: loaded.ui.edgeBendsByDirection,
+          edgeRoutesByDirection: loaded.ui.edgeRoutesByDirection,
           toolbarVisible: loaded.ui.toolbarVisible
         }
       ]);
@@ -1112,7 +1176,7 @@ export function App() {
   const autoEdgeBendMap = React.useMemo(() => {
     const map = new Map<string, EdgeBend>();
     for (const edge of doc.edges) {
-      if (edgeBends[edge.id]) continue;
+      if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
       if (!edgeForceBendMap.get(edge.id)) continue;
       const fromPos = renderedPositionMap.get(edge.from);
       const toPos = renderedPositionMap.get(edge.to);
@@ -1124,7 +1188,7 @@ export function App() {
       if (bend) map.set(edge.id, bend);
     }
     return map;
-  }, [doc.edges, edgeBends, edgeForceBendMap, layoutDirection, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
+  }, [doc.edges, edgeBends, edgeForceBendMap, edgeRoutes, layoutDirection, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
 
   const edgeLaneMap = React.useMemo(() => {
     const laneByEdgeId = new Map<string, number>();
@@ -1333,7 +1397,7 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-      const bend = edgeBends[edge.id] || autoEdgeBendMap.get(edge.id);
+      const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id));
       edges.push({
         id: edge.id,
         from: endpoints.from,
@@ -1342,11 +1406,11 @@ export function App() {
         fromSize,
         toSize,
         forceBend: edgeForceBendMap.get(edge.id) || false,
-        ...(bend ? { bend } : {})
+        ...(route ? { route } : {})
       });
     }
     return { nodes, edges };
-  }, [autoEdgeBendMap, doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
+  }, [autoEdgeBendMap, doc.edges, doc.nodes, edgeBends, edgeForceBendMap, edgeLaneMap, edgeRoutes, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
 
   const buildCanvasSvg = React.useCallback((fitToContent = false) => {
     const snapshot = buildSvgSnapshot();
@@ -1370,10 +1434,11 @@ export function App() {
       }
 
       for (const edge of snapshot.edges) {
-        minX = Math.min(minX, edge.from.x, edge.to.x, edge.bend?.x ?? edge.from.x);
-        minY = Math.min(minY, edge.from.y, edge.to.y, edge.bend?.y ?? edge.from.y);
-        maxX = Math.max(maxX, edge.from.x, edge.to.x, edge.bend?.x ?? edge.to.x);
-        maxY = Math.max(maxY, edge.from.y, edge.to.y, edge.bend?.y ?? edge.to.y);
+        const routePoints = edge.route?.points || [];
+        minX = Math.min(minX, edge.from.x, edge.to.x, ...routePoints.map(point => point.x));
+        minY = Math.min(minY, edge.from.y, edge.to.y, ...routePoints.map(point => point.y));
+        maxX = Math.max(maxX, edge.from.x, edge.to.x, ...routePoints.map(point => point.x));
+        maxY = Math.max(maxY, edge.from.y, edge.to.y, ...routePoints.map(point => point.y));
       }
 
       if (Number.isFinite(minX) && Number.isFinite(minY)) {
@@ -1390,8 +1455,10 @@ export function App() {
         edge => {
           const from = shiftPoint(edge.from);
           const to = shiftPoint(edge.to);
-          const bend = edge.bend ? shiftPoint(edge.bend) : undefined;
-          return `<path d="${edgePath(from, to, edge.lane, layoutDirection, edge.fromSize, edge.toSize, edge.forceBend, bend)}" stroke="${activeTheme.edge}" stroke-width="2" fill="none" stroke-linecap="round" />`;
+          const route = edge.route
+            ? { points: edge.route.points.map(point => shiftPoint(point)) }
+            : undefined;
+          return `<path d="${edgePath(from, to, edge.lane, layoutDirection, edge.fromSize, edge.toSize, edge.forceBend, route)}" stroke="${activeTheme.edge}" stroke-width="2" fill="none" stroke-linecap="round" />`;
         }
       )
       .join('');
@@ -1479,12 +1546,23 @@ export function App() {
         }
         return next;
       };
+      const pruneRoutes = (map: EdgeRouteMap) => {
+        const next: EdgeRouteMap = {};
+        for (const [id, route] of Object.entries(map)) {
+          if (validEdgeIds.has(id) && route.points.length > 0) next[id] = route;
+        }
+        return next;
+      };
       return {
         ...tab,
         nodeOffsetsByDirection: { horizontal: nextHorizontal, vertical: nextVertical },
         edgeBendsByDirection: {
           horizontal: pruneBends(tab.edgeBendsByDirection.horizontal),
           vertical: pruneBends(tab.edgeBendsByDirection.vertical)
+        },
+        edgeRoutesByDirection: {
+          horizontal: pruneRoutes(tab.edgeRoutesByDirection.horizontal),
+          vertical: pruneRoutes(tab.edgeRoutesByDirection.vertical)
         }
       };
     });
@@ -1562,7 +1640,11 @@ export function App() {
       const { [selectedEdgeId]: _removed, ...rest } = prev;
       return rest;
     });
-  }, [selectedEdgeId, setCurrentEdgeBends]);
+    setCurrentEdgeRoutes(prev => {
+      const { [selectedEdgeId]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }, [selectedEdgeId, setCurrentEdgeBends, setCurrentEdgeRoutes]);
 
   const hasManualOffset = React.useMemo(
     () =>
@@ -2037,7 +2119,20 @@ export function App() {
       const pointer = getCanvasContentPoint(event.clientX, event.clientY);
       if (!pointer) return;
       const { x, y } = pointer;
-      setCurrentEdgeBends(prev => ({ ...prev, [edgeBendDrag.edgeId]: { x, y } }));
+      const fallbackRoute =
+        edgeRoutes[edgeBendDrag.edgeId] ||
+        routeFromBend(edgeBends[edgeBendDrag.edgeId] || autoEdgeBendMap.get(edgeBendDrag.edgeId)) ||
+        { points: [{ x, y }] };
+      setCurrentEdgeRoutes(prev => {
+        const current = prev[edgeBendDrag.edgeId] || fallbackRoute;
+        const points = current.points.length > 0 ? [...current.points] : [{ x, y }];
+        points[edgeBendDrag.pointIndex] = { x, y };
+        return { ...prev, [edgeBendDrag.edgeId]: { points } };
+      });
+      setCurrentEdgeBends(prev => {
+        const { [edgeBendDrag.edgeId]: _removed, ...rest } = prev;
+        return rest;
+      });
     };
     const onPointerUp = () => setEdgeBendDrag(null);
     window.addEventListener('pointermove', onPointerMove);
@@ -2046,7 +2141,7 @@ export function App() {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [autoPanCanvas, edgeBendDrag, getCanvasContentPoint, setCurrentEdgeBends]);
+  }, [autoEdgeBendMap, autoPanCanvas, edgeBendDrag, edgeBends, edgeRoutes, getCanvasContentPoint, setCurrentEdgeBends, setCurrentEdgeRoutes]);
 
   React.useEffect(() => {
     if (!marquee) return;
@@ -2174,10 +2269,10 @@ export function App() {
     event.stopPropagation();
   };
 
-  const startEdgeBendDrag = (event: React.PointerEvent<SVGCircleElement>, edgeId: string) => {
+  const startEdgeBendDrag = (event: React.PointerEvent<SVGCircleElement>, edgeId: string, pointIndex: number) => {
     event.preventDefault();
     event.stopPropagation();
-    setEdgeBendDrag({ edgeId });
+    setEdgeBendDrag({ edgeId, pointIndex });
   };
 
   const beginConnectDrag = (nodeId: NodeId) => {
@@ -2480,7 +2575,7 @@ export function App() {
         <button
           type="button"
           onClick={resetSelectedEdgeBend}
-          disabled={!selectedEdgeId || !edgeBends[selectedEdgeId]}
+          disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
         >
           Reset Bend
         </button>
@@ -2710,12 +2805,12 @@ export function App() {
                     const lane = edgeLaneMap.get(edge.id) || 0;
                     const forceBend = edgeForceBendMap.get(edge.id) || false;
                     const selected = edge.id === selectedEdgeId;
-                    const bend = edgeBends[edge.id] || autoEdgeBendMap.get(edge.id);
+                    const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id));
                     return (
                       <path
                         key={edge.id}
                         data-testid={`edge-path-${edge.id}`}
-                        d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, bend)}
+                        d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
                         className={selected ? 'edge-path edge-path-selected' : 'edge-path'}
                         style={selected ? undefined : { stroke: activeTheme.edge }}
                         onPointerDown={event => {
@@ -2744,17 +2839,19 @@ export function App() {
                     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
                     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
                     const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-                    const bend = edgeBends[edge.id] || autoEdgeBendMap.get(edge.id) || edgeMidpoint(endpoints.from, endpoints.to);
-                    return (
+                    const route =
+                      edgeRoutes[edge.id] ||
+                      routeFromBend(edgeBends[edge.id] || autoEdgeBendMap.get(edge.id) || edgeMidpoint(endpoints.from, endpoints.to));
+                    return route.points.map((point, pointIndex) => (
                       <circle
-                        key={`bend-${edge.id}`}
+                        key={`bend-${edge.id}-${pointIndex}`}
                         className="edge-bend-handle"
-                        cx={bend.x}
-                        cy={bend.y}
+                        cx={point.x}
+                        cy={point.y}
                         r={7}
-                        onPointerDown={event => startEdgeBendDrag(event, edge.id)}
+                        onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
                       />
-                    );
+                    ));
                   })}
                 </svg>
 
