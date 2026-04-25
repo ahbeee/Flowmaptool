@@ -356,6 +356,11 @@ h2 {
   pointer-events: auto;
 }
 
+.edge-bend-handle-selected {
+  fill: #bfdbfe;
+  stroke-width: 3;
+}
+
 .flow-node {
   position: absolute;
   z-index: 2;

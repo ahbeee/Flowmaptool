@@ -143,6 +143,7 @@ type EdgeRoute = { points: Point[] };
 type EdgeRouteMap = Record<string, EdgeRoute>;
 type EdgeRoutesByDirection = Record<LayoutDirection, EdgeRouteMap>;
 type EdgeBendDragState = { edgeId: string; pointIndex: number };
+type EdgeRoutePointSelection = { edgeId: string; pointIndex: number };
 type ConnectDragState = {
   fromNodeId: NodeId;
   start: Point;
@@ -647,7 +648,7 @@ function distanceSquared(a: Point, b: Point): number {
   return dx * dx + dy * dy;
 }
 
-function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRoute): EdgeRoute {
+function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRoute): { route: EdgeRoute; pointIndex: number } {
   const fullRoute = [from, ...route.points, to];
   let insertAt = 0;
   let longestDistance = -1;
@@ -663,7 +664,7 @@ function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRou
   const newPoint = edgeMidpoint(start, end);
   const points = [...route.points];
   points.splice(insertAt, 0, newPoint);
-  return { points };
+  return { route: { points }, pointIndex: insertAt };
 }
 
 function escapeXml(value: string): string {
@@ -856,6 +857,7 @@ export function App() {
   const [activeTabId, setActiveTabId] = React.useState('tab-1');
   const [tabCounter, setTabCounter] = React.useState(2);
   const [selectedEdgeId, setSelectedEdgeId] = React.useState('');
+  const [selectedRoutePoint, setSelectedRoutePoint] = React.useState<EdgeRoutePointSelection | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = React.useState<NodeId[]>([]);
   const [copiedSelection, setCopiedSelection] = React.useState<CopiedSelection | null>(null);
   const [editingNodeId, setEditingNodeId] = React.useState<NodeId | null>(null);
@@ -916,6 +918,7 @@ export function App() {
   const resetTransientUiState = React.useCallback((defaultNodeId?: NodeId) => {
     stopConnectDragListeners();
     setSelectedEdgeId('');
+    setSelectedRoutePoint(null);
     setSelectedNodeIds(defaultNodeId ? [defaultNodeId] : []);
     setCopiedSelection(null);
     setEditingNodeId(null);
@@ -1544,6 +1547,18 @@ export function App() {
   }, [doc.edges, doc.nodes, selectedEdgeId]);
 
   React.useEffect(() => {
+    if (!selectedRoutePoint) return;
+    if (selectedRoutePoint.edgeId !== selectedEdgeId) {
+      setSelectedRoutePoint(null);
+      return;
+    }
+    const route = edgeRoutes[selectedRoutePoint.edgeId];
+    if (!route || !route.points[selectedRoutePoint.pointIndex]) {
+      setSelectedRoutePoint(null);
+    }
+  }, [edgeRoutes, selectedEdgeId, selectedRoutePoint]);
+
+  React.useEffect(() => {
     if (!editingNodeId) return;
     if (!doc.nodes.some(node => node.id === editingNodeId)) {
       setEditingNodeId(null);
@@ -1597,6 +1612,7 @@ export function App() {
     if (!selectedEdgeId) return;
     commitDoc(prev => removeEdge(prev, selectedEdgeId));
     setSelectedEdgeId('');
+    setSelectedRoutePoint(null);
   }, [commitDoc, selectedEdgeId]);
 
   const deleteSelectedNodes = React.useCallback(() => {
@@ -1661,6 +1677,7 @@ export function App() {
 
   const resetSelectedEdgeBend = React.useCallback(() => {
     if (!selectedEdgeId) return;
+    setSelectedRoutePoint(null);
     setCurrentEdgeBends(prev => {
       const { [selectedEdgeId]: _removed, ...rest } = prev;
       return rest;
@@ -1684,11 +1701,13 @@ export function App() {
     const fallbackRoute =
       edgeRoutes[selectedEdgeId] ||
       routeFromBend(edgeBends[selectedEdgeId] || autoEdgeBendMap.get(selectedEdgeId) || edgeMidpoint(endpoints.from, endpoints.to));
+    const inserted = insertRoutePointAtLongestSegment(endpoints.from, endpoints.to, edgeRoutes[selectedEdgeId] || fallbackRoute);
 
     setCurrentEdgeRoutes(prev => ({
       ...prev,
-      [selectedEdgeId]: insertRoutePointAtLongestSegment(endpoints.from, endpoints.to, prev[selectedEdgeId] || fallbackRoute)
+      [selectedEdgeId]: insertRoutePointAtLongestSegment(endpoints.from, endpoints.to, prev[selectedEdgeId] || fallbackRoute).route
     }));
+    setSelectedRoutePoint({ edgeId: selectedEdgeId, pointIndex: inserted.pointIndex });
     setCurrentEdgeBends(prev => {
       const { [selectedEdgeId]: _removed, ...rest } = prev;
       return rest;
@@ -1705,6 +1724,24 @@ export function App() {
     setCurrentEdgeBends,
     setCurrentEdgeRoutes
   ]);
+
+  const deleteSelectedRoutePoint = React.useCallback(() => {
+    if (!selectedRoutePoint || selectedRoutePoint.edgeId !== selectedEdgeId) return;
+    setCurrentEdgeRoutes(prev => {
+      const route = prev[selectedRoutePoint.edgeId];
+      if (!route || !route.points[selectedRoutePoint.pointIndex]) return prev;
+      const nextPoints = route.points.filter((_, index) => index !== selectedRoutePoint.pointIndex);
+      if (nextPoints.length === 0) {
+        const { [selectedRoutePoint.edgeId]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return {
+        ...prev,
+        [selectedRoutePoint.edgeId]: { points: nextPoints }
+      };
+    });
+    setSelectedRoutePoint(null);
+  }, [selectedEdgeId, selectedRoutePoint, setCurrentEdgeRoutes]);
 
   const hasManualOffset = React.useMemo(
     () =>
@@ -2332,6 +2369,7 @@ export function App() {
   const startEdgeBendDrag = (event: React.PointerEvent<SVGCircleElement>, edgeId: string, pointIndex: number) => {
     event.preventDefault();
     event.stopPropagation();
+    setSelectedRoutePoint({ edgeId, pointIndex });
     setEdgeBendDrag({ edgeId, pointIndex });
   };
 
@@ -2637,6 +2675,17 @@ export function App() {
         </button>
         <button
           type="button"
+          onClick={deleteSelectedRoutePoint}
+          disabled={
+            !selectedRoutePoint ||
+            selectedRoutePoint.edgeId !== selectedEdgeId ||
+            !edgeRoutes[selectedRoutePoint.edgeId]?.points[selectedRoutePoint.pointIndex]
+          }
+        >
+          Delete Route Point
+        </button>
+        <button
+          type="button"
           onClick={resetSelectedEdgeBend}
           disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
         >
@@ -2879,10 +2928,12 @@ export function App() {
                         onPointerDown={event => {
                           event.stopPropagation();
                           setSelectedEdgeId(edge.id);
+                          setSelectedRoutePoint(null);
                           setSelectedNodeIds([]);
                         }}
                         onClick={() => {
                           setSelectedEdgeId(edge.id);
+                          setSelectedRoutePoint(null);
                           setSelectedNodeIds([]);
                         }}
                       />
@@ -2908,7 +2959,12 @@ export function App() {
                     return route.points.map((point, pointIndex) => (
                       <circle
                         key={`bend-${edge.id}-${pointIndex}`}
-                        className="edge-bend-handle"
+                        data-testid={`edge-route-point-${pointIndex}`}
+                        className={
+                          selectedRoutePoint?.edgeId === edge.id && selectedRoutePoint.pointIndex === pointIndex
+                            ? 'edge-bend-handle edge-bend-handle-selected'
+                            : 'edge-bend-handle'
+                        }
                         cx={point.x}
                         cy={point.y}
                         r={7}
