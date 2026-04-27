@@ -71,7 +71,7 @@ const CHILD_NODE_STYLE: NodeStyle = {
   fontSize: DEFAULT_FONT_SIZE,
   shape: 'plain'
 };
-const SPACING_MIN = 16;
+const SPACING_MIN = 0;
 const SPACING_MAX = 320;
 const FONT_FAMILIES = ['Roboto', 'Segoe UI', 'Arial', 'Microsoft JhengHei', 'Noto Sans TC'];
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 32, 48, 64];
