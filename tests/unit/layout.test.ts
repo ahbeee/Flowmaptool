@@ -180,6 +180,26 @@ describe('vertical layout', () => {
     }
   });
 
+  it('allows zero secondary gap without overlapping sibling nodes', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'Root');
+    doc = addNode(doc, 'A');
+    doc = addNode(doc, 'B');
+    doc = addEdge(doc, 'n1', 'n2');
+    doc = addEdge(doc, 'n1', 'n3');
+
+    const nodeSizes: NodeSizeMap = {
+      n1: { width: 70, height: 28 },
+      n2: { width: 70, height: 28 },
+      n3: { width: 70, height: 28 }
+    };
+    const result = layoutFlow(doc, 'horizontal', nodeSizes, { primary: 48, secondary: 0 });
+    const n2 = findPos(result, 'n2');
+    const n3 = findPos(result, 'n3');
+
+    expect(Math.abs(n3.y - n2.y)).toBe(28);
+  });
+
   it('shifts downstream layers when an upstream node width grows', () => {
     let doc = createEmptyDoc();
     doc = addNode(doc, 'Root');

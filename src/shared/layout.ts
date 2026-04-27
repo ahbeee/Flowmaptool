@@ -49,8 +49,8 @@ export function getLayoutSecondaryGap(direction: LayoutDirection): number {
 
 function getSpacing(direction: LayoutDirection, spacing?: Partial<LayoutSpacing>): LayoutSpacing {
   return {
-    primary: spacing?.primary || GAP_PRIMARY,
-    secondary: spacing?.secondary || getLayoutSecondaryGap(direction)
+    primary: spacing?.primary ?? GAP_PRIMARY,
+    secondary: spacing?.secondary ?? getLayoutSecondaryGap(direction)
   };
 }
 

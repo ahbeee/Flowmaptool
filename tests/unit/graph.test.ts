@@ -3,6 +3,7 @@ import {
   addEdge,
   addNode,
   createEmptyDoc,
+  deserialize,
   reparentNode,
   removeEdge,
   removeNode,
@@ -33,6 +34,22 @@ describe('graph model', () => {
         shape: 'plain'
       }
     });
+  });
+
+  it('allows zero spacing when loading settings', () => {
+    const doc = deserialize(
+      JSON.stringify({
+        schemaVersion: 1,
+        nodes: [],
+        edges: [],
+        meta: { nextNodeSeq: 1, nextEdgeSeq: 1 },
+        settings: {
+          spacing: { horizontal: 0, vertical: 0 }
+        }
+      })
+    );
+
+    expect(doc.settings.spacing).toEqual({ horizontal: 0, vertical: 0 });
   });
 
   it('supports converge and loop edges', () => {

@@ -87,7 +87,7 @@ const DEFAULT_TAGS: FlowTag[] = [
   { id: 'tag-green', name: 'Done', color: '#22c55e' },
   { id: 'tag-orange', name: 'Orange', color: '#f97316' }
 ];
-const SPACING_MIN = 16;
+const SPACING_MIN = 0;
 const SPACING_MAX = 320;
 const EDGE_WIDTH_MIN = 1;
 const EDGE_WIDTH_MAX = 8;
@@ -274,8 +274,8 @@ function sanitizeSettings(input: unknown): FlowSettings {
   return {
     themeId: typeof raw.themeId === 'string' && raw.themeId.trim() ? raw.themeId : defaults.themeId,
     spacing: {
-      horizontal: Math.max(SPACING_MIN, Math.min(SPACING_MAX, raw.spacing?.horizontal || defaults.spacing.horizontal)),
-      vertical: Math.max(SPACING_MIN, Math.min(SPACING_MAX, raw.spacing?.vertical || defaults.spacing.vertical))
+      horizontal: Math.max(SPACING_MIN, Math.min(SPACING_MAX, raw.spacing?.horizontal ?? defaults.spacing.horizontal)),
+      vertical: Math.max(SPACING_MIN, Math.min(SPACING_MAX, raw.spacing?.vertical ?? defaults.spacing.vertical))
     },
     defaultShape:
       raw.defaultShape === 'plain' ||
