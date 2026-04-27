@@ -48,6 +48,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/favicon.ico",
       "signAndEditExecutable": false,
       "target": [
         {
