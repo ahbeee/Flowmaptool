@@ -58,22 +58,22 @@ pnpm dist:win
 
 ### Right Toolbar Polish
 
-- Continue refining the right-side toolbar interaction details after more manual use.
-- Continue simplifying controls that are not useful in normal keyboard/mouse editing workflows.
+- Refine right-side toolbar interaction details after more manual use.
+- Simplify controls that are not useful in normal keyboard/mouse editing workflows.
 
 ### Node Interaction Polish
 
-- Continue tightening node operation details that were intentionally paused after the current behavior became broadly acceptable.
+- Tighten node operation details that were intentionally paused after the current behavior became broadly acceptable.
 - Improve drag/reparent edge cases where a moved root, copied subtree, or manually adjusted node can still produce surprising placement.
 - Keep node spacing, node sizing, and text editing behavior consistent across horizontal and vertical layouts.
 
-### Layout Animation and Interaction Feedback
+### Design Feedback Items
 
-- Improve hover, selection, and connection-handle feedback without making the canvas visually noisy.
 - Review the suggestions from the design feedback document and apply the items that improve practical editing density.
 
 ### Advanced Manual Edge Routing
 
+- Treat advanced manual routing as active improvement work, not a deferred parity-only item.
 - Improve cross-layer and back-reference routing such as node-to-root, node-to-ancestor, sibling-to-sibling, and branch-to-branch connections.
 - Avoid routing manual edges through node bodies when a clear path exists above, below, or between branches.
 - Preserve user-adjusted edge routes after layout refreshes, node selection changes, and document reloads.
