@@ -49,6 +49,8 @@ test('map style toolbar applies theme and default shape to new nodes', async () 
   const window = await app.firstWindow();
 
   await expect(window.getByText('Mind Map Style')).toBeVisible();
+  await expect(window.getByLabel('Horizontal Gap')).toHaveValue('48');
+  await expect(window.getByLabel('Vertical Gap')).toHaveValue('48');
   await window.getByLabel('Theme').selectOption('gray-red');
   await window.getByLabel('Default Shape').selectOption('pill');
 
@@ -62,6 +64,32 @@ test('map style toolbar applies theme and default shape to new nodes', async () 
   await expect(child).toBeVisible();
   const radius = await child.evaluate(element => parseFloat(getComputedStyle(element).borderTopLeftRadius));
   expect(radius).toBeGreaterThan(10);
+
+  await app.close();
+});
+
+test('map style toolbar allows zero vertical gap without overlap', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  await expect(window.getByText('Mind Map Style')).toBeVisible();
+  await window.getByLabel('Vertical Gap').fill('0');
+
+  const root = window.getByTestId('node-n1');
+  await root.click();
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+  await root.click();
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+
+  const n2 = await window.getByTestId('node-n2').boundingBox();
+  const n3 = await window.getByTestId('node-n3').boundingBox();
+  if (!n2 || !n3) throw new Error('expected sibling nodes to be visible');
+
+  const verticalDistance = Math.abs(n3.y - n2.y);
+  expect(verticalDistance).toBeGreaterThanOrEqual(Math.min(n2.height, n3.height) - 1);
 
   await app.close();
 });

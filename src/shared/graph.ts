@@ -97,7 +97,7 @@ export function createDefaultSettings(): FlowSettings {
     themeId: 'blue-gray',
     spacing: {
       horizontal: 48,
-      vertical: 24
+      vertical: 48
     },
     defaultShape: 'plain',
     defaultEdgeStyle: {
