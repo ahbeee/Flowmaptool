@@ -3482,15 +3482,28 @@ export function App() {
         applyDefaultEdgeStyle
       )}
       <div className="toolbar-button-row">
-        <button type="button" onClick={fitCanvasToView}>
+        <button
+          type="button"
+          onClick={fitCanvasToView}
+          aria-label="Fit"
+          title="Fit graph to visible canvas"
+        >
           Fit
         </button>
-        <button type="button" onClick={addRoutePointToSelectedEdge} disabled={!selectedEdgeId}>
+        <button
+          type="button"
+          onClick={addRoutePointToSelectedEdge}
+          disabled={!selectedEdgeId}
+          aria-label="Add Route Point"
+          title="Add a route point to the selected edge"
+        >
           Add Route Point
         </button>
         <button
           type="button"
           onClick={deleteSelectedRoutePoint}
+          aria-label="Delete Route Point"
+          title="Delete the selected route point"
           disabled={
             !selectedRoutePoint ||
             selectedRoutePoint.edgeId !== selectedEdgeId ||
@@ -3502,6 +3515,8 @@ export function App() {
         <button
           type="button"
           onClick={resetSelectedEdgeBend}
+          aria-label="Reset Bend"
+          title="Clear manual route points from the selected edge"
           disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
         >
           Reset Bend
@@ -3717,12 +3732,20 @@ export function App() {
         applySelectedEdgeStyle
       )}
       <div className="toolbar-button-row">
-        <button type="button" onClick={addRoutePointToSelectedEdge} disabled={!selectedEdgeId}>
+        <button
+          type="button"
+          onClick={addRoutePointToSelectedEdge}
+          disabled={!selectedEdgeId}
+          aria-label="Add Route Point"
+          title="Add a route point to the selected edge"
+        >
           Add Route Point
         </button>
         <button
           type="button"
           onClick={deleteSelectedRoutePoint}
+          aria-label="Delete Route Point"
+          title="Delete the selected route point"
           disabled={
             !selectedRoutePoint ||
             selectedRoutePoint.edgeId !== selectedEdgeId ||
@@ -3734,6 +3757,8 @@ export function App() {
         <button
           type="button"
           onClick={resetSelectedEdgeBend}
+          aria-label="Reset Bend"
+          title="Clear manual route points from the selected edge"
           disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
         >
           Reset Bend

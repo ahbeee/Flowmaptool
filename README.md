@@ -58,8 +58,7 @@ pnpm dist:win
 
 ### Right Toolbar Polish
 
-- Refine the right-side toolbar interaction details after more manual use, including clearer state display for mixed multi-selection values.
-- Re-check `Fit` and `Reset Bend` against real editing cases and adjust behavior where it does not match user expectation.
+- Continue refining the right-side toolbar interaction details after more manual use.
 - Continue simplifying controls that are not useful in normal keyboard/mouse editing workflows.
 
 ### Node Interaction Polish
@@ -70,7 +69,6 @@ pnpm dist:win
 
 ### Layout Animation and Interaction Feedback
 
-- Add lightweight layout transition feedback so reflow is easier to understand after adding, deleting, reparenting, or pasting nodes.
 - Improve hover, selection, and connection-handle feedback without making the canvas visually noisy.
 - Review the suggestions from the design feedback document and apply the items that improve practical editing density.
 
