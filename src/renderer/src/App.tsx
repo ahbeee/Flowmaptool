@@ -1003,6 +1003,95 @@ function distanceToSegmentSquared(point: Point, start: Point, end: Point): numbe
   return distanceSquared(point, projected);
 }
 
+function cubicPoint(from: Point, controlA: Point, controlB: Point, to: Point, t: number): Point {
+  const inverse = 1 - t;
+  const inverseSquared = inverse * inverse;
+  const tSquared = t * t;
+  return {
+    x:
+      inverseSquared * inverse * from.x +
+      3 * inverseSquared * t * controlA.x +
+      3 * inverse * tSquared * controlB.x +
+      tSquared * t * to.x,
+    y:
+      inverseSquared * inverse * from.y +
+      3 * inverseSquared * t * controlA.y +
+      3 * inverse * tSquared * controlB.y +
+      tSquared * t * to.y
+  };
+}
+
+function quadraticPoint(from: Point, control: Point, to: Point, t: number): Point {
+  const inverse = 1 - t;
+  return {
+    x: inverse * inverse * from.x + 2 * inverse * t * control.x + t * t * to.x,
+    y: inverse * inverse * from.y + 2 * inverse * t * control.y + t * t * to.y
+  };
+}
+
+function samplePath(path: string): Point[] {
+  const tokens = path.match(/[MLCQ]|-?\d+(?:\.\d+)?/g) || [];
+  const points: Point[] = [];
+  let index = 0;
+  let current: Point | null = null;
+
+  const readNumber = () => {
+    const value = Number(tokens[index]);
+    index += 1;
+    return value;
+  };
+
+  const readPoint = (): Point => ({ x: readNumber(), y: readNumber() });
+
+  while (index < tokens.length) {
+    const command = tokens[index];
+    index += 1;
+    if (command === 'M') {
+      current = readPoint();
+      points.push(current);
+      continue;
+    }
+    if (!current) break;
+    if (command === 'L') {
+      current = readPoint();
+      points.push(current);
+      continue;
+    }
+    if (command === 'Q') {
+      const control = readPoint();
+      const to = readPoint();
+      for (let step = 1; step <= 18; step += 1) {
+        points.push(quadraticPoint(current, control, to, step / 18));
+      }
+      current = to;
+      continue;
+    }
+    if (command === 'C') {
+      const controlA = readPoint();
+      const controlB = readPoint();
+      const to = readPoint();
+      for (let step = 1; step <= 24; step += 1) {
+        points.push(cubicPoint(current, controlA, controlB, to, step / 24));
+      }
+      current = to;
+    }
+  }
+
+  return points;
+}
+
+function distanceToPathSquared(point: Point, path: string): number {
+  const points = samplePath(path);
+  if (points.length === 0) return Number.POSITIVE_INFINITY;
+  if (points.length === 1) return distanceSquared(point, points[0]);
+
+  let nearest = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    nearest = Math.min(nearest, distanceToSegmentSquared(point, points[index], points[index + 1]));
+  }
+  return nearest;
+}
+
 function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRoute): { route: EdgeRoute; pointIndex: number } {
   const fullRoute = [from, ...route.points, to];
   let insertAt = 0;
@@ -1444,6 +1533,17 @@ export function App() {
     },
     [canvasZoom]
   );
+
+  const getSvgContentPoint = React.useCallback((svg: SVGSVGElement | null, clientX: number, clientY: number): Point | null => {
+    if (!svg) return null;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return null;
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const transformed = point.matrixTransform(matrix.inverse());
+    return { x: transformed.x, y: transformed.y };
+  }, []);
 
   const commitDoc = React.useCallback((recipe: (current: FlowDoc) => FlowDoc) => {
     updateActiveTab(tab => {
@@ -2948,7 +3048,8 @@ export function App() {
     edgeId: string,
     endpoints: { from: Point; to: Point },
     route: EdgeRoute | undefined,
-    start: Point
+    start: Point,
+    getPointerPoint: (clientX: number, clientY: number) => Point | null = getCanvasContentPoint
   ) => {
     stopEdgeSegmentDragListeners();
     setSelectedEdgeId(edgeId);
@@ -2958,7 +3059,7 @@ export function App() {
     let currentRoute: EdgeRoute = route || { points: [] };
     const onPointerMove = (nativeEvent: PointerEvent) => {
       autoPanCanvas(nativeEvent);
-      const pointer = getCanvasContentPoint(nativeEvent.clientX, nativeEvent.clientY);
+      const pointer = getPointerPoint(nativeEvent.clientX, nativeEvent.clientY);
       if (!pointer) return;
 
       if (pointIndex === null) {
@@ -2983,7 +3084,14 @@ export function App() {
       currentRoute = { points };
       setCurrentEdgeRoutes(prev => ({ ...prev, [edgeId]: currentRoute }));
     };
-    const onPointerUp = () => stopEdgeSegmentDragListeners();
+    const onPointerUp = () => {
+      if (pointIndex === null) {
+        setSelectedEdgeId(edgeId);
+        setSelectedRoutePoint(null);
+        setSelectedNodeIds([]);
+      }
+      stopEdgeSegmentDragListeners();
+    };
     edgeSegmentDragListenersRef.current = { onPointerMove, onPointerUp };
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
@@ -2996,6 +3104,7 @@ export function App() {
           endpoints: { from: Point; to: Point };
           route: EdgeRoute | undefined;
           distance: number;
+          score: number;
         }
       | null = null;
     for (const edge of doc.edges) {
@@ -3006,12 +3115,17 @@ export function App() {
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
-      const fullRoute = [endpoints.from, ...(route?.points || []), endpoints.to];
-      for (let index = 0; index < fullRoute.length - 1; index += 1) {
-        const distance = distanceToSegmentSquared(point, fullRoute[index], fullRoute[index + 1]);
-        if (!best || distance < best.distance) {
-          best = { edgeId: edge.id, endpoints, route, distance };
-        }
+      const lane = edgeLaneMap.get(edge.id) || 0;
+      const forceBend = edgeForceBendMap.get(edge.id) || false;
+      const path = edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route);
+      const distance = distanceToPathSquared(point, path);
+      const linearDistance = Math.sqrt(distance);
+      const isLayoutEdge = layoutEdgeAnalysis.layoutEdgeIds.has(edge.id);
+      const isRoutedEdge = Boolean(edgeRoutes[edge.id] || edgeBends[edge.id] || (route && route.points.length > 1));
+      const routePenalty = linearDistance <= 4 ? 0 : (isLayoutEdge ? 0 : 8) + (isRoutedEdge ? 6 : 0);
+      const score = linearDistance + routePenalty;
+      if (!best || score < best.score || (score === best.score && distance < best.distance)) {
+        best = { edgeId: edge.id, endpoints, route, distance, score };
       }
     }
     return best && best.distance <= 18 * 18 ? best : null;
@@ -3026,7 +3140,7 @@ export function App() {
     if (!pointer) return;
     const edgeHit = findEdgeHitAtPoint(pointer);
     if (edgeHit && event.button === 0) {
-      startEdgeSegmentDragAtPoint(edgeHit.edgeId, edgeHit.endpoints, edgeHit.route, pointer);
+      startEdgeSegmentDragAtPoint(edgeHit.edgeId, edgeHit.endpoints, edgeHit.route, pointer, getCanvasContentPoint);
       return;
     }
     const x = pointer.x;
@@ -3124,18 +3238,18 @@ export function App() {
     setEdgeBendDrag({ edgeId, pointIndex });
   };
 
-  const startEdgeSegmentDrag = (
-    event: React.PointerEvent<SVGPathElement>,
-    edgeId: string,
-    endpoints: { from: Point; to: Point },
-    route: EdgeRoute | undefined
-  ) => {
+  const startEdgeSegmentDrag = (event: React.PointerEvent<SVGPathElement>) => {
     if (event.button !== 0) return;
     if (editingNodeIdRef.current) commitEditingNode();
     event.stopPropagation();
-    const start = getCanvasContentPoint(event.clientX, event.clientY);
+    const start = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
     if (!start) return;
-    startEdgeSegmentDragAtPoint(edgeId, endpoints, route, start);
+    const edgeHit = findEdgeHitAtPoint(start);
+    if (!edgeHit) return;
+    const svg = event.currentTarget.ownerSVGElement;
+    startEdgeSegmentDragAtPoint(edgeHit.edgeId, edgeHit.endpoints, edgeHit.route, start, (clientX, clientY) =>
+      getSvgContentPoint(svg, clientX, clientY)
+    );
   };
 
   const beginConnectDrag = (nodeId: NodeId) => {
@@ -3975,7 +4089,7 @@ export function App() {
                           strokeDasharray
                         }}
                         onPointerDown={event => {
-                          startEdgeSegmentDrag(event, edge.id, endpoints, route);
+                          startEdgeSegmentDrag(event);
                         }}
                         onClick={event => {
                           if (suppressNextEdgeClickRef.current) {
@@ -3984,16 +4098,19 @@ export function App() {
                             suppressNextEdgeClickRef.current = false;
                             return;
                           }
-                          setSelectedEdgeId(edge.id);
+                          const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
+                          const edgeHit = point ? findEdgeHitAtPoint(point) : null;
+                          setSelectedEdgeId(edgeHit?.edgeId || edge.id);
                           setSelectedRoutePoint(null);
                           setSelectedNodeIds([]);
                         }}
                         onDoubleClick={event => {
                           event.preventDefault();
                           event.stopPropagation();
-                          const point = getCanvasContentPoint(event.clientX, event.clientY);
+                          const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
                           if (!point) return;
-                          addRoutePointToEdgeAtPoint(edge.id, point);
+                          const edgeHit = findEdgeHitAtPoint(point);
+                          addRoutePointToEdgeAtPoint(edgeHit?.edgeId || edge.id, point);
                         }}
                       />
                     );
