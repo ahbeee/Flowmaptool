@@ -53,3 +53,13 @@ pnpm dist:win
 
 - Advanced manual edge routing is supported, but exact parity with every QuikFlow routing case is intentionally kept as follow-up work.
 - Remote GitHub Actions CI is disabled by design; validation is run locally with the commands above.
+
+## Follow-Up Improvements
+
+### Advanced Manual Edge Routing
+
+- Improve cross-layer and back-reference routing such as node-to-root, node-to-ancestor, sibling-to-sibling, and branch-to-branch connections.
+- Avoid routing manual edges through node bodies when a clear path exists above, below, or between branches.
+- Preserve user-adjusted edge routes after layout refreshes, node selection changes, and document reloads.
+- Keep `Reset Bend` scoped to clearing manual route points for selected edges without changing node positions or unrelated edges.
+- Separate multiple nearby manual edges into readable lanes instead of drawing them directly on top of each other.
