@@ -1,7 +1,7 @@
 import { _electron as electron, expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
-test('node moves to parent midpoint when connected by second parent and restores after edge delete', async () => {
+test('same-component manual parent edge does not reflow existing layout', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
   const window = await app.firstWindow();
@@ -32,16 +32,11 @@ test('node moves to parent midpoint when connected by second parent and restores
   await connectByShiftClick('n3', 'n4');
   await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
 
-  const n2AfterConnect = await window.getByTestId('node-n2').boundingBox();
-  const n3AfterConnect = await window.getByTestId('node-n3').boundingBox();
   const n4AfterConnect = await window.getByTestId('node-n4').boundingBox();
-  if (!n2AfterConnect || !n3AfterConnect || !n4AfterConnect) throw new Error('missing boxes after connect');
+  if (!n4AfterConnect) throw new Error('missing n4 box after connect');
 
-  const n2CenterY = n2AfterConnect.y + n2AfterConnect.height / 2;
-  const n3CenterY = n3AfterConnect.y + n3AfterConnect.height / 2;
-  const n4CenterY = n4AfterConnect.y + n4AfterConnect.height / 2;
-  const parentMidY = (n2CenterY + n3CenterY) / 2;
-  expect(Math.abs(n4CenterY - parentMidY)).toBeLessThanOrEqual(8);
+  expect(Math.abs(n4AfterConnect.x - n4Before.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(n4AfterConnect.y - n4Before.y)).toBeLessThanOrEqual(2);
 
   // e4 is the latest edge n3 -> n4
   await window.getByTestId('edge-path-e4').evaluate(element => {
@@ -50,14 +45,10 @@ test('node moves to parent midpoint when connected by second parent and restores
   await window.keyboard.press('Delete');
   await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
 
-  const n2AfterDelete = await window.getByTestId('node-n2').boundingBox();
   const n4AfterDelete = await window.getByTestId('node-n4').boundingBox();
-  if (!n2AfterDelete || !n4AfterDelete) throw new Error('missing boxes after delete');
-  const n2CenterYAfterDelete = n2AfterDelete.y + n2AfterDelete.height / 2;
-  const n4CenterYAfterDelete = n4AfterDelete.y + n4AfterDelete.height / 2;
-
-  expect(Math.abs(n4CenterYAfterDelete - n2CenterYAfterDelete)).toBeLessThanOrEqual(8);
-  expect(Math.abs(n4CenterYAfterDelete - n4Before.y - n4Before.height / 2)).toBeLessThanOrEqual(20);
+  if (!n4AfterDelete) throw new Error('missing n4 box after delete');
+  expect(Math.abs(n4AfterDelete.x - n4Before.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(n4AfterDelete.y - n4Before.y)).toBeLessThanOrEqual(2);
 
   await app.close();
 });

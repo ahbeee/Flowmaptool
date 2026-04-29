@@ -1191,6 +1191,7 @@ function analyzeLayoutEdges(doc: FlowDoc): LayoutEdgeAnalysis {
     outgoing.set(node.id, []);
   }
   for (const edge of doc.edges) {
+    if (edge.role === 'manual') continue;
     if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) continue;
     incomingCount.set(edge.to, (incomingCount.get(edge.to) || 0) + 1);
     outgoing.get(edge.from)?.push(edge);
@@ -1833,8 +1834,9 @@ export function App() {
       }
       const shouldNormalizeAttachedRoot =
         rootNodeIds.has(nextTo) && nextTo !== primaryRootNodeId;
+      const edgeRole = mergesTwoComponents ? 'layout' : 'manual';
       commitDoc(prev => {
-        const withEdge = addEdge(prev, nextFrom, nextTo);
+        const withEdge = addEdge(prev, nextFrom, nextTo, edgeRole);
         return shouldNormalizeAttachedRoot
           ? updateNodeStyle(withEdge, [nextTo], createChildNodeStyle(withEdge.settings.defaultShape))
           : withEdge;

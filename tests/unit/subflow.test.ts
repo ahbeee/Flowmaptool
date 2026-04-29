@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addEdge, addNode, createEmptyDoc, type FlowDoc } from '../../src/shared/graph';
+import { addEdge, addNode, createEmptyDoc, updateEdgeStyle, type FlowDoc } from '../../src/shared/graph';
 import { extractSelection, extractSubflow, pasteDetached, pasteSubflowAfter } from '../../src/shared/subflow';
 
 function buildDemoDoc(): FlowDoc {
@@ -49,5 +49,26 @@ describe('subflow', () => {
     expect(next.doc.nodes.length).toBe(6);
     expect(next.doc.edges.length).toBe(4);
     expect(next.newNodeIds.length).toBe(2);
+  });
+
+  it('preserves copied internal edge role and style', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, '1');
+    doc = addNode(doc, '2');
+    doc = addEdge(doc, 'n1', 'n2', 'manual');
+    doc = updateEdgeStyle(doc, ['e1'], { lineType: 'dashed', color: '#ef4444', width: 4 });
+
+    const copied = extractSelection(doc, ['n1', 'n2']);
+    const next = pasteDetached(doc, copied);
+    const pastedEdge = next.doc.edges.find(edge => edge.id !== 'e1');
+
+    expect(pastedEdge).toMatchObject({
+      role: 'manual',
+      style: {
+        lineType: 'dashed',
+        color: '#ef4444',
+        width: 4
+      }
+    });
   });
 });

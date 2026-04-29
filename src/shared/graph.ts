@@ -14,6 +14,7 @@ export type FlowEdge = {
   from: NodeId;
   to: NodeId;
   style?: EdgeStyle;
+  role?: EdgeRole;
 };
 
 export type FlowDocMeta = {
@@ -24,6 +25,7 @@ export type FlowDocMeta = {
 export type NodeShape = 'plain' | 'rounded' | 'pill' | 'underline' | 'square';
 export type TextAlign = 'left' | 'center' | 'right';
 export type EdgeLineType = 'solid' | 'dashed' | 'dotted';
+export type EdgeRole = 'layout' | 'manual';
 
 export type EdgeStyle = {
   width?: number;
@@ -174,6 +176,10 @@ function sanitizeNodes(input: LegacyFlowDoc['nodes']): FlowNode[] {
   return nodes;
 }
 
+function sanitizeEdgeRole(input: unknown): EdgeRole | undefined {
+  return input === 'layout' || input === 'manual' ? input : undefined;
+}
+
 function sanitizeEdges(input: LegacyFlowDoc['edges'], validNodeIds: Set<string>): FlowEdge[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
@@ -199,7 +205,8 @@ function sanitizeEdges(input: LegacyFlowDoc['edges'], validNodeIds: Set<string>)
     }
     if (seen.has(id)) continue;
     seen.add(id);
-    edges.push({ id, from, to });
+    const role = sanitizeEdgeRole(rawEdge.role);
+    edges.push({ id, from, to, ...(role ? { role } : {}) });
   }
   return edges;
 }
@@ -369,7 +376,9 @@ export function updateEdgeStyle(doc: FlowDoc, edgeIds: EdgeId[], patch: EdgeStyl
       for (const [key, value] of Object.entries(nextStyle)) {
         if (value === undefined || value === '') delete (nextStyle as Record<string, unknown>)[key];
       }
-      return Object.keys(nextStyle).length > 0 ? { ...edge, style: nextStyle } : { id: edge.id, from: edge.from, to: edge.to };
+      return Object.keys(nextStyle).length > 0
+        ? { ...edge, style: nextStyle }
+        : { id: edge.id, from: edge.from, to: edge.to, ...(edge.role ? { role: edge.role } : {}) };
     })
   };
 }
@@ -433,7 +442,7 @@ export function deleteTag(doc: FlowDoc, tagId: string): FlowDoc {
   };
 }
 
-export function addEdge(doc: FlowDoc, from: NodeId, to: NodeId): FlowDoc {
+export function addEdge(doc: FlowDoc, from: NodeId, to: NodeId, role: EdgeRole = 'layout'): FlowDoc {
   const validation = validateEdge(doc, from, to);
   if (!validation.ok) {
     if (validation.reason === 'unknown-node') {
@@ -446,6 +455,7 @@ export function addEdge(doc: FlowDoc, from: NodeId, to: NodeId): FlowDoc {
     id: nextEdgeId(doc),
     from,
     to,
+    ...(role !== 'layout' ? { role } : {}),
     style: { ...doc.settings.defaultEdgeStyle }
   };
   return {

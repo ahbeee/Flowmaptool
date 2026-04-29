@@ -68,6 +68,16 @@ function addUniqueEdge(edges: FlowEdge[], edge: FlowEdge) {
   if (!exists) edges.push(edge);
 }
 
+function cloneEdgeData(edge: FlowEdge, id: string, from: NodeId, to: NodeId): FlowEdge {
+  return {
+    id,
+    from,
+    to,
+    ...(edge.role ? { role: edge.role } : {}),
+    ...(edge.style ? { style: { ...edge.style } } : {})
+  };
+}
+
 export function pasteSubflowAfter(
   doc: FlowDoc,
   copied: CopiedSubflow,
@@ -106,7 +116,7 @@ export function pasteSubflowAfter(
     const from = nodeIdMap.get(edge.from);
     const to = nodeIdMap.get(edge.to);
     if (!from || !to) continue;
-    addUniqueEdge(newEdges, { id: `e${nextEdgeSeq++}`, from, to });
+    addUniqueEdge(newEdges, cloneEdgeData(edge, `e${nextEdgeSeq++}`, from, to));
   }
 
   const pastedRootId = nodeIdMap.get(copied.rootId);
@@ -174,7 +184,7 @@ export function pasteDetached(doc: FlowDoc, copied: CopiedSelection): PasteDetac
     const from = idMap.get(edge.from);
     const to = idMap.get(edge.to);
     if (!from || !to) continue;
-    newEdges.push({ id: `e${nextEdgeSeq++}`, from, to });
+    newEdges.push(cloneEdgeData(edge, `e${nextEdgeSeq++}`, from, to));
   }
 
   return {

@@ -30,6 +30,21 @@ describe('serialization and migration', () => {
     ]);
   });
 
+  it('round-trips manual edge roles', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'A');
+    doc = addNode(doc, 'B');
+    doc = addEdge(doc, 'n1', 'n2', 'manual');
+
+    const parsed = deserialize(serialize(doc));
+
+    expect(parsed.edges[0]).toMatchObject({
+      from: 'n1',
+      to: 'n2',
+      role: 'manual'
+    });
+  });
+
   it('migrates legacy file without schemaVersion', () => {
     const legacy = {
       nodes: [{ label: 'A' }, { id: 'n8', label: 'B' }],
