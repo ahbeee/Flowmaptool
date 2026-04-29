@@ -1,7 +1,7 @@
 import { _electron as electron, expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
-test('dragging connect handle creates a manual edge', async () => {
+test('left dragging connect handle creates a manual edge', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
   const window = await app.firstWindow();
@@ -14,14 +14,14 @@ test('dragging connect handle creates a manual edge', async () => {
     await window.keyboard.press('Escape');
   };
   const connectByHandle = async (fromId: string, toId: string) => {
-    const handle = window.getByTestId(`node-${fromId}`).locator('.node-connect-handle');
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
     const target = await window.getByTestId(`node-${toId}`).boundingBox();
-    const from = await handle.boundingBox();
-    if (!from || !target) throw new Error('connect points not found');
-    await window.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-    await window.mouse.down({ button: 'right' });
-    await window.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
-    await window.mouse.up({ button: 'right' });
+    const source = await sourceNode.boundingBox();
+    if (!source || !target) throw new Error('connect points not found');
+    await window.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(window.getByTestId(`node-${toId}`), { targetPosition: { x: target.width / 2, y: target.height / 2 } });
   };
 
   await createChild('n1');

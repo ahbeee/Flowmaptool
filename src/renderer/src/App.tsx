@@ -1359,6 +1359,7 @@ export function App() {
   const [marquee, setMarquee] = React.useState<MarqueeState | null>(null);
   const [edgeBendDrag, setEdgeBendDrag] = React.useState<EdgeBendDragState | null>(null);
   const [connectDrag, setConnectDrag] = React.useState<ConnectDragState | null>(null);
+  const connectDragRef = React.useRef<ConnectDragState | null>(null);
   const [dropParentTargetId, setDropParentTargetId] = React.useState<NodeId | null>(null);
   const [fileMessage, setFileMessage] = React.useState('Ready');
   const [canvasZoom, setCanvasZoom] = React.useState(1);
@@ -1443,6 +1444,7 @@ export function App() {
     setMarquee(null);
     setDragState(null);
     setEdgeBendDrag(null);
+    connectDragRef.current = null;
     setConnectDrag(null);
     setDropParentTargetId(null);
   }, [stopConnectDragListeners, stopEdgeSegmentDragListeners]);
@@ -2945,7 +2947,9 @@ export function App() {
       if (!prev) return prev;
       const hitId = findNodeAtCanvasPoint(x, y);
       const hoverTargetNodeId = hitId && hitId !== prev.fromNodeId ? hitId : null;
-      return { ...prev, current: { x, y }, hoverTargetNodeId };
+      const next = { ...prev, current: { x, y }, hoverTargetNodeId };
+      connectDragRef.current = next;
+      return next;
     });
   }, [autoPanCanvas, findNodeAtCanvasPoint, getCanvasContentPoint]);
 
@@ -2956,20 +2960,21 @@ export function App() {
     const targetFromEvent = getNodeIdFromEventTarget(event.target);
     const targetFromPoint = getNodeIdFromViewportPoint(event.clientX, event.clientY);
     if (!pointer) {
+      connectDragRef.current = null;
       setConnectDrag(null);
       return;
     }
     const { x, y } = pointer;
-    setConnectDrag(prev => {
-      if (!prev) return null;
-      const targetId = targetFromPoint || prev.hoverTargetNodeId || findNodeAtCanvasPoint(x, y) || targetFromEvent;
-      if (targetId && targetId !== prev.fromNodeId) {
-        if (tryCreateEdge(prev.fromNodeId, targetId)) {
-          setSelectedNodeIds([targetId]);
-        }
+    const drag = connectDragRef.current;
+    connectDragRef.current = null;
+    setConnectDrag(null);
+    if (!drag) return;
+    const targetId = targetFromPoint || drag.hoverTargetNodeId || findNodeAtCanvasPoint(x, y) || targetFromEvent;
+    if (targetId && targetId !== drag.fromNodeId) {
+      if (tryCreateEdge(drag.fromNodeId, targetId)) {
+        setSelectedNodeIds([targetId]);
       }
-      return null;
-    });
+    }
   }, [findNodeAtCanvasPoint, getCanvasContentPoint, stopConnectDragListeners, tryCreateEdge]);
 
   React.useEffect(() => {
@@ -3221,12 +3226,14 @@ export function App() {
   };
 
   const onNodeMouseUp = (event: React.MouseEvent<HTMLButtonElement>, nodeId: NodeId) => {
-    if (!connectDrag) return;
+    const drag = connectDragRef.current || connectDrag;
+    if (!drag) return;
     event.preventDefault();
     event.stopPropagation();
-    const fromId = connectDrag.fromNodeId;
+    const fromId = drag.fromNodeId;
     pendingRightConnectFromRef.current = null;
     stopConnectDragListeners();
+    connectDragRef.current = null;
     setConnectDrag(null);
     if (fromId !== nodeId && tryCreateEdge(fromId, nodeId)) {
       setSelectedNodeIds([nodeId]);
@@ -3278,7 +3285,9 @@ export function App() {
       layoutDirection === 'horizontal'
         ? { x: nodePos.x + nodeSize.width, y: nodePos.y + nodeSize.height / 2 }
         : { x: nodePos.x + nodeSize.width / 2, y: nodePos.y + nodeSize.height };
-    setConnectDrag({ fromNodeId: nodeId, start, current: start, hoverTargetNodeId: null });
+    const initialDrag = { fromNodeId: nodeId, start, current: start, hoverTargetNodeId: null };
+    connectDragRef.current = initialDrag;
+    setConnectDrag(initialDrag);
     const onPointerMove = (nativeEvent: PointerEvent) => updateConnectDragFromPointer(nativeEvent);
     const onPointerUp = (nativeEvent: PointerEvent) => finishConnectDragFromPointer(nativeEvent);
     const onMouseMove = (nativeEvent: MouseEvent) => updateConnectDragFromPointer(nativeEvent);

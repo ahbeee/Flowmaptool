@@ -122,3 +122,66 @@ test('nearby manual back edges use separate automatic lanes', async () => {
 
   await app.close();
 });
+
+test('cross branch manual edge keeps existing layout stable', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const source = await sourceNode.boundingBox();
+    const target = await window.getByTestId(`node-${toId}`).boundingBox();
+    if (!source || !target) throw new Error('connect points not found');
+    await window.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(window.getByTestId(`node-${toId}`), { targetPosition: { x: target.width / 2, y: target.height / 2 } });
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await createChild('n3');
+  await createChild('n3');
+  await createChild('n4');
+  await createChild('n10');
+  await createChild('n10');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(11);
+
+  const nodeIds = Array.from({ length: 12 }, (_, index) => `n${index + 1}`);
+  const before = new Map<string, { x: number; y: number }>();
+  for (const id of nodeIds) {
+    const box = await window.getByTestId(`node-${id}`).boundingBox();
+    if (!box) throw new Error(`missing node ${id}`);
+    before.set(id, { x: box.x, y: box.y });
+  }
+
+  await connectByHandle('n12', 'n4');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(12);
+
+  for (const id of nodeIds) {
+    const box = await window.getByTestId(`node-${id}`).boundingBox();
+    const oldBox = before.get(id);
+    if (!box || !oldBox) throw new Error(`missing node after cross branch route ${id}`);
+    expect(Math.abs(box.x - oldBox.x)).toBeLessThanOrEqual(2);
+    expect(Math.abs(box.y - oldBox.y)).toBeLessThanOrEqual(2);
+  }
+
+  const route = await window.getByTestId('edge-path-e12').getAttribute('d');
+  expect(route).toBeTruthy();
+  expect(route).toContain('Q');
+
+  await app.close();
+});
