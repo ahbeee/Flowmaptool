@@ -57,12 +57,14 @@ test('manual cycle edge does not reflow existing node positions', async () => {
   expect(Math.min(...cycleEdgeYValues)).toBeLessThan(cycleEdgePath.values[1] - 20);
   const targetNodeMetrics = await window.getByTestId('node-n2').evaluate(element => {
     const node = element as HTMLElement;
+    const left = Number.parseFloat(node.style.left);
+    const width = Number.parseFloat(node.style.width);
     return {
-      left: Number.parseFloat(node.style.left),
+      right: left + width,
       centerY: Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height) / 2
     };
   });
-  expect(Math.abs(cycleEdgeEndpoint.x - targetNodeMetrics.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cycleEdgeEndpoint.x - targetNodeMetrics.right)).toBeLessThanOrEqual(1);
   expect(Math.abs(cycleEdgeEndpoint.y - targetNodeMetrics.centerY)).toBeLessThanOrEqual(1);
 
   for (const id of ['n1', 'n2', 'n3', 'n4']) {

@@ -502,6 +502,38 @@ function getEdgeEndpoints(
   };
 }
 
+function getEdgeRenderEndpoints(
+  _edge: FlowEdge,
+  from: LayoutPoint,
+  to: LayoutPoint,
+  direction: LayoutDirection,
+  fromSize: NodeSize,
+  toSize: NodeSize,
+  isLayoutEdge: boolean,
+  targetIsRoot: boolean
+): { from: Point; to: Point } {
+  const endpoints = getEdgeEndpoints(from, to, direction, fromSize, toSize);
+  if (isLayoutEdge || targetIsRoot) return endpoints;
+
+  const fromCenter = getNodeCenter(from.x, from.y, fromSize);
+  const toCenter = getNodeCenter(to.x, to.y, toSize);
+  if (direction === 'vertical') {
+    const targetIsAboveSource = to.y + toSize.height <= from.y;
+    if (!targetIsAboveSource) return endpoints;
+    return {
+      from: endpoints.from,
+      to: { x: toCenter.x, y: to.y + toSize.height }
+    };
+  }
+
+  const targetIsBehindSource = to.x + toSize.width <= from.x;
+  if (!targetIsBehindSource) return endpoints;
+  return {
+    from: endpoints.from,
+    to: { x: to.x + toSize.width, y: toCenter.y }
+  };
+}
+
 function shouldBendEdge(
   from: Point,
   to: Point,
@@ -1578,6 +1610,21 @@ export function App() {
     return map;
   }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
 
+  const getRenderedEdgeEndpoints = React.useCallback(
+    (edge: FlowEdge, fromPos: LayoutPoint, toPos: LayoutPoint, fromSize: NodeSize, toSize: NodeSize) =>
+      getEdgeRenderEndpoints(
+        edge,
+        fromPos,
+        toPos,
+        layoutDirection,
+        fromSize,
+        toSize,
+        layoutEdgeAnalysis.layoutEdgeIds.has(edge.id),
+        rootNodeIds.has(edge.to)
+      ),
+    [layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, rootNodeIds]
+  );
+
   const edgeForceBendMap = React.useMemo(() => {
     const map = new Map<string, boolean>();
     for (const edge of doc.edges) {
@@ -1586,7 +1633,7 @@ export function App() {
       if (!fromPos || !toPos) continue;
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       map.set(
         edge.id,
         !layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) ||
@@ -1594,7 +1641,7 @@ export function App() {
       );
     }
     return map;
-  }, [doc.edges, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
+  }, [doc.edges, getRenderedEdgeEndpoints, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
 
   const edgeLaneMap = React.useMemo(() => {
     const laneByEdgeId = new Map<string, number>();
@@ -1605,7 +1652,7 @@ export function App() {
       if (!fromPos || !toPos) continue;
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       const forceBend = edgeForceBendMap.get(edge.id) || false;
       const needsBend = forceBend || shouldBendEdge(endpoints.from, endpoints.to, layoutDirection, fromSize, toSize);
       if (!needsBend) {
@@ -1626,7 +1673,7 @@ export function App() {
       });
     }
     return laneByEdgeId;
-  }, [doc.edges, edgeForceBendMap, layoutDirection, nodeSizeMap, renderedPositionMap]);
+  }, [doc.edges, edgeForceBendMap, getRenderedEdgeEndpoints, layoutDirection, nodeSizeMap, renderedPositionMap]);
 
   const autoEdgeRouteMap = React.useMemo(() => {
     const map = new Map<string, EdgeRoute>();
@@ -1638,7 +1685,7 @@ export function App() {
       if (!fromPos || !toPos) continue;
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       const route = computeAutoEdgeRoute(
         endpoints.from,
         endpoints.to,
@@ -1657,6 +1704,7 @@ export function App() {
     edgeForceBendMap,
     edgeLaneMap,
     edgeRoutes,
+    getRenderedEdgeEndpoints,
     layoutDirection,
     nodeBoxMap,
     nodeSizeMap,
@@ -1837,7 +1885,7 @@ export function App() {
       if (!fromPos || !toPos) continue;
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
       edges.push({
         id: edge.id,
@@ -1852,7 +1900,7 @@ export function App() {
       });
     }
     return { nodes, edges };
-  }, [autoEdgeRouteMap, doc.edges, doc.nodes, doc.settings.defaultEdgeStyle, edgeBends, edgeForceBendMap, edgeLaneMap, edgeRoutes, layoutDirection, nodeSizeMap, renderedPositionMap, rootNodeIds]);
+  }, [autoEdgeRouteMap, doc.edges, doc.nodes, doc.settings.defaultEdgeStyle, edgeBends, edgeForceBendMap, edgeLaneMap, edgeRoutes, getRenderedEdgeEndpoints, nodeSizeMap, renderedPositionMap, rootNodeIds]);
 
   const buildCanvasSvg = React.useCallback((fitToContent = false) => {
     const snapshot = buildSvgSnapshot();
@@ -2224,7 +2272,7 @@ export function App() {
     if (!fromPos || !toPos) return;
     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-    const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
     const fallbackRoute =
       edgeRoutes[selectedEdgeId] ||
       routeFromBend(edgeBends[selectedEdgeId]) ||
@@ -2246,7 +2294,7 @@ export function App() {
     doc.edges,
     edgeBends,
     edgeRoutes,
-    layoutDirection,
+    getRenderedEdgeEndpoints,
     nodeSizeMap,
     renderedPositionMap,
     selectedEdgeId,
@@ -2263,7 +2311,7 @@ export function App() {
       if (!fromPos || !toPos) return;
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       const fallbackRoute =
         edgeRoutes[edgeId] ||
         routeFromBend(edgeBends[edgeId]) ||
@@ -2288,7 +2336,7 @@ export function App() {
       doc.edges,
       edgeBends,
       edgeRoutes,
-      layoutDirection,
+      getRenderedEdgeEndpoints,
       nodeSizeMap,
       renderedPositionMap,
       setCurrentEdgeBends,
@@ -2956,7 +3004,7 @@ export function App() {
       if (!fromPos || !toPos) continue;
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
       const fullRoute = [endpoints.from, ...(route?.points || []), endpoints.to];
       for (let index = 0; index < fullRoute.length - 1; index += 1) {
@@ -3908,7 +3956,7 @@ export function App() {
                     if (!fromPos || !toPos) return null;
                     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
                     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-                    const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+                    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
                     const lane = edgeLaneMap.get(edge.id) || 0;
                     const forceBend = edgeForceBendMap.get(edge.id) || false;
                     const selected = edge.id === selectedEdgeId;
@@ -3963,7 +4011,7 @@ export function App() {
                     if (!fromPos || !toPos) return null;
                     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
                     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-                    const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+                    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
                     const route =
                       edgeRoutes[edge.id] ||
                       routeFromBend(edgeBends[edge.id]) ||
