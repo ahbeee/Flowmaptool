@@ -14,6 +14,16 @@ test('keyboard and mouse shortcuts for node editing and duplication', async () =
   await expect(nodeLocator).toHaveCount(2);
 
   await window.getByTestId('node-n2').click();
+  await window.keyboard.press('Enter');
+  await window.keyboard.press('Escape');
+  await expect(window.getByTestId('node-n3')).toBeVisible();
+  await expect(nodeLocator).toHaveCount(3);
+
+  await window.getByTestId('node-n2').click();
+  await window.keyboard.press('ArrowDown');
+  await expect(window.getByTestId('node-n3')).toHaveClass(/flow-node-selected/);
+
+  await window.getByTestId('node-n2').click();
   await window.keyboard.press('Space');
   const labelInput = window.locator('.node-label-input');
   await expect(labelInput).toBeVisible();
@@ -32,10 +42,10 @@ test('keyboard and mouse shortcuts for node editing and duplication', async () =
 
   await window.keyboard.press('Control+C');
   await window.keyboard.press('Control+V');
-  await expect(nodeLocator).toHaveCount(3);
+  await expect(nodeLocator).toHaveCount(4);
 
   await window.keyboard.press('Delete');
-  await expect(nodeLocator).toHaveCount(2);
+  await expect(nodeLocator).toHaveCount(3);
 
   await app.close();
 });

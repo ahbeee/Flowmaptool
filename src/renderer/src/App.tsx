@@ -1138,6 +1138,13 @@ function getNodeIdFromEventTarget(target: EventTarget | null | undefined): NodeI
   return nodeId.length > 0 ? nodeId : null;
 }
 
+function getPrimaryParentId(doc: FlowDoc, nodeId: NodeId): NodeId | null {
+  const incoming = doc.edges
+    .filter(edge => edge.to === nodeId)
+    .sort((a, b) => edgeSeq(a.id) - edgeSeq(b.id) || a.id.localeCompare(b.id));
+  return incoming[0]?.from || null;
+}
+
 function getNodeIdFromViewportPoint(clientX: number, clientY: number): NodeId | null {
   const el = document.elementFromPoint(clientX, clientY);
   return getNodeIdFromEventTarget(el);
@@ -1177,6 +1184,7 @@ export function App() {
   const [selectedEdgeId, setSelectedEdgeId] = React.useState('');
   const [selectedRoutePoint, setSelectedRoutePoint] = React.useState<EdgeRoutePointSelection | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = React.useState<NodeId[]>([]);
+  const selectedNodeIdsRef = React.useRef<NodeId[]>([]);
   const [copiedSelection, setCopiedSelection] = React.useState<CopiedSelection | null>(null);
   const [editingNodeId, setEditingNodeId] = React.useState<NodeId | null>(null);
   const [editingLabel, setEditingLabel] = React.useState('');
@@ -1210,6 +1218,7 @@ export function App() {
   const nodeOffsets = activeTab.nodeOffsetsByDirection[layoutDirection];
   const edgeBends = activeTab.edgeBendsByDirection[layoutDirection];
   const edgeRoutes = activeTab.edgeRoutesByDirection[layoutDirection];
+  selectedNodeIdsRef.current = selectedNodeIds;
   const activeTheme = getTheme(doc.settings.themeId);
   const layoutEdgeAnalysis = React.useMemo(() => analyzeLayoutEdges(doc), [doc]);
   const layoutDoc = React.useMemo(
@@ -2016,8 +2025,9 @@ export function App() {
   }, [commitDoc, doc.nodes]);
 
   const createLinkedNodeFromSelection = React.useCallback(() => {
-    if (selectedNodeIds.length !== 1) return;
-    const parentId = selectedNodeIds[0];
+    const currentSelection = selectedNodeIdsRef.current;
+    if (currentSelection.length !== 1) return;
+    const parentId = currentSelection[0];
     const parentOffset = getNodeOffset(nodeOffsets, parentId);
     const newNodeId = `n${doc.meta.nextNodeSeq}`;
     const newLabel = NEW_NODE_LABEL;
@@ -2031,12 +2041,104 @@ export function App() {
       [newNodeId]: { dx: parentOffset.dx, dy: parentOffset.dy }
     }));
     setSelectedNodeIds([newNodeId]);
+    selectedNodeIdsRef.current = [newNodeId];
     setSelectedEdgeId('');
     editingNodeIdRef.current = newNodeId;
     editingLabelRef.current = newLabel;
     setEditingNodeId(newNodeId);
     setEditingLabel(newLabel);
-  }, [commitDoc, doc.meta.nextNodeSeq, nodeOffsets, selectedNodeIds, setCurrentNodeOffsets]);
+  }, [commitDoc, doc.meta.nextNodeSeq, nodeOffsets, setCurrentNodeOffsets]);
+
+  const createSiblingNodeFromSelection = React.useCallback(() => {
+    const currentSelection = selectedNodeIdsRef.current;
+    if (currentSelection.length !== 1) return;
+    const selectedNodeId = currentSelection[0];
+    const parentId = getPrimaryParentId(doc, selectedNodeId);
+    if (!parentId) {
+      createLinkedNodeFromSelection();
+      return;
+    }
+    const parentOffset = getNodeOffset(nodeOffsets, parentId);
+    const newNodeId = `n${doc.meta.nextNodeSeq}`;
+    const newLabel = NEW_NODE_LABEL;
+    commitDoc(prev => {
+      let next = addNode(prev, newLabel, createChildNodeStyle(prev.settings.defaultShape));
+      next = addEdge(next, parentId, newNodeId);
+      return next;
+    });
+    setCurrentNodeOffsets(prev => ({
+      ...prev,
+      [newNodeId]: { dx: parentOffset.dx, dy: parentOffset.dy }
+    }));
+    setSelectedNodeIds([newNodeId]);
+    selectedNodeIdsRef.current = [newNodeId];
+    setSelectedEdgeId('');
+    editingNodeIdRef.current = newNodeId;
+    editingLabelRef.current = newLabel;
+    setEditingNodeId(newNodeId);
+    setEditingLabel(newLabel);
+  }, [
+    commitDoc,
+    createLinkedNodeFromSelection,
+    doc,
+    doc.meta.nextNodeSeq,
+    nodeOffsets,
+    setCurrentNodeOffsets
+  ]);
+
+  const selectNodeByDirection = React.useCallback((directionKey: string) => {
+    const currentSelection = selectedNodeIdsRef.current;
+    if (currentSelection.length !== 1) return false;
+    const selectedNodeId = currentSelection[0];
+    const selectedPos = renderedPositionMap.get(selectedNodeId);
+    if (!selectedPos) return false;
+    const selectedSize = nodeSizeMap[selectedNodeId] || DEFAULT_NODE_SIZE;
+    const selectedCenter = getNodeCenter(selectedPos.x, selectedPos.y, selectedSize);
+    const candidates = doc.nodes
+      .filter(node => node.id !== selectedNodeId)
+      .map(node => {
+        const pos = renderedPositionMap.get(node.id);
+        if (!pos) return null;
+        const size = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
+        const center = getNodeCenter(pos.x, pos.y, size);
+        const dx = center.x - selectedCenter.x;
+        const dy = center.y - selectedCenter.y;
+        let primaryDelta = 0;
+        let secondaryDelta = 0;
+        if (directionKey === 'arrowright') {
+          if (dx <= 0) return null;
+          primaryDelta = dx;
+          secondaryDelta = Math.abs(dy);
+        } else if (directionKey === 'arrowleft') {
+          if (dx >= 0) return null;
+          primaryDelta = Math.abs(dx);
+          secondaryDelta = Math.abs(dy);
+        } else if (directionKey === 'arrowdown') {
+          if (dy <= 0) return null;
+          primaryDelta = dy;
+          secondaryDelta = Math.abs(dx);
+        } else if (directionKey === 'arrowup') {
+          if (dy >= 0) return null;
+          primaryDelta = Math.abs(dy);
+          secondaryDelta = Math.abs(dx);
+        } else {
+          return null;
+        }
+        return {
+          nodeId: node.id,
+          score: secondaryDelta * 1000 + primaryDelta
+        };
+      })
+      .filter((entry): entry is { nodeId: NodeId; score: number } => Boolean(entry))
+      .sort((a, b) => a.score - b.score);
+    const next = candidates[0]?.nodeId;
+    if (!next) return false;
+    setSelectedNodeIds([next]);
+    selectedNodeIdsRef.current = [next];
+    setSelectedEdgeId('');
+    setSelectedRoutePoint(null);
+    return true;
+  }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
 
   const resetSelectedEdgeBend = React.useCallback(() => {
     if (!selectedEdgeId) return;
@@ -2307,6 +2409,7 @@ export function App() {
         return;
       }
       if (inEditor) return;
+      const latestSelectedNodeIds = selectedNodeIdsRef.current;
       if (mod && key === 'c') {
         event.preventDefault();
         copySelectedNodes();
@@ -2317,13 +2420,19 @@ export function App() {
         pasteSelectedNodes();
         return;
       }
-      if (key === 'tab' && selectedNodeIds.length === 1) {
+      if (key === 'tab' && latestSelectedNodeIds.length === 1) {
         event.preventDefault();
         createLinkedNodeFromSelection();
         return;
       }
-      if (selectedNodeIds.length > 0 && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+      if (key === 'enter' && latestSelectedNodeIds.length === 1) {
         event.preventDefault();
+        createSiblingNodeFromSelection();
+        return;
+      }
+      if (latestSelectedNodeIds.length > 0 && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        event.preventDefault();
+        selectNodeByDirection(key);
         return;
       }
       if (key === 'delete' || key === 'backspace') {
@@ -2341,15 +2450,15 @@ export function App() {
           deleteSelectedEdge();
           return;
         }
-        if (selectedNodeIds.length > 0) {
+        if (latestSelectedNodeIds.length > 0) {
           event.preventDefault();
           deleteSelectedNodes();
           return;
         }
       }
-      if (key === ' ' && selectedNodeIds.length === 1) {
+      if (key === ' ' && latestSelectedNodeIds.length === 1) {
         event.preventDefault();
-        startEditingNode(selectedNodeIds[0]);
+        startEditingNode(latestSelectedNodeIds[0]);
       }
     };
 
@@ -2358,6 +2467,7 @@ export function App() {
   }, [
     copySelectedNodes,
     createLinkedNodeFromSelection,
+    createSiblingNodeFromSelection,
     createNewDocument,
     deleteSelectedEdge,
     deleteSelectedNodes,
@@ -2366,9 +2476,9 @@ export function App() {
     openDocument,
     pasteSelectedNodes,
     saveDocument,
+    selectNodeByDirection,
     setCanvasZoom,
     selectedEdgeId,
-    selectedNodeIds,
     selectedRoutePoint,
     startEditingNode,
     fitCanvasToView,
@@ -2830,6 +2940,7 @@ export function App() {
       }
       setSelectedEdgeId('');
       setSelectedNodeIds([nodeId]);
+      selectedNodeIdsRef.current = [nodeId];
       return;
     }
     if (event.button !== 0) return;
@@ -2843,15 +2954,21 @@ export function App() {
         tryCreateEdge(from, nodeId);
       }
       setSelectedNodeIds([nodeId]);
+      selectedNodeIdsRef.current = [nodeId];
       return;
     }
     if (event.ctrlKey || event.metaKey) {
-      setSelectedNodeIds(prev => (prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]));
+      const nextSelection = selectedNodeIdsRef.current.includes(nodeId)
+        ? selectedNodeIdsRef.current.filter(id => id !== nodeId)
+        : [...selectedNodeIdsRef.current, nodeId];
+      selectedNodeIdsRef.current = nextSelection;
+      setSelectedNodeIds(nextSelection);
       return;
     }
     const isRootNode = rootNodeIds.has(nodeId);
     const nextSelection: NodeId[] = [nodeId];
     setSelectedNodeIds(nextSelection);
+    selectedNodeIdsRef.current = nextSelection;
     const connectedNodeIds = isRootNode ? collectConnectedComponent(doc, nodeId) : [nodeId];
     const startOffsets: Record<NodeId, NodeOffset> = {};
     for (const id of connectedNodeIds) {
