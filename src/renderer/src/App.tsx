@@ -754,25 +754,27 @@ function computeAutoEdgeRoute(
   direction: LayoutDirection,
   fromId: NodeId,
   toId: NodeId,
-  nodeBoxes: Map<NodeId, NodeBox>
+  nodeBoxes: Map<NodeId, NodeBox>,
+  routeLane = 0
 ): EdgeRoute | undefined {
   const obstacles = edgeCorridorObstacleBoxes(from, to, direction, fromId, toId, nodeBoxes);
   const isBackEdge = direction === 'horizontal' ? to.x < from.x : to.y < from.y;
   if (!isBackEdge && obstacles.length === 0) return undefined;
 
   const clearance = 48;
+  const lanePadding = Math.min(72, Math.max(0, routeLane) * 14);
   const graphBounds = getNodeBoxesBounds([...nodeBoxes.values()]);
 
   if (direction === 'horizontal') {
     if (isBackEdge && graphBounds) {
       const obstacleBounds = getNodeBoxesBounds(obstacles);
       const laneBounds = obstacleBounds || graphBounds;
-      const topLane = laneBounds.top - clearance;
-      const bottomLane = laneBounds.bottom + clearance;
-      const graphTopLane = graphBounds.top - clearance;
-      const graphBottomLane = graphBounds.bottom + clearance;
-      const outerX = Math.max(graphBounds.right + clearance, from.x + clearance, to.x + clearance);
-      const leftLane = Math.min(graphBounds.left - clearance, to.x - clearance);
+      const topLane = laneBounds.top - clearance - lanePadding;
+      const bottomLane = laneBounds.bottom + clearance + lanePadding;
+      const graphTopLane = graphBounds.top - clearance - lanePadding;
+      const graphBottomLane = graphBounds.bottom + clearance + lanePadding;
+      const outerX = Math.max(graphBounds.right + clearance + lanePadding, from.x + clearance, to.x + clearance);
+      const leftLane = Math.min(graphBounds.left - clearance - lanePadding, to.x - clearance);
       const sourceExitX = from.x + clearance;
       const targetEntryX = to.x - clearance;
       return chooseBestRoute([
@@ -787,8 +789,8 @@ function computeAutoEdgeRoute(
 
     const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
     if (!bounds) return routeFromBend(computeAutoEdgeBend(from, to, direction, fromId, toId, nodeBoxes));
-    const topLane = bounds.top - clearance;
-    const bottomLane = bounds.bottom + clearance;
+    const topLane = bounds.top - clearance - lanePadding;
+    const bottomLane = bounds.bottom + clearance + lanePadding;
     const dx = Math.max(80, Math.abs(to.x - from.x));
     const entryX = from.x + Math.min(72, dx / 3);
     const exitX = to.x - Math.min(72, dx / 3);
@@ -806,12 +808,12 @@ function computeAutoEdgeRoute(
   if (isBackEdge && graphBounds) {
     const obstacleBounds = getNodeBoxesBounds(obstacles);
     const laneBounds = obstacleBounds || graphBounds;
-    const leftLane = laneBounds.left - clearance;
-    const rightLane = laneBounds.right + clearance;
-    const graphLeftLane = graphBounds.left - clearance;
-    const graphRightLane = graphBounds.right + clearance;
-    const outerY = Math.max(graphBounds.bottom + clearance, from.y + clearance, to.y + clearance);
-    const topLane = Math.min(graphBounds.top - clearance, to.y - clearance);
+    const leftLane = laneBounds.left - clearance - lanePadding;
+    const rightLane = laneBounds.right + clearance + lanePadding;
+    const graphLeftLane = graphBounds.left - clearance - lanePadding;
+    const graphRightLane = graphBounds.right + clearance + lanePadding;
+    const outerY = Math.max(graphBounds.bottom + clearance + lanePadding, from.y + clearance, to.y + clearance);
+    const topLane = Math.min(graphBounds.top - clearance - lanePadding, to.y - clearance);
     const sourceExitY = from.y + clearance;
     const targetEntryY = to.y - clearance;
     return chooseBestRoute([
@@ -826,8 +828,8 @@ function computeAutoEdgeRoute(
 
   const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
   if (!bounds) return routeFromBend(computeAutoEdgeBend(from, to, direction, fromId, toId, nodeBoxes));
-  const leftLane = bounds.left - clearance;
-  const rightLane = bounds.right + clearance;
+  const leftLane = bounds.left - clearance - lanePadding;
+  const rightLane = bounds.right + clearance + lanePadding;
   const dy = Math.max(80, Math.abs(to.y - from.y));
   const entryY = from.y + Math.min(72, dy / 3);
   const exitY = to.y - Math.min(72, dy / 3);
@@ -1594,23 +1596,6 @@ export function App() {
     return map;
   }, [doc.edges, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
 
-  const autoEdgeRouteMap = React.useMemo(() => {
-    const map = new Map<string, EdgeRoute>();
-    for (const edge of doc.edges) {
-      if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
-      if (!edgeForceBendMap.get(edge.id)) continue;
-      const fromPos = renderedPositionMap.get(edge.from);
-      const toPos = renderedPositionMap.get(edge.to);
-      if (!fromPos || !toPos) continue;
-      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
-      const route = computeAutoEdgeRoute(endpoints.from, endpoints.to, layoutDirection, edge.from, edge.to, nodeBoxMap);
-      if (route) map.set(edge.id, route);
-    }
-    return map;
-  }, [doc.edges, edgeBends, edgeForceBendMap, edgeRoutes, layoutDirection, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
-
   const edgeLaneMap = React.useMemo(() => {
     const laneByEdgeId = new Map<string, number>();
     const byFrom = new Map<NodeId, { id: string; delta: number; needsBend: boolean }[]>();
@@ -1642,6 +1627,41 @@ export function App() {
     }
     return laneByEdgeId;
   }, [doc.edges, edgeForceBendMap, layoutDirection, nodeSizeMap, renderedPositionMap]);
+
+  const autoEdgeRouteMap = React.useMemo(() => {
+    const map = new Map<string, EdgeRoute>();
+    for (const edge of doc.edges) {
+      if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
+      if (!edgeForceBendMap.get(edge.id)) continue;
+      const fromPos = renderedPositionMap.get(edge.from);
+      const toPos = renderedPositionMap.get(edge.to);
+      if (!fromPos || !toPos) continue;
+      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+      const endpoints = getEdgeEndpoints(fromPos, toPos, layoutDirection, fromSize, toSize);
+      const route = computeAutoEdgeRoute(
+        endpoints.from,
+        endpoints.to,
+        layoutDirection,
+        edge.from,
+        edge.to,
+        nodeBoxMap,
+        edgeLaneMap.get(edge.id) || 0
+      );
+      if (route) map.set(edge.id, route);
+    }
+    return map;
+  }, [
+    doc.edges,
+    edgeBends,
+    edgeForceBendMap,
+    edgeLaneMap,
+    edgeRoutes,
+    layoutDirection,
+    nodeBoxMap,
+    nodeSizeMap,
+    renderedPositionMap
+  ]);
 
   const tryCreateEdge = React.useCallback(
     (from: NodeId, to: NodeId) => {
