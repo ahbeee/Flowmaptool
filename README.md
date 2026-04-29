@@ -56,6 +56,24 @@ pnpm dist:win
 
 ## Follow-Up Improvements
 
+### Right Toolbar Polish
+
+- Refine the right-side toolbar interaction details after more manual use, including clearer state display for mixed multi-selection values.
+- Re-check `Fit` and `Reset Bend` against real editing cases and adjust behavior where it does not match user expectation.
+- Continue simplifying controls that are not useful in normal keyboard/mouse editing workflows.
+
+### Node Interaction Polish
+
+- Continue tightening node operation details that were intentionally paused after the current behavior became broadly acceptable.
+- Improve drag/reparent edge cases where a moved root, copied subtree, or manually adjusted node can still produce surprising placement.
+- Keep node spacing, node sizing, and text editing behavior consistent across horizontal and vertical layouts.
+
+### Layout Animation and Interaction Feedback
+
+- Add lightweight layout transition feedback so reflow is easier to understand after adding, deleting, reparenting, or pasting nodes.
+- Improve hover, selection, and connection-handle feedback without making the canvas visually noisy.
+- Review the suggestions from the design feedback document and apply the items that improve practical editing density.
+
 ### Advanced Manual Edge Routing
 
 - Improve cross-layer and back-reference routing such as node-to-root, node-to-ancestor, sibling-to-sibling, and branch-to-branch connections.
