@@ -43,6 +43,34 @@ test('node style toolbar applies visual changes to selected nodes', async () => 
   await app.close();
 });
 
+test('node style toolbar separates default values from mixed selections', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const root = window.getByTestId('node-n1');
+  await root.click();
+  await expect(toolbarSelect(window, 'Font')).toHaveValue('Roboto');
+  await expect(toolbarSelect(window, 'Size')).toHaveValue('12');
+  await expect(toolbarSelect(window, 'Shape')).toHaveValue('rounded');
+
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+  const child = window.getByTestId('node-n2');
+  await expect(child).toHaveClass(/flow-node-selected/);
+  await expect(toolbarSelect(window, 'Font')).toHaveValue('Roboto');
+  await expect(toolbarSelect(window, 'Size')).toHaveValue('12');
+  await expect(toolbarSelect(window, 'Shape')).toHaveValue('plain');
+
+  await root.click({ modifiers: ['Control'] });
+  await expect(window.locator('.flow-node-selected')).toHaveCount(2);
+  await expect(toolbarSelect(window, 'Font')).toHaveValue('Roboto');
+  await expect(toolbarSelect(window, 'Size')).toHaveValue('12');
+  await expect(toolbarSelect(window, 'Shape')).toHaveValue('__mixed__');
+
+  await app.close();
+});
+
 test('map style toolbar applies theme and default shape to new nodes', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });

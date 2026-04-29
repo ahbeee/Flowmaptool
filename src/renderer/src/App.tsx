@@ -81,6 +81,7 @@ const EDGE_LINE_TYPES: Array<{ value: EdgeLineType; label: string }> = [
   { value: 'dashed', label: 'Dashed' },
   { value: 'dotted', label: 'Dotted' }
 ];
+const MIXED_OPTION = '__mixed__';
 const COLOR_SWATCHES = [
   '#111827',
   '#6b7280',
@@ -1080,16 +1081,14 @@ function analyzeLayoutEdges(doc: FlowDoc): LayoutEdgeAnalysis {
   };
 }
 
-function sameSelectedValue<T>(nodes: Array<{ style?: NodeStyle }>, selector: (style: NodeStyle | undefined) => T | undefined): T | '' {
-  if (nodes.length === 0) return '';
-  const first = selector(nodes[0].style);
-  return nodes.every(node => selector(node.style) === first) ? first || '' : '';
+function sameValues<T>(values: T[]): T | '' {
+  if (values.length === 0) return '';
+  const first = values[0];
+  return values.every(value => value === first) ? first : '';
 }
 
-function sameSelectedEdgeValue<T>(edges: FlowEdge[], selector: (style: EdgeStyle | undefined) => T | undefined): T | '' {
-  if (edges.length === 0) return '';
-  const first = selector(edges[0].style);
-  return edges.every(edge => selector(edge.style) === first) ? first || '' : '';
+function hasMixedValues<T>(values: T[]): boolean {
+  return values.length > 1 && values.some(value => value !== values[0]);
 }
 
 function effectiveEdgeStyle(edge: FlowEdge, defaultStyle: EdgeStyle): Required<EdgeStyle> {
@@ -3247,8 +3246,12 @@ export function App() {
     [activeTheme, doc.settings.defaultShape, rootNodeIds]
   );
 
-  const selectedFontFamily = sameSelectedValue(selectedNodes, style => style?.fontFamily);
-  const selectedFontSize = sameSelectedValue(selectedNodes, style => style?.fontSize);
+  const selectedEffectiveFontFamilies = selectedNodes.map(node => node.style?.fontFamily || DEFAULT_FONT_FAMILY);
+  const selectedFontFamilyMixed = hasMixedValues(selectedEffectiveFontFamilies);
+  const selectedFontFamily = sameValues(selectedEffectiveFontFamilies);
+  const selectedEffectiveFontSizes = selectedNodes.map(node => node.style?.fontSize || DEFAULT_FONT_SIZE);
+  const selectedFontSizeMixed = hasMixedValues(selectedEffectiveFontSizes);
+  const selectedFontSize = sameValues(selectedEffectiveFontSizes);
   const selectedEffectiveTextColors = selectedNodes.map(node =>
     node.style?.textColor || (rootNodeIds.has(node.id) ? activeTheme.rootText : activeTheme.nodeText)
   );
@@ -3263,14 +3266,26 @@ export function App() {
     selectedEffectiveBackgroundColors.length > 0 && !selectedBackgroundColorMixed
       ? selectedEffectiveBackgroundColors[0]
       : '';
-  const selectedTextAlign = sameSelectedValue(selectedNodes, style => style?.textAlign);
-  const selectedShape = sameSelectedValue(selectedNodes, style => style?.shape);
-  const selectedTagId = sameSelectedValue(selectedNodes, style => style?.tagId);
-  const selectedEdgeWidth = sameSelectedEdgeValue(selectedStyleEdges, style => style?.width);
-  const selectedEdgeLineType = sameSelectedEdgeValue(selectedStyleEdges, style => style?.lineType);
-  const selectedEffectiveEdgeColors = selectedStyleEdges.map(edge =>
-    effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle).color
+  const selectedEffectiveTextAligns = selectedNodes.map(node => node.style?.textAlign || 'left');
+  const selectedTextAlign = sameValues(selectedEffectiveTextAligns);
+  const selectedEffectiveShapes = selectedNodes.map(node =>
+    node.style?.shape || (rootNodeIds.has(node.id) ? 'rounded' : doc.settings.defaultShape)
   );
+  const selectedShapeMixed = hasMixedValues(selectedEffectiveShapes);
+  const selectedShape = sameValues(selectedEffectiveShapes);
+  const selectedEffectiveTagIds = selectedNodes.map(node => node.style?.tagId || '');
+  const selectedTagIdMixed = hasMixedValues(selectedEffectiveTagIds);
+  const selectedTagId = sameValues(selectedEffectiveTagIds);
+  const selectedEffectiveEdgeStyles = selectedStyleEdges.map(edge =>
+    effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle)
+  );
+  const selectedEffectiveEdgeWidths = selectedEffectiveEdgeStyles.map(style => style.width);
+  const selectedEdgeWidthMixed = hasMixedValues(selectedEffectiveEdgeWidths);
+  const selectedEdgeWidth = sameValues(selectedEffectiveEdgeWidths);
+  const selectedEffectiveEdgeLineTypes = selectedEffectiveEdgeStyles.map(style => style.lineType);
+  const selectedEdgeLineTypeMixed = hasMixedValues(selectedEffectiveEdgeLineTypes);
+  const selectedEdgeLineType = sameValues(selectedEffectiveEdgeLineTypes);
+  const selectedEffectiveEdgeColors = selectedEffectiveEdgeStyles.map(style => style.color);
   const selectedEdgeColorMixed = new Set(selectedEffectiveEdgeColors).size > 1;
   const selectedEdgeColor =
     selectedEffectiveEdgeColors.length > 0 && !selectedEdgeColorMixed ? selectedEffectiveEdgeColors[0] : '';
@@ -3336,7 +3351,9 @@ export function App() {
     title: string,
     edgeCount: number,
     widthValue: number | '',
+    widthMixed: boolean,
     lineTypeValue: EdgeLineType | '',
+    lineTypeMixed: boolean,
     colorValue: string | '',
     colorMixed: boolean,
     fallback: Required<EdgeStyle>,
@@ -3348,7 +3365,18 @@ export function App() {
       </div>
       <label className="toolbar-field">
         <span>Line Width</span>
-        <select value={widthValue || fallback.width} onChange={event => onPatch({ width: Number(event.target.value) })}>
+        <select
+          value={widthMixed ? MIXED_OPTION : String(widthValue || fallback.width)}
+          onChange={event => {
+            if (event.target.value === MIXED_OPTION) return;
+            onPatch({ width: Number(event.target.value) });
+          }}
+        >
+          {widthMixed ? (
+            <option value={MIXED_OPTION} disabled>
+              Mixed
+            </option>
+          ) : null}
           {EDGE_WIDTHS.map(width => (
             <option key={width} value={width}>
               {width}px
@@ -3359,9 +3387,17 @@ export function App() {
       <label className="toolbar-field">
         <span>Line Type</span>
         <select
-          value={lineTypeValue || fallback.lineType}
-          onChange={event => onPatch({ lineType: event.target.value as EdgeLineType })}
+          value={lineTypeMixed ? MIXED_OPTION : lineTypeValue || fallback.lineType}
+          onChange={event => {
+            if (event.target.value === MIXED_OPTION) return;
+            onPatch({ lineType: event.target.value as EdgeLineType });
+          }}
         >
+          {lineTypeMixed ? (
+            <option value={MIXED_OPTION} disabled>
+              Mixed
+            </option>
+          ) : null}
           {EDGE_LINE_TYPES.map(lineType => (
             <option key={lineType.value} value={lineType.value}>
               {lineType.label}
@@ -3433,7 +3469,9 @@ export function App() {
         'Default Line',
         0,
         doc.settings.defaultEdgeStyle.width || 2,
+        false,
         doc.settings.defaultEdgeStyle.lineType || 'solid',
+        false,
         doc.settings.defaultEdgeStyle.color || activeTheme.edge,
         false,
         {
@@ -3479,12 +3517,17 @@ export function App() {
       <label className="toolbar-field">
         <span>Font</span>
         <select
-          value={selectedFontFamily || ''}
-          onChange={event => applySelectedNodeStyle({ fontFamily: event.target.value })}
+          value={selectedFontFamilyMixed ? MIXED_OPTION : selectedFontFamily || DEFAULT_FONT_FAMILY}
+          onChange={event => {
+            if (event.target.value === MIXED_OPTION) return;
+            applySelectedNodeStyle({ fontFamily: event.target.value });
+          }}
         >
-          <option value="" disabled>
-            Mixed/default
-          </option>
+          {selectedFontFamilyMixed ? (
+            <option value={MIXED_OPTION} disabled>
+              Mixed
+            </option>
+          ) : null}
           {FONT_FAMILIES.map(font => (
             <option key={font} value={font}>
               {font}
@@ -3495,12 +3538,17 @@ export function App() {
       <label className="toolbar-field">
         <span>Size</span>
         <select
-          value={selectedFontSize || ''}
-          onChange={event => applySelectedNodeStyle({ fontSize: Number(event.target.value) })}
+          value={selectedFontSizeMixed ? MIXED_OPTION : String(selectedFontSize || DEFAULT_FONT_SIZE)}
+          onChange={event => {
+            if (event.target.value === MIXED_OPTION) return;
+            applySelectedNodeStyle({ fontSize: Number(event.target.value) });
+          }}
         >
-          <option value="" disabled>
-            Mixed/default
-          </option>
+          {selectedFontSizeMixed ? (
+            <option value={MIXED_OPTION} disabled>
+              Mixed
+            </option>
+          ) : null}
           {FONT_SIZES.map(size => (
             <option key={size} value={size}>
               {size}
@@ -3548,12 +3596,17 @@ export function App() {
       <label className="toolbar-field">
         <span>Shape</span>
         <select
-          value={selectedShape || ''}
-          onChange={event => applySelectedNodeStyle({ shape: event.target.value as NodeShape })}
+          value={selectedShapeMixed ? MIXED_OPTION : selectedShape || doc.settings.defaultShape}
+          onChange={event => {
+            if (event.target.value === MIXED_OPTION) return;
+            applySelectedNodeStyle({ shape: event.target.value as NodeShape });
+          }}
         >
-          <option value="" disabled>
-            Mixed/default
-          </option>
+          {selectedShapeMixed ? (
+            <option value={MIXED_OPTION} disabled>
+              Mixed
+            </option>
+          ) : null}
           {NODE_SHAPES.map(shape => (
             <option key={shape.value} value={shape.value}>
               {shape.label}
@@ -3566,7 +3619,9 @@ export function App() {
             'Related Lines',
             selectedStyleEdges.length,
             selectedEdgeWidth,
+            selectedEdgeWidthMixed,
             selectedEdgeLineType,
+            selectedEdgeLineTypeMixed,
             selectedEdgeColor,
             selectedEdgeColorMixed,
             {
@@ -3580,9 +3635,17 @@ export function App() {
       <label className="toolbar-field">
         <span>Tag</span>
         <select
-          value={selectedTagId || ''}
-          onChange={event => applySelectedNodeStyle({ tagId: event.target.value || undefined })}
+          value={selectedTagIdMixed ? MIXED_OPTION : selectedTagId || ''}
+          onChange={event => {
+            if (event.target.value === MIXED_OPTION) return;
+            applySelectedNodeStyle({ tagId: event.target.value || undefined });
+          }}
         >
+          {selectedTagIdMixed ? (
+            <option value={MIXED_OPTION} disabled>
+              Mixed
+            </option>
+          ) : null}
           <option value="">None</option>
           {doc.settings.tags.map(tag => (
             <option key={tag.id} value={tag.id}>
@@ -3641,7 +3704,9 @@ export function App() {
         'Selected Line',
         selectedStyleEdges.length,
         selectedEdgeWidth,
+        selectedEdgeWidthMixed,
         selectedEdgeLineType,
+        selectedEdgeLineTypeMixed,
         selectedEdgeColor,
         selectedEdgeColorMixed,
         {
