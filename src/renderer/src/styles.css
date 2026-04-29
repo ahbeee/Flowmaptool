@@ -462,6 +462,11 @@ h2 {
   cursor: pointer;
 }
 
+.edge-path:hover {
+  opacity: 0.9;
+  filter: drop-shadow(0 0 1px rgba(37, 99, 235, 0.35));
+}
+
 .edge-path-selected {
   filter: drop-shadow(0 0 2px rgba(37, 99, 235, 0.9));
 }
@@ -511,6 +516,10 @@ h2 {
     background-color 120ms ease,
     color 120ms ease,
     box-shadow 120ms ease;
+}
+
+.flow-node:hover:not(.flow-node-selected) {
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.16);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -580,12 +589,19 @@ h2 {
   cursor: crosshair;
   opacity: 0;
   pointer-events: none;
+  transform: scale(0.92);
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease,
+    box-shadow 100ms ease;
 }
 
 .flow-node:hover .node-connect-handle,
 .flow-node-connect-visible .node-connect-handle {
   opacity: 1;
   pointer-events: auto;
+  transform: scale(1);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .node-connect-handle-vertical {
