@@ -702,19 +702,49 @@ function routeObstacleCount(points: Point[], fromId: NodeId, toId: NodeId, nodeB
   return count;
 }
 
+function routeTurnCount(points: Point[]): number {
+  let count = 0;
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const prev = points[index - 1];
+    const current = points[index];
+    const next = points[index + 1];
+    const prevHorizontal = Math.abs(prev.y - current.y) <= 0.001;
+    const nextHorizontal = Math.abs(current.y - next.y) <= 0.001;
+    if (prevHorizontal !== nextHorizontal) count += 1;
+  }
+  return count;
+}
+
+function dedupeRouteCandidates(candidates: Point[][]): Point[][] {
+  const seen = new Set<string>();
+  const unique: Point[][] = [];
+  for (const candidate of candidates) {
+    const key = candidate.map(point => `${Math.round(point.x * 10) / 10},${Math.round(point.y * 10) / 10}`).join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(candidate);
+  }
+  return unique;
+}
+
 function chooseBestRoute(
   candidates: Point[][],
   fromId: NodeId,
   toId: NodeId,
   nodeBoxes: Map<NodeId, NodeBox>
 ): EdgeRoute | undefined {
-  const [best] = candidates
+  const [best] = dedupeRouteCandidates(candidates)
     .map(points => ({
       points,
       obstacleCount: routeObstacleCount(points, fromId, toId, nodeBoxes),
-      length: routeLength(points)
+      length: routeLength(points),
+      turns: routeTurnCount(points)
     }))
-    .sort((left, right) => left.obstacleCount - right.obstacleCount || left.length - right.length);
+    .sort((left, right) => (
+      left.obstacleCount - right.obstacleCount ||
+      left.length - right.length ||
+      left.turns - right.turns
+    ));
   return best ? routeFromPoints(best.points.slice(1, -1)) : undefined;
 }
 
@@ -735,18 +765,24 @@ function computeAutoEdgeRoute(
 
   if (direction === 'horizontal') {
     if (isBackEdge && graphBounds) {
-      const topLane = graphBounds.top - clearance;
-      const bottomLane = graphBounds.bottom + clearance;
+      const obstacleBounds = getNodeBoxesBounds(obstacles);
+      const laneBounds = obstacleBounds || graphBounds;
+      const topLane = laneBounds.top - clearance;
+      const bottomLane = laneBounds.bottom + clearance;
+      const graphTopLane = graphBounds.top - clearance;
+      const graphBottomLane = graphBounds.bottom + clearance;
       const outerX = Math.max(graphBounds.right + clearance, from.x + clearance, to.x + clearance);
-      return chooseBestRoute(
-        [
-          [from, { x: outerX, y: from.y }, { x: outerX, y: topLane }, { x: to.x, y: topLane }, to],
-          [from, { x: outerX, y: from.y }, { x: outerX, y: bottomLane }, { x: to.x, y: bottomLane }, to]
-        ],
-        fromId,
-        toId,
-        nodeBoxes
-      );
+      const leftLane = Math.min(graphBounds.left - clearance, to.x - clearance);
+      const sourceExitX = from.x + clearance;
+      const targetEntryX = to.x - clearance;
+      return chooseBestRoute([
+        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: topLane }, { x: targetEntryX, y: topLane }, { x: targetEntryX, y: to.y }, to],
+        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: bottomLane }, { x: targetEntryX, y: bottomLane }, { x: targetEntryX, y: to.y }, to],
+        [from, { x: outerX, y: from.y }, { x: outerX, y: graphTopLane }, { x: to.x, y: graphTopLane }, to],
+        [from, { x: outerX, y: from.y }, { x: outerX, y: graphBottomLane }, { x: to.x, y: graphBottomLane }, to],
+        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: graphTopLane }, { x: leftLane, y: graphTopLane }, { x: leftLane, y: to.y }, to],
+        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: graphBottomLane }, { x: leftLane, y: graphBottomLane }, { x: leftLane, y: to.y }, to]
+      ], fromId, toId, nodeBoxes);
     }
 
     const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
@@ -768,18 +804,24 @@ function computeAutoEdgeRoute(
   }
 
   if (isBackEdge && graphBounds) {
-    const leftLane = graphBounds.left - clearance;
-    const rightLane = graphBounds.right + clearance;
+    const obstacleBounds = getNodeBoxesBounds(obstacles);
+    const laneBounds = obstacleBounds || graphBounds;
+    const leftLane = laneBounds.left - clearance;
+    const rightLane = laneBounds.right + clearance;
+    const graphLeftLane = graphBounds.left - clearance;
+    const graphRightLane = graphBounds.right + clearance;
     const outerY = Math.max(graphBounds.bottom + clearance, from.y + clearance, to.y + clearance);
-    return chooseBestRoute(
-      [
-        [from, { x: from.x, y: outerY }, { x: leftLane, y: outerY }, { x: leftLane, y: to.y }, to],
-        [from, { x: from.x, y: outerY }, { x: rightLane, y: outerY }, { x: rightLane, y: to.y }, to]
-      ],
-      fromId,
-      toId,
-      nodeBoxes
-    );
+    const topLane = Math.min(graphBounds.top - clearance, to.y - clearance);
+    const sourceExitY = from.y + clearance;
+    const targetEntryY = to.y - clearance;
+    return chooseBestRoute([
+      [from, { x: from.x, y: sourceExitY }, { x: leftLane, y: sourceExitY }, { x: leftLane, y: targetEntryY }, { x: to.x, y: targetEntryY }, to],
+      [from, { x: from.x, y: sourceExitY }, { x: rightLane, y: sourceExitY }, { x: rightLane, y: targetEntryY }, { x: to.x, y: targetEntryY }, to],
+      [from, { x: from.x, y: outerY }, { x: graphLeftLane, y: outerY }, { x: graphLeftLane, y: to.y }, to],
+      [from, { x: from.x, y: outerY }, { x: graphRightLane, y: outerY }, { x: graphRightLane, y: to.y }, to],
+      [from, { x: from.x, y: sourceExitY }, { x: graphLeftLane, y: sourceExitY }, { x: graphLeftLane, y: topLane }, { x: to.x, y: topLane }, to],
+      [from, { x: from.x, y: sourceExitY }, { x: graphRightLane, y: sourceExitY }, { x: graphRightLane, y: topLane }, { x: to.x, y: topLane }, to]
+    ], fromId, toId, nodeBoxes);
   }
 
   const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
