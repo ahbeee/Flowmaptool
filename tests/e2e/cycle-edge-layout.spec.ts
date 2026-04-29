@@ -15,14 +15,16 @@ test('manual cycle edge does not reflow existing node positions', async () => {
   };
 
   const connectByHandle = async (fromId: string, toId: string) => {
-    const handle = window.getByTestId(`node-${fromId}`).locator('.node-connect-handle');
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
     const target = await window.getByTestId(`node-${toId}`).boundingBox();
-    const from = await handle.boundingBox();
-    if (!from || !target) throw new Error('connect points not found');
-    await window.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-    await window.mouse.down({ button: 'right' });
-    await window.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
-    await window.mouse.up({ button: 'right' });
+    const source = await sourceNode.boundingBox();
+    if (!source || !target) throw new Error('connect points not found');
+    await window.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(window.getByTestId(`node-${toId}`), {
+      targetPosition: { x: target.width / 2, y: target.height / 2 }
+    });
   };
 
   await createChild('n1');
@@ -58,13 +60,12 @@ test('manual cycle edge does not reflow existing node positions', async () => {
   const targetNodeMetrics = await window.getByTestId('node-n2').evaluate(element => {
     const node = element as HTMLElement;
     const left = Number.parseFloat(node.style.left);
-    const width = Number.parseFloat(node.style.width);
     return {
-      right: left + width,
+      left,
       centerY: Number.parseFloat(node.style.top) + Number.parseFloat(node.style.height) / 2
     };
   });
-  expect(Math.abs(cycleEdgeEndpoint.x - targetNodeMetrics.right)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cycleEdgeEndpoint.x - targetNodeMetrics.left)).toBeLessThanOrEqual(1);
   expect(Math.abs(cycleEdgeEndpoint.y - targetNodeMetrics.centerY)).toBeLessThanOrEqual(1);
 
   for (const id of ['n1', 'n2', 'n3', 'n4']) {

@@ -513,8 +513,54 @@ function getEdgeEndpoints(
   };
 }
 
+function getDirectionalAnchorPoint(
+  pos: LayoutPoint,
+  size: NodeSize,
+  direction: LayoutDirection,
+  anchor: 'front' | 'back'
+): Point {
+  const center = getNodeCenter(pos.x, pos.y, size);
+  if (direction === 'vertical') {
+    return anchor === 'front'
+      ? { x: center.x, y: pos.y }
+      : { x: center.x, y: pos.y + size.height };
+  }
+  return anchor === 'front'
+    ? { x: pos.x, y: center.y }
+    : { x: pos.x + size.width, y: center.y };
+}
+
+function getBodyAnchorPoint(pos: LayoutPoint, size: NodeSize, other: Point): Point {
+  const center = getNodeCenter(pos.x, pos.y, size);
+  const dx = other.x - center.x;
+  const dy = other.y - center.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx < 0
+      ? { x: pos.x, y: center.y }
+      : { x: pos.x + size.width, y: center.y };
+  }
+  return dy < 0
+    ? { x: center.x, y: pos.y }
+    : { x: center.x, y: pos.y + size.height };
+}
+
+function getAnchoredPoint(
+  pos: LayoutPoint,
+  size: NodeSize,
+  direction: LayoutDirection,
+  anchor: EdgeAnchors['from'],
+  autoPoint: Point,
+  otherPoint: Point,
+  isTarget = false
+): Point {
+  if (anchor === 'front' || anchor === 'back') return getDirectionalAnchorPoint(pos, size, direction, anchor);
+  if (anchor === 'body' && isTarget) return getDirectionalAnchorPoint(pos, size, direction, 'front');
+  if (anchor === 'body') return getBodyAnchorPoint(pos, size, otherPoint);
+  return autoPoint;
+}
+
 function getEdgeRenderEndpoints(
-  _edge: FlowEdge,
+  edge: FlowEdge,
   from: LayoutPoint,
   to: LayoutPoint,
   direction: LayoutDirection,
@@ -524,6 +570,26 @@ function getEdgeRenderEndpoints(
   targetIsRoot: boolean
 ): { from: Point; to: Point } {
   const endpoints = getEdgeEndpoints(from, to, direction, fromSize, toSize);
+  if (edge.anchors) {
+    const fromPoint = getAnchoredPoint(
+      from,
+      fromSize,
+      direction,
+      edge.anchors.from,
+      endpoints.from,
+      endpoints.to
+    );
+    const toPoint = getAnchoredPoint(
+      to,
+      toSize,
+      direction,
+      edge.anchors.to,
+      endpoints.to,
+      fromPoint,
+      true
+    );
+    return { from: fromPoint, to: toPoint };
+  }
   if (isLayoutEdge || targetIsRoot) return endpoints;
 
   const fromCenter = getNodeCenter(from.x, from.y, fromSize);
