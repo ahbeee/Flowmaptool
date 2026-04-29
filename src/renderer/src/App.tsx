@@ -20,6 +20,7 @@ import {
   type FlowTag,
   type FlowDoc,
   type EdgeLineType,
+  type EdgeAnchors,
   type EdgeStyle,
   type NodeId,
   type NodeShape,
@@ -61,6 +62,7 @@ const ROOT_LABEL = '';
 const NEW_NODE_LABEL = '';
 const DEFAULT_FONT_FAMILY = 'Roboto';
 const DEFAULT_FONT_SIZE = 12;
+const HANDLE_CONNECT_ANCHORS: EdgeAnchors = { from: 'back', to: 'body' };
 const ROOT_NODE_STYLE: NodeStyle = {
   fontFamily: DEFAULT_FONT_FAMILY,
   fontSize: DEFAULT_FONT_SIZE,
@@ -178,6 +180,7 @@ type EdgeBendDragState = { edgeId: string; pointIndex: number };
 type EdgeRoutePointSelection = { edgeId: string; pointIndex: number };
 type ConnectDragState = {
   fromNodeId: NodeId;
+  anchors: EdgeAnchors;
   start: Point;
   current: Point;
   hoverTargetNodeId: NodeId | null;
@@ -245,6 +248,14 @@ function createChildNodeStyle(defaultShape: NodeShape): NodeStyle {
   return {
     ...CHILD_NODE_STYLE,
     shape: defaultShape
+  };
+}
+
+function reverseEdgeAnchors(anchors: EdgeAnchors | undefined): EdgeAnchors | undefined {
+  if (!anchors) return undefined;
+  return {
+    ...(anchors.to ? { from: anchors.to } : {}),
+    ...(anchors.from ? { to: anchors.from } : {})
   };
 }
 
@@ -1815,13 +1826,15 @@ export function App() {
   ]);
 
   const tryCreateEdge = React.useCallback(
-    (from: NodeId, to: NodeId) => {
+    (from: NodeId, to: NodeId, anchors?: EdgeAnchors) => {
       let nextFrom = from;
       let nextTo = to;
+      let nextAnchors = anchors;
       const sameComponentBeforeConnect = new Set(collectConnectedComponent(doc, from)).has(to);
       if (to === primaryRootNodeId && from !== to && !sameComponentBeforeConnect) {
         nextFrom = to;
         nextTo = from;
+        nextAnchors = reverseEdgeAnchors(anchors);
       }
       const fromComponent = new Set(collectConnectedComponent(doc, nextFrom));
       const mergesTwoComponents = !fromComponent.has(nextTo);
@@ -1838,7 +1851,7 @@ export function App() {
         rootNodeIds.has(nextTo) && nextTo !== primaryRootNodeId;
       const edgeRole = mergesTwoComponents ? 'layout' : 'manual';
       commitDoc(prev => {
-        const withEdge = addEdge(prev, nextFrom, nextTo, edgeRole);
+        const withEdge = addEdge(prev, nextFrom, nextTo, edgeRole, nextAnchors);
         return shouldNormalizeAttachedRoot
           ? updateNodeStyle(withEdge, [nextTo], createChildNodeStyle(withEdge.settings.defaultShape))
           : withEdge;
@@ -2971,7 +2984,7 @@ export function App() {
     if (!drag) return;
     const targetId = targetFromPoint || drag.hoverTargetNodeId || findNodeAtCanvasPoint(x, y) || targetFromEvent;
     if (targetId && targetId !== drag.fromNodeId) {
-      if (tryCreateEdge(drag.fromNodeId, targetId)) {
+      if (tryCreateEdge(drag.fromNodeId, targetId, drag.anchors)) {
         setSelectedNodeIds([targetId]);
       }
     }
@@ -3235,7 +3248,7 @@ export function App() {
     stopConnectDragListeners();
     connectDragRef.current = null;
     setConnectDrag(null);
-    if (fromId !== nodeId && tryCreateEdge(fromId, nodeId)) {
+    if (fromId !== nodeId && tryCreateEdge(fromId, nodeId, drag.anchors)) {
       setSelectedNodeIds([nodeId]);
       return;
     }
@@ -3285,7 +3298,13 @@ export function App() {
       layoutDirection === 'horizontal'
         ? { x: nodePos.x + nodeSize.width, y: nodePos.y + nodeSize.height / 2 }
         : { x: nodePos.x + nodeSize.width / 2, y: nodePos.y + nodeSize.height };
-    const initialDrag = { fromNodeId: nodeId, start, current: start, hoverTargetNodeId: null };
+    const initialDrag = {
+      fromNodeId: nodeId,
+      anchors: HANDLE_CONNECT_ANCHORS,
+      start,
+      current: start,
+      hoverTargetNodeId: null
+    };
     connectDragRef.current = initialDrag;
     setConnectDrag(initialDrag);
     const onPointerMove = (nativeEvent: PointerEvent) => updateConnectDragFromPointer(nativeEvent);
@@ -3360,7 +3379,7 @@ export function App() {
       (pointer ? findNodeAtCanvasPoint(pointer.x, pointer.y) : null);
     stopConnectDragListeners();
     setConnectDrag(null);
-    if (targetId && targetId !== fromId && tryCreateEdge(fromId, targetId)) {
+    if (targetId && targetId !== fromId && tryCreateEdge(fromId, targetId, HANDLE_CONNECT_ANCHORS)) {
       setSelectedNodeIds([targetId]);
       return;
     }

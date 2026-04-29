@@ -70,6 +70,23 @@ describe('graph model', () => {
     ]);
   });
 
+  it('stores manual edge anchor intent', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'A');
+    doc = addNode(doc, 'B');
+    doc = addEdge(doc, 'n1', 'n2', 'manual', { from: 'back', to: 'body' });
+
+    expect(doc.edges[0]).toMatchObject({
+      from: 'n1',
+      to: 'n2',
+      role: 'manual',
+      anchors: {
+        from: 'back',
+        to: 'body'
+      }
+    });
+  });
+
   it('deletes edge by id only', () => {
     let doc = createEmptyDoc();
     doc = addNode(doc, 'A');

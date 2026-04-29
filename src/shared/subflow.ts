@@ -74,6 +74,7 @@ function cloneEdgeData(edge: FlowEdge, id: string, from: NodeId, to: NodeId): Fl
     from,
     to,
     ...(edge.role ? { role: edge.role } : {}),
+    ...(edge.anchors ? { anchors: { ...edge.anchors } } : {}),
     ...(edge.style ? { style: { ...edge.style } } : {})
   };
 }

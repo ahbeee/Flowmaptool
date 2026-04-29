@@ -15,6 +15,7 @@ export type FlowEdge = {
   to: NodeId;
   style?: EdgeStyle;
   role?: EdgeRole;
+  anchors?: EdgeAnchors;
 };
 
 export type FlowDocMeta = {
@@ -26,6 +27,12 @@ export type NodeShape = 'plain' | 'rounded' | 'pill' | 'underline' | 'square';
 export type TextAlign = 'left' | 'center' | 'right';
 export type EdgeLineType = 'solid' | 'dashed' | 'dotted';
 export type EdgeRole = 'layout' | 'manual';
+export type EdgeAnchor = 'auto' | 'front' | 'back' | 'body';
+
+export type EdgeAnchors = {
+  from?: EdgeAnchor;
+  to?: EdgeAnchor;
+};
 
 export type EdgeStyle = {
   width?: number;
@@ -180,6 +187,22 @@ function sanitizeEdgeRole(input: unknown): EdgeRole | undefined {
   return input === 'layout' || input === 'manual' ? input : undefined;
 }
 
+function sanitizeEdgeAnchor(input: unknown): EdgeAnchor | undefined {
+  return input === 'auto' || input === 'front' || input === 'back' || input === 'body' ? input : undefined;
+}
+
+function sanitizeEdgeAnchors(input: unknown): EdgeAnchors | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as EdgeAnchors;
+  const from = sanitizeEdgeAnchor(raw.from);
+  const to = sanitizeEdgeAnchor(raw.to);
+  if (!from && !to) return undefined;
+  return {
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {})
+  };
+}
+
 function sanitizeEdges(input: LegacyFlowDoc['edges'], validNodeIds: Set<string>): FlowEdge[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
@@ -206,7 +229,8 @@ function sanitizeEdges(input: LegacyFlowDoc['edges'], validNodeIds: Set<string>)
     if (seen.has(id)) continue;
     seen.add(id);
     const role = sanitizeEdgeRole(rawEdge.role);
-    edges.push({ id, from, to, ...(role ? { role } : {}) });
+    const anchors = sanitizeEdgeAnchors(rawEdge.anchors);
+    edges.push({ id, from, to, ...(role ? { role } : {}), ...(anchors ? { anchors } : {}) });
   }
   return edges;
 }
@@ -378,7 +402,13 @@ export function updateEdgeStyle(doc: FlowDoc, edgeIds: EdgeId[], patch: EdgeStyl
       }
       return Object.keys(nextStyle).length > 0
         ? { ...edge, style: nextStyle }
-        : { id: edge.id, from: edge.from, to: edge.to, ...(edge.role ? { role: edge.role } : {}) };
+        : {
+            id: edge.id,
+            from: edge.from,
+            to: edge.to,
+            ...(edge.role ? { role: edge.role } : {}),
+            ...(edge.anchors ? { anchors: edge.anchors } : {})
+          };
     })
   };
 }
@@ -442,7 +472,13 @@ export function deleteTag(doc: FlowDoc, tagId: string): FlowDoc {
   };
 }
 
-export function addEdge(doc: FlowDoc, from: NodeId, to: NodeId, role: EdgeRole = 'layout'): FlowDoc {
+export function addEdge(
+  doc: FlowDoc,
+  from: NodeId,
+  to: NodeId,
+  role: EdgeRole = 'layout',
+  anchors?: EdgeAnchors
+): FlowDoc {
   const validation = validateEdge(doc, from, to);
   if (!validation.ok) {
     if (validation.reason === 'unknown-node') {
@@ -456,6 +492,7 @@ export function addEdge(doc: FlowDoc, from: NodeId, to: NodeId, role: EdgeRole =
     from,
     to,
     ...(role !== 'layout' ? { role } : {}),
+    ...(anchors ? { anchors } : {}),
     style: { ...doc.settings.defaultEdgeStyle }
   };
   return {

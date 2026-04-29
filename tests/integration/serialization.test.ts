@@ -34,15 +34,29 @@ describe('serialization and migration', () => {
     let doc = createEmptyDoc();
     doc = addNode(doc, 'A');
     doc = addNode(doc, 'B');
-    doc = addEdge(doc, 'n1', 'n2', 'manual');
+    doc = addEdge(doc, 'n1', 'n2', 'manual', { from: 'back', to: 'body' });
 
     const parsed = deserialize(serialize(doc));
 
     expect(parsed.edges[0]).toMatchObject({
       from: 'n1',
       to: 'n2',
-      role: 'manual'
+      role: 'manual',
+      anchors: {
+        from: 'back',
+        to: 'body'
+      }
     });
+  });
+
+  it('drops invalid edge anchors during migration', () => {
+    const legacy = {
+      nodes: [{ id: 'n1', label: 'A' }, { id: 'n2', label: 'B' }],
+      edges: [{ id: 'e1', from: 'n1', to: 'n2', anchors: { from: 'bad', to: 'front' } }]
+    };
+    const doc = migrateToLatest(legacy);
+
+    expect(doc.edges[0].anchors).toEqual({ to: 'front' });
   });
 
   it('migrates legacy file without schemaVersion', () => {
