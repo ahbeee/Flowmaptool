@@ -93,6 +93,18 @@ test('selected edge supports multiple editable route points', async () => {
   await window.mouse.up();
 
   await expect.poll(edgePathD).not.toBe(beforeDrag);
+
+  const beforeSecondDrag = await edgePathD();
+  const secondDragCenter = await handleCenter(1);
+  await window.mouse.move(secondDragCenter.x, secondDragCenter.y);
+  await window.mouse.down();
+  await window.mouse.move(secondDragCenter.x + 20, secondDragCenter.y - 70);
+  await expect(window.getByTestId('edge-route-drag-preview')).toBeVisible();
+  await window.mouse.up();
+
+  await expect.poll(edgePathD).not.toBe(beforeSecondDrag);
+  await expect(window.getByTestId('edge-route-drag-preview')).toHaveCount(0);
+  await expect(window.locator('.edge-bend-handle-selected')).toHaveCount(1);
   await window.getByRole('button', { name: 'Reset Bend' }).click();
   await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
   await expect.poll(edgePathD).toBe(automaticPath);

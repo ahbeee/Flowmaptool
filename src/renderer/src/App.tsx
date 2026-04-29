@@ -2972,7 +2972,8 @@ export function App() {
 
   React.useEffect(() => {
     if (!edgeBendDrag) return;
-    const onPointerMove = (event: PointerEvent) => {
+    const moveEdgeBend = (event: PointerEvent | MouseEvent) => {
+      event.preventDefault();
       autoPanCanvas(event);
       const pointer = getCanvasContentPoint(event.clientX, event.clientY);
       if (!pointer) return;
@@ -2993,12 +2994,19 @@ export function App() {
         return rest;
       });
     };
-    const onPointerUp = () => setEdgeBendDrag(null);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
+    const finishEdgeBend = (event: PointerEvent | MouseEvent) => {
+      event.preventDefault();
+      setEdgeBendDrag(null);
+    };
+    window.addEventListener('pointermove', moveEdgeBend);
+    window.addEventListener('pointerup', finishEdgeBend);
+    window.addEventListener('mousemove', moveEdgeBend);
+    window.addEventListener('mouseup', finishEdgeBend);
     return () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointermove', moveEdgeBend);
+      window.removeEventListener('pointerup', finishEdgeBend);
+      window.removeEventListener('mousemove', moveEdgeBend);
+      window.removeEventListener('mouseup', finishEdgeBend);
     };
   }, [autoEdgeRouteMap, autoPanCanvas, edgeBendDrag, edgeBends, edgeRoutes, getCanvasContentPoint, setCurrentEdgeBends, setCurrentEdgeRoutes]);
 
@@ -3231,11 +3239,18 @@ export function App() {
     event.stopPropagation();
   };
 
-  const startEdgeBendDrag = (event: React.PointerEvent<SVGCircleElement>, edgeId: string, pointIndex: number) => {
-    event.preventDefault();
-    event.stopPropagation();
+  const beginEdgeBendDrag = (edgeId: string, pointIndex: number) => {
+    setSelectedEdgeId(edgeId);
+    setSelectedNodeIds([]);
     setSelectedRoutePoint({ edgeId, pointIndex });
     setEdgeBendDrag({ edgeId, pointIndex });
+  };
+
+  const startEdgeBendDrag = (event: React.PointerEvent<SVGCircleElement>, edgeId: string, pointIndex: number) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    beginEdgeBendDrag(edgeId, pointIndex);
   };
 
   const startEdgeSegmentDrag = (event: React.PointerEvent<SVGPathElement>) => {
@@ -4121,6 +4136,31 @@ export function App() {
                       d={`M ${connectDrag.start.x} ${connectDrag.start.y} Q ${(connectDrag.start.x + connectDrag.current.x) / 2} ${(connectDrag.start.y + connectDrag.current.y) / 2} ${connectDrag.current.x} ${connectDrag.current.y}`}
                     />
                   ) : null}
+                  {edgeBendDrag
+                    ? doc.edges.map(edge => {
+                        if (edge.id !== edgeBendDrag.edgeId) return null;
+                        const fromPos = renderedPositionMap.get(edge.from);
+                        const toPos = renderedPositionMap.get(edge.to);
+                        if (!fromPos || !toPos) return null;
+                        const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+                        const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+                        const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+                        const lane = edgeLaneMap.get(edge.id) || 0;
+                        const forceBend = edgeForceBendMap.get(edge.id) || false;
+                        const route =
+                          edgeRoutes[edge.id] ||
+                          routeFromBend(edgeBends[edge.id]) ||
+                          autoEdgeRouteMap.get(edge.id);
+                        return (
+                          <path
+                            key={`route-preview-${edge.id}`}
+                            data-testid="edge-route-drag-preview"
+                            className="edge-route-drag-preview"
+                            d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
+                          />
+                        );
+                      })
+                    : null}
                   {doc.edges.map(edge => {
                     if (edge.id !== selectedEdgeId) return null;
                     const fromPos = renderedPositionMap.get(edge.from);
@@ -4134,19 +4174,47 @@ export function App() {
                       routeFromBend(edgeBends[edge.id]) ||
                       routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
                     return route.points.map((point, pointIndex) => (
-                      <circle
-                        key={`bend-${edge.id}-${pointIndex}`}
-                        data-testid={`edge-route-point-${pointIndex}`}
-                        className={
-                          selectedRoutePoint?.edgeId === edge.id && selectedRoutePoint.pointIndex === pointIndex
-                            ? 'edge-bend-handle edge-bend-handle-selected'
-                            : 'edge-bend-handle'
-                        }
-                        cx={point.x}
-                        cy={point.y}
-                        r={7}
-                        onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
-                      />
+                      <g key={`bend-${edge.id}-${pointIndex}`}>
+                        <circle
+                          className="edge-bend-hit-area"
+                          cx={point.x}
+                          cy={point.y}
+                          r={16}
+                          onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
+                          onDoubleClick={event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const routePoint = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
+                            if (routePoint) addRoutePointToEdgeAtPoint(edge.id, routePoint);
+                          }}
+                          onContextMenu={event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                        />
+                        <circle
+                          data-testid={`edge-route-point-${pointIndex}`}
+                          className={
+                            selectedRoutePoint?.edgeId === edge.id && selectedRoutePoint.pointIndex === pointIndex
+                              ? 'edge-bend-handle edge-bend-handle-selected'
+                              : 'edge-bend-handle'
+                          }
+                          cx={point.x}
+                          cy={point.y}
+                          r={7}
+                          onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
+                          onDoubleClick={event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const routePoint = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
+                            if (routePoint) addRoutePointToEdgeAtPoint(edge.id, routePoint);
+                          }}
+                          onContextMenu={event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                        />
+                      </g>
                     ));
                   })}
                 </svg>
