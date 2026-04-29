@@ -420,6 +420,14 @@ h2 {
   min-height: 680px;
 }
 
+.canvas-surface-animated .edge-path {
+  transition:
+    stroke 120ms ease,
+    stroke-width 120ms ease,
+    opacity 120ms ease,
+    filter 120ms ease;
+}
+
 .marquee-selection {
   position: absolute;
   border: 1px dashed #2563eb;
@@ -495,6 +503,21 @@ h2 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: clip;
+}
+
+.canvas-surface-animated .flow-node {
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-surface-animated .edge-path,
+  .canvas-surface-animated .flow-node {
+    transition: none;
+  }
 }
 
 .flow-node[data-tag-name]:hover::after {

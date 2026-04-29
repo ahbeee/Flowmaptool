@@ -1214,6 +1214,7 @@ export function App() {
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) || tabs[0];
   const doc = activeTab.history.present;
+  const isLiveCanvasInteraction = Boolean(dragState || marquee || edgeBendDrag || connectDrag);
   const layoutDirection = activeTab.layoutDirection;
   const nodeOffsets = activeTab.nodeOffsetsByDirection[layoutDirection];
   const edgeBends = activeTab.edgeBendsByDirection[layoutDirection];
@@ -3734,7 +3735,7 @@ export function App() {
               style={{ background: activeTheme.canvas }}
             >
               <div
-                className="canvas-surface"
+                className={isLiveCanvasInteraction ? 'canvas-surface' : 'canvas-surface canvas-surface-animated'}
                 data-testid="canvas-surface"
                 style={{ width: canvasSize.width, height: canvasSize.height, zoom: canvasZoom }}
                 onPointerDown={onCanvasPointerDown}
