@@ -16,7 +16,7 @@ describe('graph model', () => {
   it('uses the requested document and node defaults', () => {
     let doc = createEmptyDoc();
 
-    expect(doc.settings.spacing).toEqual({ horizontal: 48, vertical: 24 });
+    expect(doc.settings.spacing).toEqual({ horizontal: 48, vertical: 48 });
     expect(doc.settings.defaultShape).toBe('plain');
 
     doc = addNode(doc, '', {
