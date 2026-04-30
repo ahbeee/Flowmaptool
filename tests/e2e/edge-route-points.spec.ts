@@ -129,6 +129,111 @@ function createDisconnectedBackEdgeFixture() {
   };
 }
 
+function createDuplicatedBackEdgeFixture(includeManualEdges = true) {
+  const settings = {
+    themeId: 'blue-gray',
+    spacing: {
+      horizontal: 48,
+      vertical: 48
+    },
+    defaultShape: 'plain',
+    defaultEdgeStyle: {
+      width: 2,
+      lineType: 'solid',
+      color: '#64748b'
+    },
+    tags: [
+      { id: 'tag-blue', name: 'Blue', color: '#3b82f6' },
+      { id: 'tag-pink', name: 'Pending', color: '#ec4899' },
+      { id: 'tag-green', name: 'Done', color: '#22c55e' },
+      { id: 'tag-orange', name: 'Orange', color: '#f97316' }
+    ]
+  };
+  const nodes = [
+    { id: 'n1', label: 'Root' },
+    { id: 'n2', label: '1' },
+    { id: 'n3', label: '2' },
+    { id: 'n4', label: '3' },
+    { id: 'n5', label: '4' },
+    { id: 'n6', label: '5' },
+    { id: 'n7', label: '6' },
+    { id: 'n8', label: '7' },
+    { id: 'n9', label: '8' },
+    { id: 'n10', label: 'Root' },
+    { id: 'n11', label: '1' },
+    { id: 'n12', label: '2' },
+    { id: 'n13', label: '3' },
+    { id: 'n14', label: '4' },
+    { id: 'n15', label: '5' },
+    { id: 'n16', label: '6' },
+    { id: 'n17', label: '7' },
+    { id: 'n18', label: '8' }
+  ];
+  const layoutEdges = [
+    ['e1', 'n1', 'n2'],
+    ['e2', 'n1', 'n3'],
+    ['e3', 'n2', 'n4'],
+    ['e4', 'n2', 'n5'],
+    ['e5', 'n3', 'n6'],
+    ['e6', 'n3', 'n7'],
+    ['e7', 'n4', 'n8'],
+    ['e8', 'n6', 'n9'],
+    ['e9', 'n10', 'n11'],
+    ['e10', 'n10', 'n12'],
+    ['e11', 'n11', 'n13'],
+    ['e12', 'n11', 'n14'],
+    ['e13', 'n12', 'n15'],
+    ['e14', 'n12', 'n16'],
+    ['e15', 'n13', 'n17'],
+    ['e16', 'n15', 'n18']
+  ].map(([id, from, to]) => ({ id, from, to, role: 'layout' }));
+  const manualEdges = [
+    {
+      id: 'e17',
+      from: 'n17',
+      to: 'n10',
+      role: 'manual',
+      anchors: { from: 'back', to: 'front' }
+    },
+    {
+      id: 'e18',
+      from: 'n18',
+      to: 'n10',
+      role: 'manual',
+      anchors: { from: 'back', to: 'front' }
+    }
+  ];
+  const bottomOffsets = Object.fromEntries(
+    nodes
+      .filter(node => Number(node.id.slice(1)) >= 10)
+      .map(node => [node.id, { x: 0, y: 360 }])
+  );
+
+  return {
+    schemaVersion: 1,
+    doc: {
+      schemaVersion: 1,
+      nodes,
+      edges: includeManualEdges ? [...layoutEdges, ...manualEdges] : layoutEdges,
+      meta: {
+        nextNodeSeq: 19,
+        nextEdgeSeq: includeManualEdges ? 19 : 17
+      },
+      settings
+    },
+    ui: {
+      layoutDirection: 'horizontal',
+      nodeOffsetsByDirection: {
+        horizontal: bottomOffsets,
+        vertical: {}
+      },
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} },
+      toolbarVisible: true
+    }
+  };
+}
+
 test('edge segment drag keeps a clean routed bend without route point controls', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
@@ -176,6 +281,124 @@ test('edge segment drag keeps a clean routed bend without route point controls',
   expect((draggedPath?.match(/\bL\b/g) || []).length).toBeGreaterThanOrEqual(3);
   await window.getByRole('button', { name: 'Reset Bend' }).click();
   await expect.poll(() => edgePath.getAttribute('d')).toBe(automaticPath);
+
+  await app.close();
+});
+
+test('duplicated component back edges stay scoped after moving copied root', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('duplicated-back-edge.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createDuplicatedBackEdgeFixture(), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+  await expect(window.getByTestId('edge-path-e17')).toBeVisible();
+  await expect(window.getByTestId('edge-path-e18')).toBeVisible();
+
+  const topRootBox = await window.getByTestId('node-n1').boundingBox();
+  const bottomRoot = window.getByTestId('node-n10');
+  const bottomRootBox = await bottomRoot.boundingBox();
+  if (!topRootBox || !bottomRootBox) throw new Error('expected both roots to be measurable');
+
+  await window.mouse.move(
+    bottomRootBox.x + bottomRootBox.width / 2,
+    bottomRootBox.y + bottomRootBox.height / 2
+  );
+  await window.mouse.down();
+  await window.mouse.move(
+    bottomRootBox.x + bottomRootBox.width / 2 - 120,
+    bottomRootBox.y + bottomRootBox.height / 2 + 40,
+    { steps: 10 }
+  );
+  await window.mouse.up();
+
+  const movedBottomRootBox = await bottomRoot.boundingBox();
+  if (!movedBottomRootBox) throw new Error('expected moved copied root to be measurable');
+  const topRootMidY = topRootBox.y + topRootBox.height / 2;
+  const bottomRootMidY = movedBottomRootBox.y + movedBottomRootBox.height / 2;
+
+  for (const edgeId of ['e17', 'e18']) {
+    const routeBox = await window.getByTestId(`edge-path-${edgeId}`).boundingBox();
+    if (!routeBox) throw new Error(`expected ${edgeId} route to be measurable`);
+    const routeMidY = routeBox.y + routeBox.height / 2;
+    expect(Math.abs(routeMidY - bottomRootMidY)).toBeLessThan(Math.abs(routeMidY - topRootMidY));
+    expect(routeBox.y).toBeGreaterThan(topRootBox.y + topRootBox.height);
+  }
+
+  await app.close();
+});
+
+test('duplicated component back edges created by handle drag stay scoped after moving copied root', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('duplicated-back-edge-ui-connect.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createDuplicatedBackEdgeFixture(false), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+
+  await connectByHandle('n17', 'n10');
+  await connectByHandle('n18', 'n10');
+  await expect(window.getByTestId('edge-path-e17')).toBeVisible();
+  await expect(window.getByTestId('edge-path-e18')).toBeVisible();
+
+  const topRootBox = await window.getByTestId('node-n1').boundingBox();
+  const bottomRoot = window.getByTestId('node-n10');
+  const bottomRootBox = await bottomRoot.boundingBox();
+  if (!topRootBox || !bottomRootBox) throw new Error('expected both roots to be measurable');
+
+  await window.mouse.move(
+    bottomRootBox.x + bottomRootBox.width / 2,
+    bottomRootBox.y + bottomRootBox.height / 2
+  );
+  await window.mouse.down();
+  await window.mouse.move(
+    bottomRootBox.x + bottomRootBox.width / 2 - 120,
+    bottomRootBox.y + bottomRootBox.height / 2 + 40,
+    { steps: 10 }
+  );
+  await window.mouse.up();
+
+  const movedBottomRootBox = await bottomRoot.boundingBox();
+  if (!movedBottomRootBox) throw new Error('expected moved copied root to be measurable');
+  const topRootMidY = topRootBox.y + topRootBox.height / 2;
+  const bottomRootMidY = movedBottomRootBox.y + movedBottomRootBox.height / 2;
+
+  for (const edgeId of ['e17', 'e18']) {
+    const routeBox = await window.getByTestId(`edge-path-${edgeId}`).boundingBox();
+    if (!routeBox) throw new Error(`expected ${edgeId} route to be measurable`);
+    const routeMidY = routeBox.y + routeBox.height / 2;
+    expect(Math.abs(routeMidY - bottomRootMidY)).toBeLessThan(Math.abs(routeMidY - topRootMidY));
+    expect(routeBox.y).toBeGreaterThan(topRootBox.y + topRootBox.height);
+  }
 
   await app.close();
 });
@@ -417,18 +640,28 @@ test('user adjusted manual route stays stable while selecting other objects', as
 
   const routeBoxBeforeMove = await edgePath.boundingBox();
   const root = window.getByTestId('node-n1');
-  const rootBox = await root.boundingBox();
-  if (!routeBoxBeforeMove || !rootBox) throw new Error('expected root and manual route to be measurable');
-  await window.mouse.move(rootBox.x + rootBox.width / 2, rootBox.y + rootBox.height / 2);
+  const rootBoxBeforeMove = await root.boundingBox();
+  if (!routeBoxBeforeMove || !rootBoxBeforeMove) throw new Error('expected root and manual route to be measurable');
+  await window.mouse.move(rootBoxBeforeMove.x + rootBoxBeforeMove.width / 2, rootBoxBeforeMove.y + rootBoxBeforeMove.height / 2);
   await window.mouse.down();
-  await window.mouse.move(rootBox.x + rootBox.width / 2 + 96, rootBox.y + rootBox.height / 2 + 64, {
+  await window.mouse.move(rootBoxBeforeMove.x + rootBoxBeforeMove.width / 2 + 96, rootBoxBeforeMove.y + rootBoxBeforeMove.height / 2 + 64, {
     steps: 8
   });
   await window.mouse.up();
 
+  const rootBoxAfterMove = await root.boundingBox();
   const routeBoxAfterMove = await edgePath.boundingBox();
-  if (!routeBoxAfterMove) throw new Error('expected manual route to remain measurable after root move');
-  expect(routeBoxAfterMove.x).toBeGreaterThan(routeBoxBeforeMove.x + 30);
+  if (!routeBoxAfterMove || !rootBoxAfterMove) throw new Error('expected root and manual route to remain measurable after root move');
+  const rootDelta = {
+    x: rootBoxAfterMove.x - rootBoxBeforeMove.x,
+    y: rootBoxAfterMove.y - rootBoxBeforeMove.y
+  };
+  const routeDelta = {
+    x: routeBoxAfterMove.x - routeBoxBeforeMove.x,
+    y: routeBoxAfterMove.y - routeBoxBeforeMove.y
+  };
+  expect(routeDelta.x).toBeCloseTo(rootDelta.x, 0);
+  expect(routeDelta.y).toBeCloseTo(rootDelta.y, 0);
 
   await app.close();
 });
