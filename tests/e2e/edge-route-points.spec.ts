@@ -154,6 +154,18 @@ test('legacy route can be opened and reset without route point editing', async (
   await expect(window.getByRole('button', { name: 'Add Route Point' })).toHaveCount(0);
   await expect(window.getByRole('button', { name: 'Delete Route Point' })).toHaveCount(0);
 
+  const routedPath = await edgePath.getAttribute('d');
+  const handleBox = await window.locator('.edge-bend-handle').boundingBox();
+  if (!handleBox) throw new Error('legacy route control handle not found');
+  await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(handleBox.x + handleBox.width / 2 + 48, handleBox.y + handleBox.height / 2 + 28, {
+    steps: 6
+  });
+  await window.mouse.up();
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+  await expect.poll(() => edgePath.getAttribute('d')).not.toBe(routedPath);
+
   await window.getByRole('button', { name: 'Reset Bend' }).click();
   await triggerMenuAction(app, 'file:save');
   await expect(window.getByTestId('file-status')).toContainText('Saved:');
