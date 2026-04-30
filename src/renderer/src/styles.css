@@ -476,6 +476,7 @@ h2 {
   stroke-dasharray: 6 4;
   stroke-width: 2;
   opacity: 0.85;
+  pointer-events: none;
 }
 
 .edge-route-drag-preview {
@@ -593,10 +594,10 @@ h2 {
   padding: 2px 4px;
 }
 
-.node-connect-handle {
+.node-connect-handle,
+.node-connect-handle-front {
   position: absolute;
   z-index: 5;
-  right: -8px;
   top: calc(50% - 7px);
   width: 14px;
   height: 14px;
@@ -613,8 +614,18 @@ h2 {
     box-shadow 100ms ease;
 }
 
+.node-connect-handle {
+  right: -8px;
+}
+
+.node-connect-handle-front {
+  left: -6px;
+}
+
 .flow-node:hover .node-connect-handle,
-.flow-node-connect-visible .node-connect-handle {
+.flow-node:hover .node-connect-handle-front,
+.flow-node-connect-visible .node-connect-handle,
+.flow-node-connect-visible .node-connect-handle-front {
   opacity: 1;
   pointer-events: auto;
   transform: scale(1);
@@ -625,4 +636,9 @@ h2 {
   right: calc(50% - 7px);
   top: auto;
   bottom: -8px;
+}
+
+.node-connect-handle-front-vertical {
+  left: calc(50% - 7px);
+  top: -6px;
 }

@@ -20,6 +20,7 @@ import {
   type FlowTag,
   type FlowDoc,
   type EdgeLineType,
+  type EdgeAnchor,
   type EdgeAnchors,
   type EdgeStyle,
   type NodeId,
@@ -63,6 +64,7 @@ const NEW_NODE_LABEL = '';
 const DEFAULT_FONT_FAMILY = 'Roboto';
 const DEFAULT_FONT_SIZE = 12;
 const HANDLE_CONNECT_ANCHORS: EdgeAnchors = { from: 'back', to: 'body' };
+const FRONT_HANDLE_CONNECT_ANCHORS: EdgeAnchors = { from: 'front', to: 'body' };
 const ROOT_NODE_STYLE: NodeStyle = {
   fontFamily: DEFAULT_FONT_FAMILY,
   fontSize: DEFAULT_FONT_SIZE,
@@ -1396,24 +1398,43 @@ function isNodeLabelInputTarget(target: EventTarget | null): boolean {
   return target instanceof Element && Boolean(target.closest('.node-label-input'));
 }
 
-function isViewportPointOnConnectHandle(clientX: number, clientY: number, nodeId: NodeId, direction: LayoutDirection) {
+type ConnectHandleHit = { nodeId: NodeId; anchor: EdgeAnchor };
+
+function getViewportConnectHandleHit(
+  clientX: number,
+  clientY: number,
+  nodeId: NodeId,
+  direction: LayoutDirection
+): ConnectHandleHit | null {
   const nodeEl = document.querySelector(`[data-testid="node-${nodeId}"]`);
-  if (!(nodeEl instanceof HTMLElement)) return false;
+  if (!(nodeEl instanceof HTMLElement)) return null;
   const rect = nodeEl.getBoundingClientRect();
   if (direction === 'horizontal') {
-    return Math.abs(clientX - rect.right) <= 14 && clientY >= rect.top - 8 && clientY <= rect.bottom + 8;
+    const withinY = clientY >= rect.top - 8 && clientY <= rect.bottom + 8;
+    if (Math.abs(clientX - rect.right) <= 14 && withinY) return { nodeId, anchor: 'back' };
+    if (Math.abs(clientX - rect.left) <= 14 && withinY) return { nodeId, anchor: 'front' };
+    return null;
   }
-  return Math.abs(clientY - rect.bottom) <= 14 && clientX >= rect.left - 8 && clientX <= rect.right + 8;
+  const withinX = clientX >= rect.left - 8 && clientX <= rect.right + 8;
+  if (Math.abs(clientY - rect.bottom) <= 14 && withinX) return { nodeId, anchor: 'back' };
+  if (Math.abs(clientY - rect.top) <= 14 && withinX) return { nodeId, anchor: 'front' };
+  return null;
 }
 
-function getConnectHandleNodeIdFromViewportPoint(clientX: number, clientY: number, direction: LayoutDirection): NodeId | null {
+function isViewportPointOnConnectHandle(clientX: number, clientY: number, nodeId: NodeId, direction: LayoutDirection) {
+  return Boolean(getViewportConnectHandleHit(clientX, clientY, nodeId, direction));
+}
+
+function getConnectHandleHitFromViewportPoint(clientX: number, clientY: number, direction: LayoutDirection): ConnectHandleHit | null {
   const nodeEls = Array.from(document.querySelectorAll('[data-testid^="node-"]'));
   for (const nodeEl of nodeEls) {
     if (!(nodeEl instanceof HTMLElement)) continue;
     const testId = nodeEl.dataset.testid || nodeEl.getAttribute('data-testid');
     const nodeId = testId?.replace(/^node-/, '') as NodeId | undefined;
-    if (nodeId && isViewportPointOnConnectHandle(clientX, clientY, nodeId, direction)) {
-      return nodeId;
+    if (!nodeId) continue;
+    const hit = getViewportConnectHandleHit(clientX, clientY, nodeId, direction);
+    if (hit) {
+      return hit;
     }
   }
   return null;
@@ -1444,6 +1465,7 @@ export function App() {
   const dragDidMoveRef = React.useRef(false);
   const suppressNextEdgeClickRef = React.useRef(false);
   const pendingRightConnectFromRef = React.useRef<NodeId | null>(null);
+  const pendingRightConnectAnchorsRef = React.useRef<EdgeAnchors>(HANDLE_CONNECT_ANCHORS);
   const connectDragListenersRef = React.useRef<{
     onPointerMove: (event: PointerEvent) => void;
     onPointerUp: (event: PointerEvent) => void;
@@ -3251,9 +3273,12 @@ export function App() {
     if (event.button === 2) {
       event.preventDefault();
       event.stopPropagation();
-      if (isViewportPointOnConnectHandle(event.clientX, event.clientY, nodeId, layoutDirection)) {
+      const handleHit = getViewportConnectHandleHit(event.clientX, event.clientY, nodeId, layoutDirection);
+      if (handleHit) {
         pendingRightConnectFromRef.current = nodeId;
-        beginConnectDrag(nodeId);
+        const anchors = handleHit.anchor === 'front' ? FRONT_HANDLE_CONNECT_ANCHORS : HANDLE_CONNECT_ANCHORS;
+        pendingRightConnectAnchorsRef.current = anchors;
+        beginConnectDrag(nodeId, anchors);
         return;
       }
       setSelectedEdgeId('');
@@ -3355,18 +3380,16 @@ export function App() {
     );
   };
 
-  const beginConnectDrag = (nodeId: NodeId) => {
+  const beginConnectDrag = (nodeId: NodeId, anchors: EdgeAnchors = HANDLE_CONNECT_ANCHORS) => {
     stopConnectDragListeners();
     const nodePos = renderedPositionMap.get(nodeId);
     const nodeSize = nodeSizeMap[nodeId] || DEFAULT_NODE_SIZE;
     if (!nodePos) return;
-    const start =
-      layoutDirection === 'horizontal'
-        ? { x: nodePos.x + nodeSize.width, y: nodePos.y + nodeSize.height / 2 }
-        : { x: nodePos.x + nodeSize.width / 2, y: nodePos.y + nodeSize.height };
+    const fromAnchor = anchors.from === 'front' ? 'front' : 'back';
+    const start = getDirectionalAnchorPoint(nodePos, nodeSize, layoutDirection, fromAnchor);
     const initialDrag = {
       fromNodeId: nodeId,
-      anchors: HANDLE_CONNECT_ANCHORS,
+      anchors,
       start,
       current: start,
       hoverTargetNodeId: null
@@ -3386,13 +3409,13 @@ export function App() {
     setSelectedEdgeId('');
   };
 
-  const startConnectDrag = (event: React.PointerEvent<HTMLSpanElement>, nodeId: NodeId) => {
+  const startConnectDrag = (event: React.PointerEvent<HTMLSpanElement>, nodeId: NodeId, anchors = HANDLE_CONNECT_ANCHORS) => {
     event.preventDefault();
     event.stopPropagation();
     if (event.button === 2 || event.buttons === 2) {
       pendingRightConnectFromRef.current = nodeId;
     }
-    beginConnectDrag(nodeId);
+    beginConnectDrag(nodeId, anchors);
   };
 
   React.useEffect(() => {
@@ -3401,16 +3424,17 @@ export function App() {
       if (editingNodeId || connectDrag) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
-      const nodeId =
-        getNodeIdFromEventTarget(target) ||
-        getConnectHandleNodeIdFromViewportPoint(event.clientX, event.clientY, layoutDirection);
+      const handleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
+      const nodeId = getNodeIdFromEventTarget(target) || handleHit?.nodeId;
       if (!nodeId) return;
       if (!target.closest('.node-connect-handle') && !isViewportPointOnConnectHandle(event.clientX, event.clientY, nodeId, layoutDirection)) {
         return;
       }
       event.preventDefault();
       pendingRightConnectFromRef.current = nodeId;
-      beginConnectDrag(nodeId);
+      const anchors = handleHit?.anchor === 'front' ? FRONT_HANDLE_CONNECT_ANCHORS : HANDLE_CONNECT_ANCHORS;
+      pendingRightConnectAnchorsRef.current = anchors;
+      beginConnectDrag(nodeId, anchors);
     };
     window.addEventListener('mousedown', onRightMouseDown, true);
     return () => window.removeEventListener('mousedown', onRightMouseDown, true);
@@ -3422,21 +3446,26 @@ export function App() {
     if (!(target instanceof Element)) return;
     const nodeId =
       getNodeIdFromEventTarget(target) ||
-      getConnectHandleNodeIdFromViewportPoint(event.clientX, event.clientY, layoutDirection);
+      getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection)?.nodeId;
     if (!nodeId) return;
     if (!target.closest('.node-connect-handle') && !isViewportPointOnConnectHandle(event.clientX, event.clientY, nodeId, layoutDirection)) {
       return;
     }
     pendingRightConnectFromRef.current = nodeId;
+    const handleHit = getViewportConnectHandleHit(event.clientX, event.clientY, nodeId, layoutDirection);
+    const anchors = handleHit?.anchor === 'front' ? FRONT_HANDLE_CONNECT_ANCHORS : HANDLE_CONNECT_ANCHORS;
+    pendingRightConnectAnchorsRef.current = anchors;
     event.preventDefault();
     event.stopPropagation();
-    beginConnectDrag(nodeId);
+    beginConnectDrag(nodeId, anchors);
   };
 
   const onCanvasMouseUpCapture = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 2) return;
     const fromId = pendingRightConnectFromRef.current;
+    const anchors = pendingRightConnectAnchorsRef.current;
     pendingRightConnectFromRef.current = null;
+    pendingRightConnectAnchorsRef.current = HANDLE_CONNECT_ANCHORS;
     if (!fromId) return;
     const pointer = getCanvasContentPoint(event.clientX, event.clientY);
     const targetId =
@@ -3445,7 +3474,7 @@ export function App() {
       (pointer ? findNodeAtCanvasPoint(pointer.x, pointer.y) : null);
     stopConnectDragListeners();
     setConnectDrag(null);
-    if (targetId && targetId !== fromId && tryCreateEdge(fromId, targetId, HANDLE_CONNECT_ANCHORS)) {
+    if (targetId && targetId !== fromId && tryCreateEdge(fromId, targetId, anchors)) {
       setSelectedNodeIds([targetId]);
       return;
     }
@@ -4414,6 +4443,16 @@ export function App() {
                           aria-label={nodeTag.name}
                         />
                       ) : null}
+                      <span
+                        className={
+                          layoutDirection === 'horizontal'
+                            ? 'node-connect-handle-front'
+                            : 'node-connect-handle-front node-connect-handle-front-vertical'
+                        }
+                        title="Drag from input side"
+                        onPointerDown={event => startConnectDrag(event, node.id, FRONT_HANDLE_CONNECT_ANCHORS)}
+                        onContextMenu={event => event.preventDefault()}
+                      />
                       <span
                         className={
                           layoutDirection === 'horizontal'

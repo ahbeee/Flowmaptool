@@ -185,3 +185,50 @@ test('cross branch manual edge keeps existing layout stable', async () => {
 
   await app.close();
 });
+
+test('front connect handle preserves source side intent', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
+
+  const root = window.getByTestId('node-n1');
+  const frontHandle = root.locator('.node-connect-handle-front');
+  const target = window.getByTestId('node-n4');
+  await root.hover();
+  await expect(frontHandle).toHaveCSS('opacity', '1');
+  await expect(frontHandle).toHaveCSS('pointer-events', 'auto');
+  const handleBox = await frontHandle.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!handleBox) throw new Error('missing front handle');
+  if (!targetBox) throw new Error('missing target node');
+  await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
+  await window.mouse.up();
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+
+  const startsAtRootFront = await window.getByTestId('edge-path-e4').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    const rootNode = document.querySelector('[data-testid="node-n1"]');
+    if (!matrix || !(rootNode instanceof HTMLElement)) return false;
+    const start = path.getPointAtLength(0).matrixTransform(matrix);
+    const rootRect = rootNode.getBoundingClientRect();
+    return Math.abs(start.x - rootRect.left) <= 3;
+  });
+  expect(startsAtRootFront).toBe(true);
+
+  await app.close();
+});
