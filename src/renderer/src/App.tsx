@@ -809,6 +809,15 @@ function getNodeBoxesBounds(boxes: NodeBox[]): NodeBox | undefined {
   };
 }
 
+function filterNodeBoxesByIds(nodeBoxes: Map<NodeId, NodeBox>, nodeIds: Iterable<NodeId>): Map<NodeId, NodeBox> {
+  const filtered = new Map<NodeId, NodeBox>();
+  for (const nodeId of nodeIds) {
+    const box = nodeBoxes.get(nodeId);
+    if (box) filtered.set(nodeId, box);
+  }
+  return filtered;
+}
+
 function routeFromPoints(points: Point[]): EdgeRoute | undefined {
   return points.length > 0 ? { points } : undefined;
 }
@@ -2078,6 +2087,28 @@ export function App() {
     return map;
   }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
 
+  const componentNodeIdsByNodeId = React.useMemo(() => {
+    const map = new Map<NodeId, NodeId[]>();
+    for (const node of doc.nodes) {
+      if (map.has(node.id)) continue;
+      const componentNodeIds = collectConnectedComponent(doc, node.id);
+      for (const componentNodeId of componentNodeIds) {
+        map.set(componentNodeId, componentNodeIds);
+      }
+    }
+    return map;
+  }, [doc]);
+
+  const getRouteNodeBoxes = React.useCallback(
+    (nodeId: NodeId) => {
+      const componentNodeIds = componentNodeIdsByNodeId.get(nodeId);
+      if (!componentNodeIds) return nodeBoxMap;
+      const scopedNodeBoxes = filterNodeBoxesByIds(nodeBoxMap, componentNodeIds);
+      return scopedNodeBoxes.size > 0 ? scopedNodeBoxes : nodeBoxMap;
+    },
+    [componentNodeIdsByNodeId, nodeBoxMap]
+  );
+
   const getRenderedEdgeEndpoints = React.useCallback(
     (edge: FlowEdge, fromPos: LayoutPoint, toPos: LayoutPoint, fromSize: NodeSize, toSize: NodeSize) =>
       getEdgeRenderEndpoints(
@@ -2102,14 +2133,23 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+      const routeNodeBoxes = getRouteNodeBoxes(edge.from);
       map.set(
         edge.id,
         !layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) ||
-          edgeIntersectsNodeCorridor(endpoints.from, endpoints.to, layoutDirection, edge.from, edge.to, nodeBoxMap)
+          edgeIntersectsNodeCorridor(endpoints.from, endpoints.to, layoutDirection, edge.from, edge.to, routeNodeBoxes)
       );
     }
     return map;
-  }, [doc.edges, getRenderedEdgeEndpoints, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, nodeBoxMap, nodeSizeMap, renderedPositionMap]);
+  }, [
+    doc.edges,
+    getRenderedEdgeEndpoints,
+    getRouteNodeBoxes,
+    layoutDirection,
+    layoutEdgeAnalysis.layoutEdgeIds,
+    nodeSizeMap,
+    renderedPositionMap
+  ]);
 
   const edgeLaneMap = React.useMemo(() => {
     const laneByEdgeId = new Map<string, number>();
@@ -2154,13 +2194,14 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+      const routeNodeBoxes = getRouteNodeBoxes(edge.from);
       const route = computeAutoEdgeRoute(
         endpoints.from,
         endpoints.to,
         layoutDirection,
         edge.from,
         edge.to,
-        nodeBoxMap,
+        routeNodeBoxes,
         edgeLaneMap.get(edge.id) || 0
       );
       if (route) map.set(edge.id, route);
@@ -2173,8 +2214,8 @@ export function App() {
     edgeLaneMap,
     edgeRoutes,
     getRenderedEdgeEndpoints,
+    getRouteNodeBoxes,
     layoutDirection,
-    nodeBoxMap,
     nodeSizeMap,
     renderedPositionMap
   ]);

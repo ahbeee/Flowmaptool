@@ -67,6 +67,68 @@ function createManualRouteFixture() {
   };
 }
 
+function createDisconnectedBackEdgeFixture() {
+  return {
+    schemaVersion: 1,
+    doc: {
+      schemaVersion: 1,
+      nodes: [
+        { id: 'n1', label: 'Top Root' },
+        { id: 'n2', label: 'Top Child' },
+        { id: 'n3', label: 'Bottom Root' },
+        { id: 'n4', label: 'Bottom Child' }
+      ],
+      edges: [
+        { id: 'e1', from: 'n1', to: 'n2', role: 'layout' },
+        { id: 'e2', from: 'n3', to: 'n4', role: 'layout' },
+        {
+          id: 'e3',
+          from: 'n4',
+          to: 'n3',
+          role: 'manual',
+          anchors: { from: 'back', to: 'front' }
+        }
+      ],
+      meta: {
+        nextNodeSeq: 5,
+        nextEdgeSeq: 4
+      },
+      settings: {
+        themeId: 'blue-gray',
+        spacing: {
+          horizontal: 48,
+          vertical: 48
+        },
+        defaultShape: 'plain',
+        defaultEdgeStyle: {
+          width: 2,
+          lineType: 'solid',
+          color: '#64748b'
+        },
+        tags: [
+          { id: 'tag-blue', name: 'Blue', color: '#3b82f6' },
+          { id: 'tag-pink', name: 'Pending', color: '#ec4899' },
+          { id: 'tag-green', name: 'Done', color: '#22c55e' },
+          { id: 'tag-orange', name: 'Orange', color: '#f97316' }
+        ]
+      }
+    },
+    ui: {
+      layoutDirection: 'horizontal',
+      nodeOffsetsByDirection: {
+        horizontal: {
+          n3: { x: 0, y: 320 },
+          n4: { x: 0, y: 320 }
+        },
+        vertical: {}
+      },
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} },
+      toolbarVisible: true
+    }
+  };
+}
+
 test('edge segment drag keeps a clean routed bend without route point controls', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
@@ -114,6 +176,53 @@ test('edge segment drag keeps a clean routed bend without route point controls',
   expect((draggedPath?.match(/\bL\b/g) || []).length).toBeGreaterThanOrEqual(3);
   await window.getByRole('button', { name: 'Reset Bend' }).click();
   await expect.poll(() => edgePath.getAttribute('d')).toBe(automaticPath);
+
+  await app.close();
+});
+
+test('automatic back edge route is scoped to its disconnected component after root move', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('disconnected-back-edge.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createDisconnectedBackEdgeFixture(), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+  await expect(window.getByTestId('edge-path-e3')).toBeVisible();
+
+  const bottomRoot = window.getByTestId('node-n3');
+  const rootBox = await bottomRoot.boundingBox();
+  if (!rootBox) throw new Error('bottom root node not found');
+  await window.mouse.move(rootBox.x + rootBox.width / 2, rootBox.y + rootBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(rootBox.x + rootBox.width / 2 - 90, rootBox.y + rootBox.height / 2 + 36, { steps: 8 });
+  await window.mouse.up();
+
+  const movedRootBox = await bottomRoot.boundingBox();
+  const bottomChildBox = await window.getByTestId('node-n4').boundingBox();
+  const topRootBox = await window.getByTestId('node-n1').boundingBox();
+  const routeBox = await window.getByTestId('edge-path-e3').boundingBox();
+  if (!movedRootBox || !bottomChildBox || !topRootBox || !routeBox) {
+    throw new Error('expected route and node boxes to be measurable');
+  }
+
+  const bottomComponentTop = Math.min(movedRootBox.y, bottomChildBox.y);
+  const bottomComponentBottom = Math.max(
+    movedRootBox.y + movedRootBox.height,
+    bottomChildBox.y + bottomChildBox.height
+  );
+
+  expect(routeBox.y).toBeGreaterThan(bottomComponentTop - 140);
+  expect(routeBox.y + routeBox.height).toBeLessThan(bottomComponentBottom + 140);
+  expect(routeBox.y).toBeGreaterThan(topRootBox.y + topRootBox.height);
 
   await app.close();
 });
