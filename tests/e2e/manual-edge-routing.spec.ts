@@ -209,6 +209,49 @@ test('reverse manual connections preserve source and target direction', async ()
   await secondCase.app.close();
 });
 
+test('selecting nodes does not mutate automatic manual routes', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    await sourceNode.hover();
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await createChild('n3');
+  await createChild('n3');
+  await connectByHandle('n7', 'n2');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(7);
+
+  const routePath = () => window.getByTestId('edge-path-e7').getAttribute('d');
+  const stableRoute = await routePath();
+  await window.getByTestId('node-n4').click();
+  await expect.poll(routePath).toBe(stableRoute);
+  await window.getByTestId('node-n2').click();
+  await expect.poll(routePath).toBe(stableRoute);
+  await window.getByTestId('canvas-surface').click({ position: { x: 12, y: 12 } });
+  await expect.poll(routePath).toBe(stableRoute);
+
+  await app.close();
+});
+
 test('cross branch manual edge keeps existing layout stable', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
