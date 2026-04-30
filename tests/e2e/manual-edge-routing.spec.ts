@@ -315,6 +315,107 @@ test('cross branch manual edge keeps existing layout stable', async () => {
   await app.close();
 });
 
+test('long labels reflow descendants without breaking cross branch manual routes', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    await sourceNode.hover();
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await createChild('n3');
+  await createChild('n3');
+  await connectByHandle('n5', 'n6');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(7);
+
+  await window.getByTestId('node-n3').click();
+  await window.keyboard.press('Space');
+  const labelInput = window.locator('.node-label-input');
+  await expect(labelInput).toBeVisible();
+  await labelInput.fill('Node 333333333333333333333333333333333');
+  await labelInput.press('Enter');
+  await expect(window.getByTestId('node-n3')).toContainText('Node 333333333333333333333333333333333');
+
+  const geometry = await window.locator('[data-testid^="node-"]').evaluateAll(nodes =>
+    nodes.map(node => {
+      const element = node as HTMLElement;
+      const rect = element.getBoundingClientRect();
+      return {
+        id: element.getAttribute('data-testid') || '',
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom
+      };
+    })
+  );
+
+  for (let i = 0; i < geometry.length; i++) {
+    for (let j = i + 1; j < geometry.length; j++) {
+      const a = geometry[i];
+      const b = geometry[j];
+      const overlaps =
+        a.left < b.right - 2 &&
+        a.right > b.left + 2 &&
+        a.top < b.bottom - 2 &&
+        a.bottom > b.top + 2;
+      expect(overlaps, `${a.id} should not overlap ${b.id}`).toBe(false);
+    }
+  }
+
+  const node3 = geometry.find(node => node.id === 'node-n3');
+  const node6 = geometry.find(node => node.id === 'node-n6');
+  const node7 = geometry.find(node => node.id === 'node-n7');
+  if (!node3 || !node6 || !node7) throw new Error('missing reflow nodes');
+  expect(node6.left - node3.right).toBeGreaterThanOrEqual(44);
+  expect(node7.left - node3.right).toBeGreaterThanOrEqual(44);
+
+  const intersectsNonEndpointNode = await window.getByTestId('edge-path-e7').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const boxes = Array.from(document.querySelectorAll('[data-testid^="node-"]'))
+      .filter(element => element.getAttribute('data-testid') !== 'node-n5' && element.getAttribute('data-testid') !== 'node-n6')
+      .map(element => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left + 6,
+          right: rect.right - 6,
+          top: rect.top + 6,
+          bottom: rect.bottom - 6
+        };
+      });
+    const totalLength = path.getTotalLength();
+    for (let distance = totalLength * 0.08; distance <= totalLength * 0.92; distance += 12) {
+      const point = path.getPointAtLength(distance).matrixTransform(matrix);
+      if (boxes.some(box => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom)) {
+        return true;
+      }
+    }
+    return false;
+  });
+  expect(intersectsNonEndpointNode).toBe(false);
+
+  await app.close();
+});
+
 test('front connect handle preserves source side intent', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
