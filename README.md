@@ -51,7 +51,7 @@ pnpm dist:win
 
 ## Known Boundaries
 
-- Advanced manual edge routing is supported, but exact parity with every QuikFlow routing case is intentionally kept as follow-up work.
+- Advanced manual edge routing is supported; exact QuikFlow parity remains an active improvement area rather than a release blocker.
 - Remote GitHub Actions CI is disabled by design; validation is run locally with the commands above.
 
 ## Follow-Up Improvements
