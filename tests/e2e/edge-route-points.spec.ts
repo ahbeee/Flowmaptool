@@ -268,6 +268,46 @@ test('selected automatic manual route exposes editable route points', async () =
   await app.close();
 });
 
+test('route point insertion stays away from edge endpoints', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const root = window.getByTestId('node-n1');
+  await root.click();
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+
+  const edgePath = window.getByTestId('edge-path-e1');
+  const endpointClick = await edgePath.evaluate((path: SVGPathElement) => {
+    const start = path.getPointAtLength(0);
+    const next = path.getPointAtLength(Math.min(path.getTotalLength(), 12));
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenStart = new DOMPoint(start.x, start.y).matrixTransform(matrix);
+    const screenNext = new DOMPoint(next.x, next.y).matrixTransform(matrix);
+    return {
+      startX: screenStart.x,
+      startY: screenStart.y,
+      clickX: screenStart.x + (screenNext.x - screenStart.x) * 0.12,
+      clickY: screenStart.y + (screenNext.y - screenStart.y) * 0.12
+    };
+  });
+
+  await window.mouse.dblclick(endpointClick.clickX, endpointClick.clickY);
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(2);
+  await expect(window.locator('.edge-bend-handle-selected')).toHaveCount(1);
+  const selectedHandle = await window.locator('.edge-bend-handle-selected').boundingBox();
+  if (!selectedHandle) throw new Error('selected inserted route handle not found');
+  const selectedPoint = {
+    x: selectedHandle.x + selectedHandle.width / 2,
+    y: selectedHandle.y + selectedHandle.height / 2
+  };
+  expect(Math.hypot(selectedPoint.x - endpointClick.startX, selectedPoint.y - endpointClick.startY)).toBeGreaterThan(8);
+
+  await app.close();
+});
+
 test('manual route edits are saved and restored from qflow files', async ({}, testInfo) => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const fixturePath = testInfo.outputPath('manual-route-persistence.qflow');

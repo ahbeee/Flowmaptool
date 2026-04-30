@@ -1275,7 +1275,9 @@ function insertRoutePointNearSegment(from: Point, to: Point, route: EdgeRoute, p
     lengthSquared <= 0.0001
       ? start
       : (() => {
-          const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1);
+          const length = Math.sqrt(lengthSquared);
+          const endpointInset = Math.min(0.45, 18 / length);
+          const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, endpointInset, 1 - endpointInset);
           return { x: start.x + dx * t, y: start.y + dy * t };
         })();
   const points = [...route.points];
