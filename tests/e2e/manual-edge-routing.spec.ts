@@ -123,6 +123,92 @@ test('nearby manual back edges use separate automatic lanes', async () => {
   await app.close();
 });
 
+test('reverse manual connections preserve source and target direction', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+
+  const buildBaseTree = async () => {
+    const app = await electron.launch({ args: [mainEntry] });
+    const window = await app.firstWindow();
+
+    const createChild = async (parentId: string) => {
+      const parent = window.getByTestId(`node-${parentId}`);
+      await parent.click();
+      await expect(parent).toHaveClass(/flow-node-selected/);
+      await window.keyboard.press('Tab');
+      await window.keyboard.press('Escape');
+    };
+
+    const connectByHandle = async (fromId: string, toId: string) => {
+      const sourceNode = window.getByTestId(`node-${fromId}`);
+      const handle = sourceNode.locator('.node-connect-handle');
+      const target = window.getByTestId(`node-${toId}`);
+      await sourceNode.hover();
+      await expect(handle).toHaveCSS('opacity', '1');
+      await handle.dragTo(target);
+    };
+
+    await createChild('n1');
+    await createChild('n1');
+    await createChild('n2');
+    await createChild('n2');
+    await createChild('n3');
+    await createChild('n3');
+
+    return { app, window, connectByHandle };
+  };
+
+  const firstCase = await buildBaseTree();
+  await firstCase.connectByHandle('n7', 'n4');
+  await expect(firstCase.window.locator('[data-testid^="edge-path-"]')).toHaveCount(7);
+  const n7ToN4Path = await firstCase.window.getByTestId('edge-path-e7').getAttribute('d');
+  const n7ToN4Anchors = await firstCase.window.getByTestId('edge-path-e7').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    const source = document.querySelector('[data-testid="node-n7"]');
+    const target = document.querySelector('[data-testid="node-n4"]');
+    if (!matrix || !(source instanceof HTMLElement) || !(target instanceof HTMLElement)) {
+      throw new Error('missing screen geometry');
+    }
+    const start = path.getPointAtLength(0).matrixTransform(matrix);
+    const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+    const sourceRect = source.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    return {
+      startsAtSourceBack: Math.abs(start.x - sourceRect.right) <= 4,
+      endsAtTargetFront: Math.abs(end.x - targetRect.left) <= 4
+    };
+  });
+  expect(n7ToN4Anchors.startsAtSourceBack).toBe(true);
+  expect(n7ToN4Anchors.endsAtTargetFront).toBe(true);
+  await firstCase.app.close();
+
+  const secondCase = await buildBaseTree();
+  await secondCase.connectByHandle('n4', 'n7');
+  await expect(secondCase.window.locator('[data-testid^="edge-path-"]')).toHaveCount(7);
+  const n4ToN7Path = await secondCase.window.getByTestId('edge-path-e7').getAttribute('d');
+  const n4ToN7Anchors = await secondCase.window.getByTestId('edge-path-e7').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    const source = document.querySelector('[data-testid="node-n4"]');
+    const target = document.querySelector('[data-testid="node-n7"]');
+    if (!matrix || !(source instanceof HTMLElement) || !(target instanceof HTMLElement)) {
+      throw new Error('missing screen geometry');
+    }
+    const start = path.getPointAtLength(0).matrixTransform(matrix);
+    const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+    const sourceRect = source.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    return {
+      startsAtSourceBack: Math.abs(start.x - sourceRect.right) <= 4,
+      endsAtTargetFront: Math.abs(end.x - targetRect.left) <= 4
+    };
+  });
+  expect(n4ToN7Anchors.startsAtSourceBack).toBe(true);
+  expect(n4ToN7Anchors.endsAtTargetFront).toBe(true);
+  expect(n7ToN4Path).toBeTruthy();
+  expect(n4ToN7Path).toBeTruthy();
+  expect(n4ToN7Path).not.toBe(n7ToN4Path);
+  await secondCase.app.close();
+});
+
 test('cross branch manual edge keeps existing layout stable', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
