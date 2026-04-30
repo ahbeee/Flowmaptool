@@ -498,6 +498,66 @@ test('adjusted copied component back edge moves with copied root', async ({}, te
   await app.close();
 });
 
+test('copied component back edges ignore unrelated root moves', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('duplicated-back-edge-unrelated-root.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createDuplicatedBackEdgeFixture(), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+  await expect(window.getByTestId('edge-path-e17')).toBeVisible();
+  await expect(window.getByTestId('edge-path-e18')).toBeVisible();
+
+  const edgeSnapshot = async (edgeId: string) => {
+    const path = window.getByTestId(`edge-path-${edgeId}`);
+    const d = await path.getAttribute('d');
+    const box = await path.boundingBox();
+    if (!d || !box) throw new Error(`expected ${edgeId} route to be measurable`);
+    return { d, box };
+  };
+
+  const before = {
+    e17: await edgeSnapshot('e17'),
+    e18: await edgeSnapshot('e18')
+  };
+  const bottomRootBoxBefore = await window.getByTestId('node-n10').boundingBox();
+  const topRoot = window.getByTestId('node-n1');
+  const topRootBox = await topRoot.boundingBox();
+  if (!topRootBox || !bottomRootBoxBefore) throw new Error('expected both roots to be measurable');
+
+  await window.mouse.move(topRootBox.x + topRootBox.width / 2, topRootBox.y + topRootBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(topRootBox.x + topRootBox.width / 2 + 112, topRootBox.y + topRootBox.height / 2 - 36, {
+    steps: 10
+  });
+  await window.mouse.up();
+
+  const bottomRootBoxAfter = await window.getByTestId('node-n10').boundingBox();
+  if (!bottomRootBoxAfter) throw new Error('expected copied root to remain measurable');
+  expect(bottomRootBoxAfter.x).toBeCloseTo(bottomRootBoxBefore.x, 0);
+  expect(bottomRootBoxAfter.y).toBeCloseTo(bottomRootBoxBefore.y, 0);
+
+  for (const edgeId of ['e17', 'e18'] as const) {
+    const after = await edgeSnapshot(edgeId);
+    expect(after.d).toBe(before[edgeId].d);
+    expect(after.box.x).toBeCloseTo(before[edgeId].box.x, 0);
+    expect(after.box.y).toBeCloseTo(before[edgeId].box.y, 0);
+    expect(after.box.width).toBeCloseTo(before[edgeId].box.width, 0);
+    expect(after.box.height).toBeCloseTo(before[edgeId].box.height, 0);
+  }
+
+  await app.close();
+});
+
 test('automatic back edge route is scoped to its disconnected component after root move', async ({}, testInfo) => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const fixturePath = testInfo.outputPath('disconnected-back-edge.qflow');
