@@ -1236,55 +1236,6 @@ function distanceToPathSquared(point: Point, path: string): number {
   return nearest;
 }
 
-function insertRoutePointAtLongestSegment(from: Point, to: Point, route: EdgeRoute): { route: EdgeRoute; pointIndex: number } {
-  const fullRoute = [from, ...route.points, to];
-  let insertAt = 0;
-  let longestDistance = -1;
-  for (let index = 0; index < fullRoute.length - 1; index += 1) {
-    const segmentDistance = distanceSquared(fullRoute[index], fullRoute[index + 1]);
-    if (segmentDistance > longestDistance) {
-      longestDistance = segmentDistance;
-      insertAt = index;
-    }
-  }
-  const start = fullRoute[insertAt];
-  const end = fullRoute[insertAt + 1];
-  const newPoint = edgeMidpoint(start, end);
-  const points = [...route.points];
-  points.splice(insertAt, 0, newPoint);
-  return { route: { points }, pointIndex: insertAt };
-}
-
-function insertRoutePointNearSegment(from: Point, to: Point, route: EdgeRoute, point: Point): { route: EdgeRoute; pointIndex: number } {
-  const fullRoute = [from, ...route.points, to];
-  let insertAt = 0;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < fullRoute.length - 1; index += 1) {
-    const segmentDistance = distanceToSegmentSquared(point, fullRoute[index], fullRoute[index + 1]);
-    if (segmentDistance < nearestDistance) {
-      nearestDistance = segmentDistance;
-      insertAt = index;
-    }
-  }
-  const start = fullRoute[insertAt];
-  const end = fullRoute[insertAt + 1];
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const lengthSquared = dx * dx + dy * dy;
-  const projectedPoint =
-    lengthSquared <= 0.0001
-      ? start
-      : (() => {
-          const length = Math.sqrt(lengthSquared);
-          const endpointInset = Math.min(0.45, 18 / length);
-          const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, endpointInset, 1 - endpointInset);
-          return { x: start.x + dx * t, y: start.y + dy * t };
-        })();
-  const points = [...route.points];
-  points.splice(insertAt, 0, projectedPoint);
-  return { route: { points }, pointIndex: insertAt };
-}
-
 function escapeXml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -2547,105 +2498,6 @@ export function App() {
     });
   }, [selectedEdgeId, setCurrentEdgeBends, setCurrentEdgeRoutes]);
 
-  const addRoutePointToSelectedEdge = React.useCallback(() => {
-    if (!selectedEdgeId) return;
-    const edge = doc.edges.find(item => item.id === selectedEdgeId);
-    if (!edge) return;
-    const fromPos = renderedPositionMap.get(edge.from);
-    const toPos = renderedPositionMap.get(edge.to);
-    if (!fromPos || !toPos) return;
-    const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-    const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-    const fallbackRoute =
-      edgeRoutes[selectedEdgeId] ||
-      routeFromBend(edgeBends[selectedEdgeId]) ||
-      autoEdgeRouteMap.get(selectedEdgeId) ||
-      routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
-    const inserted = insertRoutePointAtLongestSegment(endpoints.from, endpoints.to, edgeRoutes[selectedEdgeId] || fallbackRoute);
-
-    setCurrentEdgeRoutes(prev => ({
-      ...prev,
-      [selectedEdgeId]: insertRoutePointAtLongestSegment(endpoints.from, endpoints.to, prev[selectedEdgeId] || fallbackRoute).route
-    }));
-    setSelectedRoutePoint({ edgeId: selectedEdgeId, pointIndex: inserted.pointIndex });
-    setCurrentEdgeBends(prev => {
-      const { [selectedEdgeId]: _removed, ...rest } = prev;
-      return rest;
-    });
-  }, [
-    autoEdgeRouteMap,
-    doc.edges,
-    edgeBends,
-    edgeRoutes,
-    getRenderedEdgeEndpoints,
-    nodeSizeMap,
-    renderedPositionMap,
-    selectedEdgeId,
-    setCurrentEdgeBends,
-    setCurrentEdgeRoutes
-  ]);
-
-  const addRoutePointToEdgeAtPoint = React.useCallback(
-    (edgeId: string, point: Point) => {
-      const edge = doc.edges.find(item => item.id === edgeId);
-      if (!edge) return;
-      const fromPos = renderedPositionMap.get(edge.from);
-      const toPos = renderedPositionMap.get(edge.to);
-      if (!fromPos || !toPos) return;
-      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      const fallbackRoute =
-        edgeRoutes[edgeId] ||
-        routeFromBend(edgeBends[edgeId]) ||
-        autoEdgeRouteMap.get(edgeId) ||
-        routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
-      const inserted = insertRoutePointNearSegment(endpoints.from, endpoints.to, edgeRoutes[edgeId] || fallbackRoute, point);
-
-      setCurrentEdgeRoutes(prev => ({
-        ...prev,
-        [edgeId]: insertRoutePointNearSegment(endpoints.from, endpoints.to, prev[edgeId] || fallbackRoute, point).route
-      }));
-      setSelectedEdgeId(edgeId);
-      setSelectedRoutePoint({ edgeId, pointIndex: inserted.pointIndex });
-      setSelectedNodeIds([]);
-      setCurrentEdgeBends(prev => {
-        const { [edgeId]: _removed, ...rest } = prev;
-        return rest;
-      });
-    },
-    [
-      autoEdgeRouteMap,
-      doc.edges,
-      edgeBends,
-      edgeRoutes,
-      getRenderedEdgeEndpoints,
-      nodeSizeMap,
-      renderedPositionMap,
-      setCurrentEdgeBends,
-      setCurrentEdgeRoutes
-    ]
-  );
-
-  const deleteSelectedRoutePoint = React.useCallback(() => {
-    if (!selectedRoutePoint || selectedRoutePoint.edgeId !== selectedEdgeId) return;
-    setCurrentEdgeRoutes(prev => {
-      const route = prev[selectedRoutePoint.edgeId];
-      if (!route || !route.points[selectedRoutePoint.pointIndex]) return prev;
-      const nextPoints = route.points.filter((_, index) => index !== selectedRoutePoint.pointIndex);
-      if (nextPoints.length === 0) {
-        const { [selectedRoutePoint.edgeId]: _removed, ...rest } = prev;
-        return rest;
-      }
-      return {
-        ...prev,
-        [selectedRoutePoint.edgeId]: { points: nextPoints }
-      };
-    });
-    setSelectedRoutePoint(null);
-  }, [selectedEdgeId, selectedRoutePoint, setCurrentEdgeRoutes]);
-
   const hasManualOffset = React.useMemo(
     () =>
       selectedNodeIds.some(nodeId => {
@@ -2830,15 +2682,6 @@ export function App() {
         return;
       }
       if (key === 'delete' || key === 'backspace') {
-        if (
-          selectedRoutePoint &&
-          selectedRoutePoint.edgeId === selectedEdgeId &&
-          edgeRoutes[selectedRoutePoint.edgeId]?.points[selectedRoutePoint.pointIndex]
-        ) {
-          event.preventDefault();
-          deleteSelectedRoutePoint();
-          return;
-        }
         if (selectedEdgeId) {
           event.preventDefault();
           deleteSelectedEdge();
@@ -2865,15 +2708,12 @@ export function App() {
     createNewDocument,
     deleteSelectedEdge,
     deleteSelectedNodes,
-    deleteSelectedRoutePoint,
-    edgeRoutes,
     openDocument,
     pasteSelectedNodes,
     saveDocument,
     selectNodeByDirection,
     setCanvasZoom,
     selectedEdgeId,
-    selectedRoutePoint,
     startEditingNode,
     fitCanvasToView,
     updateActiveTab
@@ -3165,18 +3005,8 @@ export function App() {
       const pointer = getCanvasContentPoint(event.clientX, event.clientY);
       if (!pointer) return;
       const { x, y } = pointer;
-      const fallbackRoute =
-        edgeRoutes[edgeBendDrag.edgeId] ||
-        routeFromBend(edgeBends[edgeBendDrag.edgeId]) ||
-        autoEdgeRouteMap.get(edgeBendDrag.edgeId) ||
-        { points: [{ x, y }] };
+      setCurrentEdgeBends(prev => ({ ...prev, [edgeBendDrag.edgeId]: { x, y } }));
       setCurrentEdgeRoutes(prev => {
-        const current = prev[edgeBendDrag.edgeId] || fallbackRoute;
-        const points = current.points.length > 0 ? [...current.points] : [{ x, y }];
-        points[edgeBendDrag.pointIndex] = { x, y };
-        return { ...prev, [edgeBendDrag.edgeId]: { points } };
-      });
-      setCurrentEdgeBends(prev => {
         const { [edgeBendDrag.edgeId]: _removed, ...rest } = prev;
         return rest;
       });
@@ -3195,7 +3025,7 @@ export function App() {
       window.removeEventListener('mousemove', moveEdgeBend);
       window.removeEventListener('mouseup', finishEdgeBend);
     };
-  }, [autoEdgeRouteMap, autoPanCanvas, edgeBendDrag, edgeBends, edgeRoutes, getCanvasContentPoint, setCurrentEdgeBends, setCurrentEdgeRoutes]);
+  }, [autoPanCanvas, edgeBendDrag, getCanvasContentPoint, setCurrentEdgeBends, setCurrentEdgeRoutes]);
 
   React.useEffect(() => {
     if (!marquee) return;
@@ -3241,8 +3071,6 @@ export function App() {
 
   const startEdgeSegmentDragAtPoint = (
     edgeId: string,
-    endpoints: { from: Point; to: Point },
-    route: EdgeRoute | undefined,
     start: Point,
     getPointerPoint: (clientX: number, clientY: number) => Point | null = getCanvasContentPoint
   ) => {
@@ -3250,41 +3078,24 @@ export function App() {
     setSelectedEdgeId(edgeId);
     setSelectedRoutePoint(null);
     setSelectedNodeIds([]);
-    let pointIndex: number | null = null;
-    let currentRoute: EdgeRoute = route || { points: [] };
+    let didDrag = false;
     const onPointerMove = (nativeEvent: PointerEvent) => {
       autoPanCanvas(nativeEvent);
       const pointer = getPointerPoint(nativeEvent.clientX, nativeEvent.clientY);
       if (!pointer) return;
-
-      if (pointIndex === null) {
-        if (distanceSquared(start, pointer) < 16) return;
-        const inserted = insertRoutePointNearSegment(endpoints.from, endpoints.to, currentRoute, start);
-        const points = [...inserted.route.points];
-        points[inserted.pointIndex] = pointer;
-        currentRoute = { points };
-        pointIndex = inserted.pointIndex;
-        suppressNextEdgeClickRef.current = true;
-        setCurrentEdgeRoutes(prev => ({ ...prev, [edgeId]: currentRoute }));
-        setSelectedRoutePoint({ edgeId, pointIndex });
-        setCurrentEdgeBends(prev => {
-          const { [edgeId]: _removed, ...rest } = prev;
-          return rest;
-        });
-        return;
-      }
-
-      const points = currentRoute.points.length > 0 ? [...currentRoute.points] : [pointer];
-      points[pointIndex] = pointer;
-      currentRoute = { points };
-      setCurrentEdgeRoutes(prev => ({ ...prev, [edgeId]: currentRoute }));
+      if (!didDrag && distanceSquared(start, pointer) < 16) return;
+      didDrag = true;
+      suppressNextEdgeClickRef.current = true;
+      setCurrentEdgeBends(prev => ({ ...prev, [edgeId]: pointer }));
+      setCurrentEdgeRoutes(prev => {
+        const { [edgeId]: _removed, ...rest } = prev;
+        return rest;
+      });
     };
     const onPointerUp = () => {
-      if (pointIndex === null) {
-        setSelectedEdgeId(edgeId);
-        setSelectedRoutePoint(null);
-        setSelectedNodeIds([]);
-      }
+      setSelectedEdgeId(edgeId);
+      setSelectedRoutePoint(null);
+      setSelectedNodeIds([]);
       stopEdgeSegmentDragListeners();
     };
     edgeSegmentDragListenersRef.current = { onPointerMove, onPointerUp };
@@ -3338,7 +3149,7 @@ export function App() {
     if (!pointer) return;
     const edgeHit = findEdgeHitAtPoint(pointer);
     if (edgeHit && event.button === 0) {
-      startEdgeSegmentDragAtPoint(edgeHit.edgeId, edgeHit.endpoints, edgeHit.route, pointer, getCanvasContentPoint);
+      startEdgeSegmentDragAtPoint(edgeHit.edgeId, pointer, getCanvasContentPoint);
       return;
     }
     const x = pointer.x;
@@ -3346,19 +3157,6 @@ export function App() {
     setMarquee({ startX: x, startY: y, currentX: x, currentY: y });
     setSelectedNodeIds([]);
     setSelectedEdgeId('');
-  };
-
-  const onCanvasDoubleClick = (event: React.MouseEvent<Element>) => {
-    if (event.target !== event.currentTarget) return;
-    if (isNodeLabelInputTarget(event.target)) return;
-    if (editingNodeIdRef.current) commitEditingNode();
-    const pointer = getCanvasContentPoint(event.clientX, event.clientY);
-    if (!pointer) return;
-    const edgeHit = findEdgeHitAtPoint(pointer);
-    if (!edgeHit) return;
-    event.preventDefault();
-    event.stopPropagation();
-    addRoutePointToEdgeAtPoint(edgeHit.edgeId, pointer);
   };
 
   const onNodePointerDown = (event: React.PointerEvent<HTMLButtonElement>, nodeId: NodeId) => {
@@ -3470,7 +3268,7 @@ export function App() {
     const edgeHit = findEdgeHitAtPoint(start, event.currentTarget.dataset.edgeId);
     if (!edgeHit) return;
     const svg = event.currentTarget.ownerSVGElement;
-    startEdgeSegmentDragAtPoint(edgeHit.edgeId, edgeHit.endpoints, edgeHit.route, start, (clientX, clientY) =>
+    startEdgeSegmentDragAtPoint(edgeHit.edgeId, start, (clientX, clientY) =>
       getSvgContentPoint(svg, clientX, clientY)
     );
   };
@@ -3951,31 +3749,9 @@ export function App() {
         </button>
         <button
           type="button"
-          onClick={addRoutePointToSelectedEdge}
-          disabled={!selectedEdgeId}
-          aria-label="Add Route Point"
-          title="Add a route point to the selected edge"
-        >
-          Add Route Point
-        </button>
-        <button
-          type="button"
-          onClick={deleteSelectedRoutePoint}
-          aria-label="Delete Route Point"
-          title="Delete the selected route point"
-          disabled={
-            !selectedRoutePoint ||
-            selectedRoutePoint.edgeId !== selectedEdgeId ||
-            !edgeRoutes[selectedRoutePoint.edgeId]?.points[selectedRoutePoint.pointIndex]
-          }
-        >
-          Delete Route Point
-        </button>
-        <button
-          type="button"
           onClick={resetSelectedEdgeBend}
           aria-label="Reset Bend"
-          title="Clear manual route points from the selected edge"
+          title="Reset selected line route"
           disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
         >
           Reset Bend
@@ -4193,31 +3969,9 @@ export function App() {
       <div className="toolbar-button-row">
         <button
           type="button"
-          onClick={addRoutePointToSelectedEdge}
-          disabled={!selectedEdgeId}
-          aria-label="Add Route Point"
-          title="Add a route point to the selected edge"
-        >
-          Add Route Point
-        </button>
-        <button
-          type="button"
-          onClick={deleteSelectedRoutePoint}
-          aria-label="Delete Route Point"
-          title="Delete the selected route point"
-          disabled={
-            !selectedRoutePoint ||
-            selectedRoutePoint.edgeId !== selectedEdgeId ||
-            !edgeRoutes[selectedRoutePoint.edgeId]?.points[selectedRoutePoint.pointIndex]
-          }
-        >
-          Delete Route Point
-        </button>
-        <button
-          type="button"
           onClick={resetSelectedEdgeBend}
           aria-label="Reset Bend"
-          title="Clear manual route points from the selected edge"
+          title="Reset selected line route"
           disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
         >
           Reset Bend
@@ -4288,7 +4042,6 @@ export function App() {
                 data-testid="canvas-surface"
                 style={{ width: canvasSize.width, height: canvasSize.height, zoom: canvasZoom }}
                 onPointerDown={onCanvasPointerDown}
-                onDoubleClick={onCanvasDoubleClick}
                 onMouseDownCapture={onCanvasMouseDownCapture}
                 onMouseUpCapture={onCanvasMouseUpCapture}
                 onWheel={onCanvasWheel}
@@ -4299,7 +4052,6 @@ export function App() {
                   aria-label="edge-layer"
                   style={{ width: canvasSize.width, height: canvasSize.height }}
                   onPointerDown={onCanvasPointerDown}
-                  onDoubleClick={onCanvasDoubleClick}
                 >
                   {doc.edges.map(edge => {
                     const fromPos = renderedPositionMap.get(edge.from);
@@ -4341,14 +4093,6 @@ export function App() {
                           setSelectedEdgeId(edgeHit?.edgeId || edge.id);
                           setSelectedRoutePoint(null);
                           setSelectedNodeIds([]);
-                        }}
-                        onDoubleClick={event => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
-                          if (!point) return;
-                          const edgeHit = findEdgeHitAtPoint(point, event.currentTarget.dataset.edgeId);
-                          addRoutePointToEdgeAtPoint(edgeHit?.edgeId || edge.id, point);
                         }}
                       />
                     );
@@ -4447,12 +4191,6 @@ export function App() {
                           cy={point.y}
                           r={16}
                           onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
-                          onDoubleClick={event => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            const routePoint = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
-                            if (routePoint) addRoutePointToEdgeAtPoint(edge.id, routePoint);
-                          }}
                           onContextMenu={event => {
                             event.preventDefault();
                             event.stopPropagation();
@@ -4469,12 +4207,6 @@ export function App() {
                           cy={point.y}
                           r={7}
                           onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
-                          onDoubleClick={event => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            const routePoint = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
-                            if (routePoint) addRoutePointToEdgeAtPoint(edge.id, routePoint);
-                          }}
                           onContextMenu={event => {
                             event.preventDefault();
                             event.stopPropagation();
