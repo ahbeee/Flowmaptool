@@ -853,8 +853,8 @@ function chooseBestRoute(
     }))
     .sort((left, right) => (
       left.obstacleCount - right.obstacleCount ||
-      left.length - right.length ||
-      left.turns - right.turns
+      left.turns - right.turns ||
+      left.length - right.length
     ));
   return best ? routeFromPoints(best.points.slice(1, -1)) : undefined;
 }
