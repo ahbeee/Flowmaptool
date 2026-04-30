@@ -1295,13 +1295,34 @@ function compactRoutePoints(points: Point[]): Point[] {
   });
 }
 
-function routeFromDraggedControl(from: Point, to: Point, direction: LayoutDirection, pointer: Point): EdgeRoute {
+function getRouteTangentSign(
+  anchor: EdgeAnchor | undefined,
+  role: 'source' | 'target',
+  direction: LayoutDirection,
+  from: Point,
+  to: Point
+): number {
+  if (anchor === 'front') return -1;
+  if (anchor === 'back') return 1;
+  if (anchor === 'body' && role === 'target') return -1;
+  if (direction === 'horizontal') return to.x >= from.x ? 1 : -1;
+  return to.y >= from.y ? 1 : -1;
+}
+
+function routeFromDraggedControl(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  pointer: Point,
+  anchors?: EdgeAnchors
+): EdgeRoute {
   if (direction === 'horizontal') {
-    const sign = to.x >= from.x ? 1 : -1;
     const distance = Math.max(48, Math.abs(to.x - from.x));
     const offset = Math.min(72, distance / 3);
-    const entryX = from.x + sign * offset;
-    const exitX = to.x - sign * offset;
+    const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
+    const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
+    const entryX = from.x + sourceSign * offset;
+    const exitX = to.x + targetSign * offset;
     return {
       points: compactRoutePoints([
         { x: entryX, y: from.y },
@@ -1312,11 +1333,12 @@ function routeFromDraggedControl(from: Point, to: Point, direction: LayoutDirect
     };
   }
 
-  const sign = to.y >= from.y ? 1 : -1;
   const distance = Math.max(48, Math.abs(to.y - from.y));
   const offset = Math.min(72, distance / 3);
-  const entryY = from.y + sign * offset;
-  const exitY = to.y - sign * offset;
+  const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
+  const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
+  const entryY = from.y + sourceSign * offset;
+  const exitY = to.y + targetSign * offset;
   return {
     points: compactRoutePoints([
       { x: from.x, y: entryY },
@@ -1651,6 +1673,13 @@ function isNodeLabelInputTarget(target: EventTarget | null): boolean {
 }
 
 type ConnectHandleHit = { nodeId: NodeId; anchor: EdgeAnchor };
+
+function resolveDraggedEdgeAnchors(sourceAnchors: EdgeAnchors, targetAnchor?: EdgeAnchor): EdgeAnchors | null {
+  const sourceAnchor = sourceAnchors.from === 'front' ? 'front' : 'back';
+  if (!targetAnchor || targetAnchor === 'body') return sourceAnchors;
+  if (sourceAnchor === targetAnchor) return null;
+  return { ...sourceAnchors, to: targetAnchor };
+}
 
 function getViewportConnectHandleHit(
   clientX: number,
@@ -2315,11 +2344,18 @@ export function App() {
     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
     const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-    return routeFromDraggedControl(endpoints.from, endpoints.to, layoutDirection, pointer);
+    return routeFromDraggedControl(endpoints.from, endpoints.to, layoutDirection, pointer, edge.anchors);
   }, [doc.edges, getRenderedEdgeEndpoints, layoutDirection, nodeSizeMap, renderedPositionMap]);
 
   const tryCreateEdge = React.useCallback(
     (from: NodeId, to: NodeId, anchors?: EdgeAnchors) => {
+      if (
+        (anchors?.from === 'front' && anchors.to === 'front') ||
+        (anchors?.from === 'back' && anchors.to === 'back')
+      ) {
+        setFileMessage('Connect blocked: use opposite node handles');
+        return false;
+      }
       let nextFrom = from;
       let nextTo = to;
       let nextAnchors = anchors;
@@ -3416,13 +3452,18 @@ export function App() {
     connectDragRef.current = null;
     setConnectDrag(null);
     if (!drag) return;
-    const targetId = targetFromPoint || drag.hoverTargetNodeId || findNodeAtCanvasPoint(x, y) || targetFromEvent;
+    const targetHandleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
+    const targetId = targetHandleHit?.nodeId || targetFromPoint || drag.hoverTargetNodeId || findNodeAtCanvasPoint(x, y) || targetFromEvent;
     if (targetId && targetId !== drag.fromNodeId) {
-      if (tryCreateEdge(drag.fromNodeId, targetId, drag.anchors)) {
+      const anchors = resolveDraggedEdgeAnchors(
+        drag.anchors,
+        targetHandleHit?.nodeId === targetId ? targetHandleHit.anchor : undefined
+      );
+      if (anchors && tryCreateEdge(drag.fromNodeId, targetId, anchors)) {
         setSelectedNodeIds([targetId]);
       }
     }
-  }, [findNodeAtCanvasPoint, getCanvasContentPoint, stopConnectDragListeners, tryCreateEdge]);
+  }, [findNodeAtCanvasPoint, getCanvasContentPoint, layoutDirection, stopConnectDragListeners, tryCreateEdge]);
 
   React.useEffect(() => {
     if (!edgeBendDrag) return;
@@ -3702,7 +3743,9 @@ export function App() {
     stopConnectDragListeners();
     connectDragRef.current = null;
     setConnectDrag(null);
-    if (fromId !== nodeId && tryCreateEdge(fromId, nodeId, drag.anchors)) {
+    const targetHandleHit = getViewportConnectHandleHit(event.clientX, event.clientY, nodeId, layoutDirection);
+    const anchors = resolveDraggedEdgeAnchors(drag.anchors, targetHandleHit?.anchor);
+    if (fromId !== nodeId && anchors && tryCreateEdge(fromId, nodeId, anchors)) {
       setSelectedNodeIds([nodeId]);
       return;
     }
@@ -3833,12 +3876,18 @@ export function App() {
     if (!fromId) return;
     const pointer = getCanvasContentPoint(event.clientX, event.clientY);
     const targetId =
+      getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection)?.nodeId ||
       getNodeIdFromViewportPoint(event.clientX, event.clientY) ||
       getNodeIdFromEventTarget(event.target) ||
       (pointer ? findNodeAtCanvasPoint(pointer.x, pointer.y) : null);
     stopConnectDragListeners();
     setConnectDrag(null);
-    if (targetId && targetId !== fromId && tryCreateEdge(fromId, targetId, anchors)) {
+    const targetHandleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
+    const resolvedAnchors = resolveDraggedEdgeAnchors(
+      anchors,
+      targetHandleHit?.nodeId === targetId ? targetHandleHit.anchor : undefined
+    );
+    if (targetId && targetId !== fromId && resolvedAnchors && tryCreateEdge(fromId, targetId, resolvedAnchors)) {
       setSelectedNodeIds([targetId]);
       return;
     }
@@ -4722,8 +4771,7 @@ export function App() {
                   const nodeSize = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
                   const selected = selectedNodeIds.includes(node.id);
                   const editing = editingNodeId === node.id;
-                  const connectHandleVisible =
-                    connectDrag?.fromNodeId === node.id || connectDrag?.hoverTargetNodeId === node.id;
+                  const connectHandleVisible = Boolean(connectDrag);
                   const nodeTag = node.style?.tagId
                     ? doc.settings.tags.find(tag => tag.id === node.style?.tagId)
                     : undefined;

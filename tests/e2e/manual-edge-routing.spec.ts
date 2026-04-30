@@ -1,4 +1,4 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { _electron as electron, expect, test, type Page } from '@playwright/test';
 import { join } from 'node:path';
 
 test('manual back edge routes around nodes without reflowing layout', async () => {
@@ -741,4 +741,65 @@ test('large routed manual edge does not block selecting nearby layout edges', as
   await expect(window.getByTestId('edge-path-e4')).not.toHaveClass(/edge-path-selected/);
 
   await app.close();
+});
+
+test('manual handle connections require opposite source and target sides', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+
+  const openBaseTree = async () => {
+    const app = await electron.launch({ args: [mainEntry] });
+    const window = await app.firstWindow();
+    const createChild = async (parentId: string) => {
+      const parent = window.getByTestId(`node-${parentId}`);
+      await parent.click();
+      await expect(parent).toHaveClass(/flow-node-selected/);
+      await window.keyboard.press('Tab');
+      await window.keyboard.press('Escape');
+    };
+
+    await createChild('n1');
+    await createChild('n1');
+    await createChild('n2');
+    await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
+    return { app, window };
+  };
+
+  const dragBetweenHandles = async (
+    window: Page,
+    fromId: string,
+    fromSelector: '.node-connect-handle' | '.node-connect-handle-front',
+    toId: string,
+    toSelector: '.node-connect-handle' | '.node-connect-handle-front'
+  ) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const sourceHandle = sourceNode.locator(fromSelector);
+    const targetHandle = window.getByTestId(`node-${toId}`).locator(toSelector);
+    await sourceNode.hover();
+    await expect(sourceHandle).toHaveCSS('opacity', '1');
+    const targetBox = await targetHandle.boundingBox();
+    if (!targetBox) throw new Error('handle geometry not found');
+    await sourceHandle.dragTo(targetHandle, {
+      targetPosition: { x: targetBox.width / 2, y: targetBox.height / 2 }
+    });
+  };
+
+  const sameBack = await openBaseTree();
+  await dragBetweenHandles(sameBack.window, 'n4', '.node-connect-handle', 'n1', '.node-connect-handle');
+  await expect(sameBack.window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
+  await sameBack.app.close();
+
+  const sameFront = await openBaseTree();
+  await dragBetweenHandles(sameFront.window, 'n4', '.node-connect-handle-front', 'n1', '.node-connect-handle-front');
+  await expect(sameFront.window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
+  await sameFront.app.close();
+
+  const backToFront = await openBaseTree();
+  await dragBetweenHandles(backToFront.window, 'n4', '.node-connect-handle', 'n1', '.node-connect-handle-front');
+  await expect(backToFront.window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+  await backToFront.app.close();
+
+  const frontToBack = await openBaseTree();
+  await dragBetweenHandles(frontToBack.window, 'n1', '.node-connect-handle-front', 'n4', '.node-connect-handle');
+  await expect(frontToBack.window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+  await frontToBack.app.close();
 });

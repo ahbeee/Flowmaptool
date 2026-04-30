@@ -285,6 +285,90 @@ test('edge segment drag keeps a clean routed bend without route point controls',
   await app.close();
 });
 
+test('dragging a back-edge control preserves source and target anchor sides', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target, { force: true });
+  };
+
+  const expectAnchorDirections = async () => {
+    const directions = await window.getByTestId('edge-path-e7').evaluate((path: SVGPathElement) => {
+      const matrix = path.getScreenCTM();
+      const source = document.querySelector('[data-testid="node-n4"]');
+      const target = document.querySelector('[data-testid="node-n1"]');
+      if (!matrix || !(source instanceof HTMLElement) || !(target instanceof HTMLElement)) {
+        throw new Error('missing edge geometry');
+      }
+      const total = path.getTotalLength();
+      const start = path.getPointAtLength(0).matrixTransform(matrix);
+      const afterStart = path.getPointAtLength(Math.min(16, total * 0.08)).matrixTransform(matrix);
+      const beforeEnd = path.getPointAtLength(Math.max(0, total - Math.min(16, total * 0.08))).matrixTransform(matrix);
+      const end = path.getPointAtLength(total).matrixTransform(matrix);
+      const sourceRect = source.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      return {
+        startsAtSourceBack: Math.abs(start.x - sourceRect.right) <= 5,
+        exitsSourceBack: afterStart.x >= start.x - 1,
+        endsAtTargetFront: Math.abs(end.x - targetRect.left) <= 5,
+        entersTargetFront: beforeEnd.x <= end.x + 1
+      };
+    });
+    expect(directions.startsAtSourceBack).toBe(true);
+    expect(directions.exitsSourceBack).toBe(true);
+    expect(directions.endsAtTargetFront).toBe(true);
+    expect(directions.entersTargetFront).toBe(true);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await createChild('n3');
+  await createChild('n3');
+  await connectByHandle('n4', 'n1');
+  await expect(window.getByTestId('edge-path-e7')).toBeVisible();
+  await expectAnchorDirections();
+
+  const edgePath = window.getByTestId('edge-path-e7');
+  const selectPoint = await edgePath.evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const point = path.getPointAtLength(path.getTotalLength() * 0.5).matrixTransform(matrix);
+    return { x: point.x, y: point.y };
+  });
+  await window.mouse.click(selectPoint.x, selectPoint.y);
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+  const handleBox = await window.locator('.edge-bend-handle').boundingBox();
+  if (!handleBox) throw new Error('manual route control handle not found');
+  await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(handleBox.x + handleBox.width / 2 + 32, handleBox.y + handleBox.height / 2 + 120, {
+    steps: 10
+  });
+  await window.mouse.up();
+
+  await expectAnchorDirections();
+  await app.close();
+});
+
 test('duplicated component back edges stay scoped after moving copied root', async ({}, testInfo) => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const fixturePath = testInfo.outputPath('duplicated-back-edge.qflow');
