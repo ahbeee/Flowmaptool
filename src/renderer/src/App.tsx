@@ -813,6 +813,19 @@ function routeObstacleCount(points: Point[], fromId: NodeId, toId: NodeId, nodeB
   return count;
 }
 
+function routeClearancePenalty(points: Point[], fromId: NodeId, toId: NodeId, nodeBoxes: Map<NodeId, NodeBox>): number {
+  let count = 0;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const from = points[index];
+    const to = points[index + 1];
+    for (const [nodeId, box] of nodeBoxes.entries()) {
+      if (nodeId === fromId || nodeId === toId) continue;
+      if (segmentIntersectsBox(from, to, box, 28)) count += 1;
+    }
+  }
+  return count;
+}
+
 function routeTurnCount(points: Point[]): number {
   let count = 0;
   for (let index = 1; index < points.length - 1; index += 1) {
@@ -848,11 +861,13 @@ function chooseBestRoute(
     .map(points => ({
       points,
       obstacleCount: routeObstacleCount(points, fromId, toId, nodeBoxes),
+      clearancePenalty: routeClearancePenalty(points, fromId, toId, nodeBoxes),
       length: routeLength(points),
       turns: routeTurnCount(points)
     }))
     .sort((left, right) => (
       left.obstacleCount - right.obstacleCount ||
+      left.clearancePenalty - right.clearancePenalty ||
       left.turns - right.turns ||
       left.length - right.length
     ));
