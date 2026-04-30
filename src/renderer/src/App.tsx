@@ -1124,6 +1124,30 @@ function edgeMidpoint(from: Point, to: Point): EdgeBend {
   return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
 }
 
+function routeControlPoint(from: Point, to: Point, route: EdgeRoute): Point {
+  const points = [from, ...route.points, to];
+  const totalLength = routeLength(points);
+  if (totalLength <= 0) return edgeMidpoint(from, to);
+
+  let remaining = totalLength / 2;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    const segmentLength = Math.sqrt(distanceSquared(start, end));
+    if (segmentLength === 0) continue;
+    if (remaining <= segmentLength) {
+      const ratio = remaining / segmentLength;
+      return {
+        x: start.x + (end.x - start.x) * ratio,
+        y: start.y + (end.y - start.y) * ratio
+      };
+    }
+    remaining -= segmentLength;
+  }
+
+  return edgeMidpoint(from, to);
+}
+
 function routeFromBend(bend?: EdgeBend): EdgeRoute | undefined {
   return bend ? { points: [bend] } : undefined;
 }
@@ -4183,8 +4207,12 @@ export function App() {
                       routeFromBend(edgeBends[edge.id]) ||
                       automaticManualRoute ||
                       routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
-                    return route.points.map((point, pointIndex) => (
-                      <g key={`bend-${edge.id}-${pointIndex}`}>
+                    const point = route.points.length === 1
+                      ? route.points[0]
+                      : routeControlPoint(endpoints.from, endpoints.to, route);
+                    const pointIndex = 0;
+                    return (
+                      <g key={`bend-${edge.id}`}>
                         <circle
                           className="edge-bend-hit-area"
                           cx={point.x}
@@ -4213,7 +4241,7 @@ export function App() {
                           }}
                         />
                       </g>
-                    ));
+                    );
                   })}
                 </svg>
 

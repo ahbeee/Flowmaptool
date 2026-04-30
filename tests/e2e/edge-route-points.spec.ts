@@ -150,7 +150,7 @@ test('legacy route can be opened and reset without route point editing', async (
     return { x: screenPoint.x, y: screenPoint.y };
   });
   await window.mouse.click(selectPoint.x, selectPoint.y);
-  await expect.poll(() => window.locator('.edge-bend-handle').count()).toBeGreaterThan(1);
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
   await expect(window.getByRole('button', { name: 'Add Route Point' })).toHaveCount(0);
   await expect(window.getByRole('button', { name: 'Delete Route Point' })).toHaveCount(0);
 
