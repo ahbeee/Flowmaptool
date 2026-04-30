@@ -76,6 +76,7 @@ pnpm dist:win
 - Treat advanced manual routing as active improvement work, not a deferred parity-only item.
 - Improve cross-layer and back-reference routing such as node-to-root, node-to-ancestor, sibling-to-sibling, and branch-to-branch connections.
 - Avoid routing manual edges through node bodies when a clear path exists above, below, or between branches.
+- Preserve tree-edge selection near large cross-branch routes; covered by regression tests for nested layout edges and deep branch-to-branch routes.
 - Preserve user-adjusted edge routes after layout refreshes, node selection changes, and document reloads.
 - Keep `Reset Bend` scoped to clearing manual edge bends/routes for selected edges without changing node positions or unrelated edges.
 - Separate multiple nearby manual edges into readable lanes instead of drawing them directly on top of each other.
