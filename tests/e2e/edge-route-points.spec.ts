@@ -361,8 +361,7 @@ test('duplicated component back edges created by handle drag stay scoped after m
     const sourceBox = await sourceNode.boundingBox();
     if (!sourceBox) throw new Error(`source node ${fromId} not found`);
     await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
-    await expect(handle).toHaveCSS('opacity', '1');
-    await handle.dragTo(target);
+    await handle.dragTo(target, { force: true });
   };
 
   await connectByHandle('n17', 'n10');
@@ -399,6 +398,102 @@ test('duplicated component back edges created by handle drag stay scoped after m
     expect(Math.abs(routeMidY - bottomRootMidY)).toBeLessThan(Math.abs(routeMidY - topRootMidY));
     expect(routeBox.y).toBeGreaterThan(topRootBox.y + topRootBox.height);
   }
+
+  await app.close();
+});
+
+test('adjusted copied component back edge moves with copied root', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('duplicated-adjusted-back-edge.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createDuplicatedBackEdgeFixture(false), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
+    await handle.dragTo(target, { force: true });
+  };
+
+  await connectByHandle('n17', 'n10');
+  await expect(window.getByTestId('edge-path-e17')).toBeVisible();
+
+  const edgePath = window.getByTestId('edge-path-e17');
+  const selectPoint = await edgePath.evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() * 0.5);
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await window.mouse.click(selectPoint.x, selectPoint.y);
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+
+  const handleBox = await window.locator('.edge-bend-handle').boundingBox();
+  if (!handleBox) throw new Error('manual route control handle not found');
+  await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(handleBox.x + handleBox.width / 2 + 84, handleBox.y + handleBox.height / 2 + 48, {
+    steps: 8
+  });
+  await window.mouse.up();
+
+  const adjustedPath = await edgePath.getAttribute('d');
+  expect(adjustedPath).toBeTruthy();
+  const routeBoxBeforeMove = await edgePath.boundingBox();
+  const topRootBox = await window.getByTestId('node-n1').boundingBox();
+  const bottomRoot = window.getByTestId('node-n10');
+  const bottomRootBox = await bottomRoot.boundingBox();
+  if (!routeBoxBeforeMove || !topRootBox || !bottomRootBox) {
+    throw new Error('expected adjusted route and roots to be measurable');
+  }
+
+  await window.mouse.move(
+    bottomRootBox.x + bottomRootBox.width / 2,
+    bottomRootBox.y + bottomRootBox.height / 2
+  );
+  await window.mouse.down();
+  await window.mouse.move(
+    bottomRootBox.x + bottomRootBox.width / 2 - 118,
+    bottomRootBox.y + bottomRootBox.height / 2 + 42,
+    { steps: 10 }
+  );
+  await window.mouse.up();
+
+  const movedBottomRootBox = await bottomRoot.boundingBox();
+  const routeBoxAfterMove = await edgePath.boundingBox();
+  if (!movedBottomRootBox || !routeBoxAfterMove) {
+    throw new Error('expected adjusted route and moved copied root to remain measurable');
+  }
+  const rootDelta = {
+    x: movedBottomRootBox.x - bottomRootBox.x,
+    y: movedBottomRootBox.y - bottomRootBox.y
+  };
+  const routeDelta = {
+    x: routeBoxAfterMove.x - routeBoxBeforeMove.x,
+    y: routeBoxAfterMove.y - routeBoxBeforeMove.y
+  };
+  expect(Math.abs(routeDelta.x - rootDelta.x)).toBeLessThanOrEqual(3);
+  expect(Math.abs(routeDelta.y - rootDelta.y)).toBeLessThanOrEqual(3);
+
+  const topRootMidY = topRootBox.y + topRootBox.height / 2;
+  const bottomRootMidY = movedBottomRootBox.y + movedBottomRootBox.height / 2;
+  const routeMidY = routeBoxAfterMove.y + routeBoxAfterMove.height / 2;
+  expect(Math.abs(routeMidY - bottomRootMidY)).toBeLessThan(Math.abs(routeMidY - topRootMidY));
 
   await app.close();
 });

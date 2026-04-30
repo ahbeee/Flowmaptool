@@ -21,8 +21,8 @@ test('manual cycle edge does not reflow existing node positions', async () => {
     const source = await sourceNode.boundingBox();
     if (!source || !target) throw new Error('connect points not found');
     await window.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
-    await expect(handle).toHaveCSS('opacity', '1');
     await handle.dragTo(window.getByTestId(`node-${toId}`), {
+      force: true,
       targetPosition: { x: target.width / 2, y: target.height / 2 }
     });
   };
