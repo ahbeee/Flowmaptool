@@ -1601,6 +1601,29 @@ function collectConnectedComponent(doc: FlowDoc, startNodeId: NodeId): NodeId[] 
   return [...visited];
 }
 
+function collectEdgeComponent(doc: FlowDoc, startNodeId: NodeId, edgeIds: Set<string>): NodeId[] {
+  const neighbors = new Map<NodeId, Set<NodeId>>();
+  for (const node of doc.nodes) {
+    neighbors.set(node.id, new Set());
+  }
+  for (const edge of doc.edges) {
+    if (!edgeIds.has(edge.id)) continue;
+    neighbors.get(edge.from)?.add(edge.to);
+    neighbors.get(edge.to)?.add(edge.from);
+  }
+  const queue: NodeId[] = [startNodeId];
+  const visited = new Set<NodeId>([startNodeId]);
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const next of neighbors.get(current) || []) {
+      if (visited.has(next)) continue;
+      visited.add(next);
+      queue.push(next);
+    }
+  }
+  return [...visited];
+}
+
 function getNodeIdFromEventTarget(target: EventTarget | null | undefined): NodeId | null {
   if (!target || !(target instanceof Element)) return null;
   const nodeEl = target.closest('[data-testid^="node-"]') as HTMLElement | null;
@@ -2145,26 +2168,31 @@ export function App() {
     return map;
   }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
 
-  const componentNodeIdsByNodeId = React.useMemo(() => {
+  const routeScopeNodeIdsByNodeId = React.useMemo(() => {
     const map = new Map<NodeId, NodeId[]>();
     for (const node of doc.nodes) {
       if (map.has(node.id)) continue;
-      const componentNodeIds = collectConnectedComponent(doc, node.id);
+      const componentNodeIds = collectEdgeComponent(doc, node.id, layoutEdgeAnalysis.layoutEdgeIds);
       for (const componentNodeId of componentNodeIds) {
         map.set(componentNodeId, componentNodeIds);
       }
     }
     return map;
-  }, [doc]);
+  }, [doc, layoutEdgeAnalysis.layoutEdgeIds]);
 
   const getRouteNodeBoxes = React.useCallback(
-    (nodeId: NodeId) => {
-      const componentNodeIds = componentNodeIdsByNodeId.get(nodeId);
-      if (!componentNodeIds) return nodeBoxMap;
-      const scopedNodeBoxes = filterNodeBoxesByIds(nodeBoxMap, componentNodeIds);
+    (edge: FlowEdge) => {
+      const componentNodeIds = new Set<NodeId>();
+      for (const nodeId of routeScopeNodeIdsByNodeId.get(edge.from) || [edge.from]) {
+        componentNodeIds.add(nodeId);
+      }
+      for (const nodeId of routeScopeNodeIdsByNodeId.get(edge.to) || [edge.to]) {
+        componentNodeIds.add(nodeId);
+      }
+      const scopedNodeBoxes = filterNodeBoxesByIds(nodeBoxMap, [...componentNodeIds]);
       return scopedNodeBoxes.size > 0 ? scopedNodeBoxes : nodeBoxMap;
     },
-    [componentNodeIdsByNodeId, nodeBoxMap]
+    [nodeBoxMap, routeScopeNodeIdsByNodeId]
   );
 
   const getRenderedEdgeEndpoints = React.useCallback(
@@ -2191,7 +2219,7 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      const routeNodeBoxes = getRouteNodeBoxes(edge.from);
+      const routeNodeBoxes = getRouteNodeBoxes(edge);
       map.set(
         edge.id,
         !layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) ||
@@ -2252,7 +2280,7 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      const routeNodeBoxes = getRouteNodeBoxes(edge.from);
+      const routeNodeBoxes = getRouteNodeBoxes(edge);
       const route = computeAutoEdgeRoute(
         endpoints.from,
         endpoints.to,
