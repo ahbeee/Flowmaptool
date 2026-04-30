@@ -227,6 +227,7 @@ test('selected automatic manual route exposes editable route points', async () =
   await window.mouse.click(selectPoint.x, selectPoint.y);
 
   await expect.poll(() => window.locator('.edge-bend-handle').count()).toBeGreaterThan(1);
+  await expect(window.getByTestId('edge-route-guide')).toBeVisible();
   const beforeDrag = await window.getByTestId('edge-path-e7').getAttribute('d');
   const handleBox = await window.locator('.edge-bend-handle').first().boundingBox();
   if (!handleBox) throw new Error('edge route handle not found');
@@ -236,9 +237,11 @@ test('selected automatic manual route exposes editable route points', async () =
   await window.mouse.down();
   await window.mouse.move(center.x + 40, center.y - 60, { steps: 8 });
   await expect(window.getByTestId('edge-route-drag-preview')).toBeVisible();
+  await expect(window.getByTestId('edge-route-guide')).toHaveCount(0);
   await window.mouse.up();
 
   await expect.poll(() => window.getByTestId('edge-path-e7').getAttribute('d')).not.toBe(beforeDrag);
+  await expect(window.getByTestId('edge-route-guide')).toBeVisible();
   await app.close();
 });
 

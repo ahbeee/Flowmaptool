@@ -4286,6 +4286,40 @@ export function App() {
                         );
                       })
                     : null}
+                  {!edgeBendDrag && selectedEdgeId
+                    ? doc.edges.map(edge => {
+                        if (edge.id !== selectedEdgeId) return null;
+                        const fromPos = renderedPositionMap.get(edge.from);
+                        const toPos = renderedPositionMap.get(edge.to);
+                        if (!fromPos || !toPos) return null;
+                        const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+                        const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+                        const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+                        const lane = edgeLaneMap.get(edge.id) || 0;
+                        const forceBend = edgeForceBendMap.get(edge.id) || false;
+                        const isForwardAlignedEdge =
+                          layoutDirection === 'horizontal'
+                            ? endpoints.to.x >= endpoints.from.x && Math.abs(endpoints.to.y - endpoints.from.y) <= 2
+                            : endpoints.to.y >= endpoints.from.y && Math.abs(endpoints.to.x - endpoints.from.x) <= 2;
+                        const automaticManualRoute =
+                          layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) || isForwardAlignedEdge
+                            ? undefined
+                            : autoEdgeRouteMap.get(edge.id);
+                        const route =
+                          edgeRoutes[edge.id] ||
+                          routeFromBend(edgeBends[edge.id]) ||
+                          automaticManualRoute;
+                        if (!route || route.points.length === 0) return null;
+                        return (
+                          <path
+                            key={`route-guide-${edge.id}`}
+                            data-testid="edge-route-guide"
+                            className="edge-route-guide"
+                            d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
+                          />
+                        );
+                      })
+                    : null}
                   {doc.edges.map(edge => {
                     if (edge.id !== selectedEdgeId) return null;
                     const fromPos = renderedPositionMap.get(edge.from);
