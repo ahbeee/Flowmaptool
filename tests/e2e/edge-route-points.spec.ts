@@ -242,3 +242,69 @@ test('manual routed edge persists after save and reopen', async ({}, testInfo) =
   await expect.poll(() => secondRun.window.getByTestId('edge-path-e3').getAttribute('d')).toBe(persistedPath);
   await secondRun.app.close();
 });
+
+test('user adjusted manual route stays stable while selecting other objects', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await createChild('n3');
+  await createChild('n3');
+  await connectByHandle('n7', 'n2');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(7);
+
+  const edgePath = window.getByTestId('edge-path-e7');
+  const selectPoint = await edgePath.evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() * 0.5);
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await window.mouse.click(selectPoint.x, selectPoint.y);
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+
+  const handleBox = await window.locator('.edge-bend-handle').boundingBox();
+  if (!handleBox) throw new Error('manual route control handle not found');
+  await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(handleBox.x + handleBox.width / 2 + 64, handleBox.y + handleBox.height / 2 - 38, {
+    steps: 8
+  });
+  await window.mouse.up();
+
+  const adjustedPath = await edgePath.getAttribute('d');
+  expect(adjustedPath).toBeTruthy();
+
+  await window.getByTestId('node-n4').click();
+  await expect.poll(() => edgePath.getAttribute('d')).toBe(adjustedPath);
+  await window.getByTestId('node-n2').click();
+  await expect.poll(() => edgePath.getAttribute('d')).toBe(adjustedPath);
+  await window.getByTestId('canvas-surface').click({ position: { x: 16, y: 16 } });
+  await expect.poll(() => edgePath.getAttribute('d')).toBe(adjustedPath);
+
+  await app.close();
+});
