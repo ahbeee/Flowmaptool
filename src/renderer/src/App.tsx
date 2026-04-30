@@ -178,6 +178,17 @@ type EdgeBendsByDirection = Record<LayoutDirection, EdgeBendMap>;
 type EdgeRoute = { points: Point[] };
 type EdgeRouteMap = Record<string, EdgeRoute>;
 type EdgeRoutesByDirection = Record<LayoutDirection, EdgeRouteMap>;
+type EdgeUiSnapshot = {
+  edgeBendsByDirection: EdgeBendsByDirection;
+  edgeRoutesByDirection: EdgeRoutesByDirection;
+};
+type InteractionHistoryEntry =
+  | { kind: 'doc' }
+  | { kind: 'edge-ui'; snapshot: EdgeUiSnapshot };
+type InteractionHistory = {
+  past: InteractionHistoryEntry[];
+  future: InteractionHistoryEntry[];
+};
 type EdgeBendDragState = { edgeId: string; pointIndex: number };
 type EdgeRoutePointSelection = { edgeId: string; pointIndex: number };
 type ConnectDragState = {
@@ -242,6 +253,7 @@ type TabDocument = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
   toolbarVisible: boolean;
+  interactionHistory: InteractionHistory;
 };
 
 const PNG_FILTER = [{ name: 'PNG Image', extensions: ['png'] }];
@@ -273,6 +285,61 @@ function emptyEdgeRoutesByDirection(): EdgeRoutesByDirection {
   return { horizontal: {}, vertical: {} };
 }
 
+function emptyInteractionHistory(): InteractionHistory {
+  return { past: [], future: [] };
+}
+
+function cloneEdgeBendMap(map: EdgeBendMap): EdgeBendMap {
+  return Object.fromEntries(Object.entries(map).map(([id, bend]) => [id, { ...bend }]));
+}
+
+function cloneEdgeBendsByDirection(value: EdgeBendsByDirection): EdgeBendsByDirection {
+  return {
+    horizontal: cloneEdgeBendMap(value.horizontal),
+    vertical: cloneEdgeBendMap(value.vertical)
+  };
+}
+
+function cloneEdgeRouteMap(map: EdgeRouteMap): EdgeRouteMap {
+  return Object.fromEntries(
+    Object.entries(map).map(([id, route]) => [id, { points: route.points.map(point => ({ ...point })) }])
+  );
+}
+
+function cloneEdgeRoutesByDirection(value: EdgeRoutesByDirection): EdgeRoutesByDirection {
+  return {
+    horizontal: cloneEdgeRouteMap(value.horizontal),
+    vertical: cloneEdgeRouteMap(value.vertical)
+  };
+}
+
+function getEdgeUiSnapshot(tab: TabDocument): EdgeUiSnapshot {
+  return {
+    edgeBendsByDirection: cloneEdgeBendsByDirection(tab.edgeBendsByDirection),
+    edgeRoutesByDirection: cloneEdgeRoutesByDirection(tab.edgeRoutesByDirection)
+  };
+}
+
+function applyEdgeUiSnapshot(tab: TabDocument, snapshot: EdgeUiSnapshot): TabDocument {
+  return {
+    ...tab,
+    edgeBendsByDirection: cloneEdgeBendsByDirection(snapshot.edgeBendsByDirection),
+    edgeRoutesByDirection: cloneEdgeRoutesByDirection(snapshot.edgeRoutesByDirection)
+  };
+}
+
+function edgeUiSnapshotsEqual(a: EdgeUiSnapshot, b: EdgeUiSnapshot): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function pushInteractionPast(
+  past: InteractionHistoryEntry[],
+  entry: InteractionHistoryEntry,
+  maxPast = 100
+): InteractionHistoryEntry[] {
+  return past.length >= maxPast ? [...past.slice(1), entry] : [...past, entry];
+}
+
 function createSeedDoc(): FlowDoc {
   return addNode(createEmptyDoc(), ROOT_LABEL, ROOT_NODE_STYLE);
 }
@@ -292,7 +359,8 @@ function createTabDocument(id: string, title: string, doc?: FlowDoc): TabDocumen
     nodeOffsetsByDirection: emptyOffsetsByDirection(),
     edgeBendsByDirection: emptyEdgeBendsByDirection(),
     edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
-    toolbarVisible: true
+    toolbarVisible: true,
+    interactionHistory: emptyInteractionHistory()
   };
 }
 
@@ -1510,6 +1578,7 @@ export function App() {
   const [dragState, setDragState] = React.useState<DragState | null>(null);
   const [marquee, setMarquee] = React.useState<MarqueeState | null>(null);
   const [edgeBendDrag, setEdgeBendDrag] = React.useState<EdgeBendDragState | null>(null);
+  const edgeBendDragStartSnapshotRef = React.useRef<EdgeUiSnapshot | null>(null);
   const [connectDrag, setConnectDrag] = React.useState<ConnectDragState | null>(null);
   const connectDragRef = React.useRef<ConnectDragState | null>(null);
   const [dropParentTargetId, setDropParentTargetId] = React.useState<NodeId | null>(null);
@@ -1652,6 +1721,100 @@ export function App() {
     }));
   }, [updateActiveTab]);
 
+  const commitEdgeUiChange = React.useCallback(
+    (recipe: (snapshot: EdgeUiSnapshot, layoutDirection: LayoutDirection) => EdgeUiSnapshot) => {
+      updateActiveTab(tab => {
+        const before = getEdgeUiSnapshot(tab);
+        const after = recipe(before, tab.layoutDirection);
+        if (edgeUiSnapshotsEqual(before, after)) return tab;
+        return {
+          ...applyEdgeUiSnapshot(tab, after),
+          isDirty: true,
+          interactionHistory: {
+            past: pushInteractionPast(tab.interactionHistory.past, { kind: 'edge-ui', snapshot: before }),
+            future: []
+          }
+        };
+      });
+      setFileMessage('Edited');
+    },
+    [updateActiveTab]
+  );
+
+  const commitCurrentEdgeUiSnapshot = React.useCallback(
+    (before: EdgeUiSnapshot | null) => {
+      if (!before) return;
+      updateActiveTab(tab => {
+        const after = getEdgeUiSnapshot(tab);
+        if (edgeUiSnapshotsEqual(before, after)) return tab;
+        return {
+          ...tab,
+          isDirty: true,
+          interactionHistory: {
+            past: pushInteractionPast(tab.interactionHistory.past, { kind: 'edge-ui', snapshot: before }),
+            future: []
+          }
+        };
+      });
+      setFileMessage('Edited');
+    },
+    [updateActiveTab]
+  );
+
+  const undoInteraction = React.useCallback(() => {
+    updateActiveTab(tab => {
+      const entry = tab.interactionHistory.past[tab.interactionHistory.past.length - 1];
+      if (!entry) {
+        const nextHistory = undoHistory(tab.history);
+        return nextHistory === tab.history ? tab : { ...tab, history: nextHistory, isDirty: true };
+      }
+      const base = {
+        ...tab,
+        isDirty: true,
+        interactionHistory: {
+          past: tab.interactionHistory.past.slice(0, -1),
+          future: [
+            entry.kind === 'edge-ui'
+              ? { kind: 'edge-ui' as const, snapshot: getEdgeUiSnapshot(tab) }
+              : { kind: 'doc' as const },
+            ...tab.interactionHistory.future
+          ]
+        }
+      };
+      return entry.kind === 'edge-ui'
+        ? applyEdgeUiSnapshot(base, entry.snapshot)
+        : { ...base, history: undoHistory(tab.history) };
+    });
+    setFileMessage('Edited');
+  }, [updateActiveTab]);
+
+  const redoInteraction = React.useCallback(() => {
+    updateActiveTab(tab => {
+      const entry = tab.interactionHistory.future[0];
+      if (!entry) {
+        const nextHistory = redoHistory(tab.history);
+        return nextHistory === tab.history ? tab : { ...tab, history: nextHistory, isDirty: true };
+      }
+      const base = {
+        ...tab,
+        isDirty: true,
+        interactionHistory: {
+          past: pushInteractionPast(
+            tab.interactionHistory.past,
+            entry.kind === 'edge-ui'
+              ? { kind: 'edge-ui' as const, snapshot: getEdgeUiSnapshot(tab) }
+              : { kind: 'doc' as const }
+          ),
+          future: tab.interactionHistory.future.slice(1)
+        }
+      };
+      return entry.kind === 'edge-ui'
+        ? applyEdgeUiSnapshot(base, entry.snapshot)
+        : { ...base, history: redoHistory(tab.history) };
+    });
+    setFileMessage('Edited');
+  }, [updateActiveTab]);
+
   const autoPanCanvas = React.useCallback((event: DragPointerLikeEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1704,9 +1867,17 @@ export function App() {
   const commitDoc = React.useCallback((recipe: (current: FlowDoc) => FlowDoc) => {
     updateActiveTab(tab => {
       const nextDoc = ensureDocHasNode(recipe(tab.history.present));
+      const nextHistory = commitHistory(tab.history, nextDoc);
       return {
         ...tab,
-        history: commitHistory(tab.history, nextDoc),
+        history: nextHistory,
+        interactionHistory:
+          nextHistory === tab.history
+            ? tab.interactionHistory
+            : {
+                past: pushInteractionPast(tab.interactionHistory.past, { kind: 'doc' }),
+                future: []
+              },
         isDirty: true
       };
     });
@@ -1756,7 +1927,8 @@ export function App() {
       nodeOffsetsByDirection: emptyOffsetsByDirection(),
       edgeBendsByDirection: emptyEdgeBendsByDirection(),
       edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
-      toolbarVisible: true
+      toolbarVisible: true,
+      interactionHistory: emptyInteractionHistory()
     }));
     setFileMessage('New document');
     resetTransientUiState(nextDoc.nodes[0]?.id);
@@ -2512,15 +2684,17 @@ export function App() {
   const resetSelectedEdgeBend = React.useCallback(() => {
     if (!selectedEdgeId) return;
     setSelectedRoutePoint(null);
-    setCurrentEdgeBends(prev => {
-      const { [selectedEdgeId]: _removed, ...rest } = prev;
-      return rest;
+    commitEdgeUiChange((snapshot, direction) => {
+      const nextBends = cloneEdgeBendsByDirection(snapshot.edgeBendsByDirection);
+      const nextRoutes = cloneEdgeRoutesByDirection(snapshot.edgeRoutesByDirection);
+      delete nextBends[direction][selectedEdgeId];
+      delete nextRoutes[direction][selectedEdgeId];
+      return {
+        edgeBendsByDirection: nextBends,
+        edgeRoutesByDirection: nextRoutes
+      };
     });
-    setCurrentEdgeRoutes(prev => {
-      const { [selectedEdgeId]: _removed, ...rest } = prev;
-      return rest;
-    });
-  }, [selectedEdgeId, setCurrentEdgeBends, setCurrentEdgeRoutes]);
+  }, [commitEdgeUiChange, selectedEdgeId]);
 
   const hasManualOffset = React.useMemo(
     () =>
@@ -2645,12 +2819,12 @@ export function App() {
 
       if (mod && key === 'z' && !event.shiftKey) {
         event.preventDefault();
-        updateActiveTab(tab => ({ ...tab, history: undoHistory(tab.history), isDirty: true }));
+        undoInteraction();
         return;
       }
       if (mod && ((key === 'z' && event.shiftKey) || key === 'y')) {
         event.preventDefault();
-        updateActiveTab(tab => ({ ...tab, history: redoHistory(tab.history), isDirty: true }));
+        redoInteraction();
         return;
       }
       if (mod && key === 'n') {
@@ -2734,13 +2908,14 @@ export function App() {
     deleteSelectedNodes,
     openDocument,
     pasteSelectedNodes,
+    redoInteraction,
     saveDocument,
     selectNodeByDirection,
     setCanvasZoom,
     selectedEdgeId,
     startEditingNode,
     fitCanvasToView,
-    updateActiveTab
+    undoInteraction
   ]);
 
   const onCanvasWheel = React.useCallback(
@@ -3037,6 +3212,8 @@ export function App() {
     };
     const finishEdgeBend = (event: PointerEvent | MouseEvent) => {
       event.preventDefault();
+      commitCurrentEdgeUiSnapshot(edgeBendDragStartSnapshotRef.current);
+      edgeBendDragStartSnapshotRef.current = null;
       setEdgeBendDrag(null);
     };
     window.addEventListener('pointermove', moveEdgeBend);
@@ -3049,7 +3226,14 @@ export function App() {
       window.removeEventListener('mousemove', moveEdgeBend);
       window.removeEventListener('mouseup', finishEdgeBend);
     };
-  }, [autoPanCanvas, edgeBendDrag, getCanvasContentPoint, setCurrentEdgeBends, setCurrentEdgeRoutes]);
+  }, [
+    autoPanCanvas,
+    commitCurrentEdgeUiSnapshot,
+    edgeBendDrag,
+    getCanvasContentPoint,
+    setCurrentEdgeBends,
+    setCurrentEdgeRoutes
+  ]);
 
   React.useEffect(() => {
     if (!marquee) return;
@@ -3102,6 +3286,7 @@ export function App() {
     setSelectedEdgeId(edgeId);
     setSelectedRoutePoint(null);
     setSelectedNodeIds([]);
+    const initialEdgeUiSnapshot = getEdgeUiSnapshot(activeTab);
     let didDrag = false;
     const onPointerMove = (nativeEvent: PointerEvent) => {
       autoPanCanvas(nativeEvent);
@@ -3117,6 +3302,9 @@ export function App() {
       });
     };
     const onPointerUp = () => {
+      if (didDrag) {
+        commitCurrentEdgeUiSnapshot(initialEdgeUiSnapshot);
+      }
       setSelectedEdgeId(edgeId);
       setSelectedRoutePoint(null);
       setSelectedNodeIds([]);
@@ -3270,6 +3458,7 @@ export function App() {
   };
 
   const beginEdgeBendDrag = (edgeId: string, pointIndex: number) => {
+    edgeBendDragStartSnapshotRef.current = getEdgeUiSnapshot(activeTab);
     setSelectedEdgeId(edgeId);
     setSelectedNodeIds([]);
     setSelectedRoutePoint({ edgeId, pointIndex });
