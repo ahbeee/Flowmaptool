@@ -745,13 +745,16 @@ test('user adjusted manual route stays stable while selecting other objects', as
 
   const connectByHandle = async (fromId: string, toId: string) => {
     const sourceNode = window.getByTestId(`node-${fromId}`);
-    const handle = sourceNode.locator('.node-connect-handle');
     const target = window.getByTestId(`node-${toId}`);
     const sourceBox = await sourceNode.boundingBox();
-    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
-    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
-    await expect(handle).toHaveCSS('opacity', '1');
-    await handle.dragTo(target);
+    const targetBox = await target.boundingBox();
+    if (!sourceBox || !targetBox) throw new Error(`nodes ${fromId} and ${toId} must be measurable`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 1, sourceBox.y + sourceBox.height / 2);
+    await window.mouse.down();
+    await window.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
+      steps: 8
+    });
+    await window.mouse.up();
   };
 
   await createChild('n1');
@@ -818,5 +821,59 @@ test('user adjusted manual route stays stable while selecting other objects', as
   expect(routeDelta.x).toBeCloseTo(rootDelta.x, 0);
   expect(routeDelta.y).toBeCloseTo(rootDelta.y, 0);
 
+  await app.close();
+});
+
+test('rejected non-root drag restores adjusted manual route state', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('manual-route-single-node-drag.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createManualRouteFixture(), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+
+  const edgePath = window.getByTestId('edge-path-e3');
+  const selectPoint = await edgePath.evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() * 0.5);
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await window.mouse.click(selectPoint.x, selectPoint.y);
+  await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+
+  const handleBox = await window.locator('.edge-bend-handle').boundingBox();
+  if (!handleBox) throw new Error('manual route control handle not found');
+  await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(handleBox.x + handleBox.width / 2 + 72, handleBox.y + handleBox.height / 2 - 44, {
+    steps: 8
+  });
+  await window.mouse.up();
+
+  const adjustedPath = await edgePath.getAttribute('d');
+  expect(adjustedPath).toBeTruthy();
+
+  const node = window.getByTestId('node-n3');
+  const nodeBox = await node.boundingBox();
+  if (!nodeBox) throw new Error('node n3 not found');
+  await window.mouse.move(nodeBox.x + nodeBox.width / 2, nodeBox.y + nodeBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(nodeBox.x + nodeBox.width / 2 + 180, nodeBox.y + nodeBox.height / 2 + 120, {
+    steps: 8
+  });
+  await window.mouse.up();
+
+  await expect.poll(() => edgePath.getAttribute('d')).toBe(adjustedPath);
   await app.close();
 });

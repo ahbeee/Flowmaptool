@@ -328,7 +328,14 @@ function translateEdgeBendsForMovedNodes(
   for (const edge of doc.edges) {
     const bend = bends[edge.id];
     if (!bend) continue;
-    if (!movedNodeIds.has(edge.from) || !movedNodeIds.has(edge.to)) continue;
+    const fromMoved = movedNodeIds.has(edge.from);
+    const toMoved = movedNodeIds.has(edge.to);
+    if (!fromMoved && !toMoved) continue;
+    if (fromMoved !== toMoved) {
+      delete next[edge.id];
+      changed = true;
+      continue;
+    }
     next[edge.id] = { x: bend.x + deltaX, y: bend.y + deltaY };
     changed = true;
   }
@@ -348,7 +355,14 @@ function translateEdgeRoutesForMovedNodes(
   for (const edge of doc.edges) {
     const route = routes[edge.id];
     if (!route) continue;
-    if (!movedNodeIds.has(edge.from) || !movedNodeIds.has(edge.to)) continue;
+    const fromMoved = movedNodeIds.has(edge.from);
+    const toMoved = movedNodeIds.has(edge.to);
+    if (!fromMoved && !toMoved) continue;
+    if (fromMoved !== toMoved) {
+      delete next[edge.id];
+      changed = true;
+      continue;
+    }
     next[edge.id] = {
       points: route.points.map(point => ({ x: point.x + deltaX, y: point.y + deltaY }))
     };
@@ -3174,14 +3188,20 @@ export function App() {
             return tab;
           }
         }
-        const nextBendsForDirection =
-          dragState.nodeIds.length > 1
-            ? translateEdgeBendsForMovedNodes(doc, dragState.startEdgeBends, dragNodeSet, appliedDeltaX, appliedDeltaY)
-            : tab.edgeBendsByDirection[direction];
-        const nextRoutesForDirection =
-          dragState.nodeIds.length > 1
-            ? translateEdgeRoutesForMovedNodes(doc, dragState.startEdgeRoutes, dragNodeSet, appliedDeltaX, appliedDeltaY)
-            : tab.edgeRoutesByDirection[direction];
+        const nextBendsForDirection = translateEdgeBendsForMovedNodes(
+          doc,
+          dragState.startEdgeBends,
+          dragNodeSet,
+          appliedDeltaX,
+          appliedDeltaY
+        );
+        const nextRoutesForDirection = translateEdgeRoutesForMovedNodes(
+          doc,
+          dragState.startEdgeRoutes,
+          dragNodeSet,
+          appliedDeltaX,
+          appliedDeltaY
+        );
 
         return {
           ...tab,
@@ -3280,17 +3300,31 @@ export function App() {
         }
         setSelectedNodeIds([movingNodeId]);
       } else if (!isRootDrag) {
-        setCurrentNodeOffsets(prev => {
-          const next = { ...prev };
+        updateActiveTab(tab => {
+          const nextOffsets = { ...tab.nodeOffsetsByDirection[layoutDirection] };
           for (const nodeId of dragState.nodeIds) {
             const startOffset = dragState.startOffsets[nodeId] || { dx: 0, dy: 0 };
             if (startOffset.dx === 0 && startOffset.dy === 0) {
-              delete next[nodeId];
+              delete nextOffsets[nodeId];
             } else {
-              next[nodeId] = startOffset;
+              nextOffsets[nodeId] = startOffset;
             }
           }
-          return next;
+          return {
+            ...tab,
+            nodeOffsetsByDirection: {
+              ...tab.nodeOffsetsByDirection,
+              [layoutDirection]: nextOffsets
+            },
+            edgeBendsByDirection: {
+              ...tab.edgeBendsByDirection,
+              [layoutDirection]: dragState.startEdgeBends
+            },
+            edgeRoutesByDirection: {
+              ...tab.edgeRoutesByDirection,
+              [layoutDirection]: dragState.startEdgeRoutes
+            }
+          };
         });
       }
       setDragState(null);
