@@ -1201,8 +1201,20 @@ function insertRoutePointNearSegment(from: Point, to: Point, route: EdgeRoute, p
       insertAt = index;
     }
   }
+  const start = fullRoute[insertAt];
+  const end = fullRoute[insertAt + 1];
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const projectedPoint =
+    lengthSquared <= 0.0001
+      ? start
+      : (() => {
+          const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1);
+          return { x: start.x + dx * t, y: start.y + dy * t };
+        })();
   const points = [...route.points];
-  points.splice(insertAt, 0, point);
+  points.splice(insertAt, 0, projectedPoint);
   return { route: { points }, pointIndex: insertAt };
 }
 
