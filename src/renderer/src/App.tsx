@@ -3372,15 +3372,15 @@ export function App() {
   };
 
   const findEdgeHitAtPoint = (point: Point, preferredEdgeId?: string) => {
-    let best:
-      | {
-          edgeId: string;
-          endpoints: { from: Point; to: Point };
-          route: EdgeRoute | undefined;
-          distance: number;
-          score: number;
-        }
-      | null = null;
+    type EdgeHitCandidate = {
+      edgeId: string;
+      endpoints: { from: Point; to: Point };
+      route: EdgeRoute | undefined;
+      distance: number;
+      score: number;
+    };
+    let best: EdgeHitCandidate | null = null;
+    let bestNearbyLayoutEdge: EdgeHitCandidate | null = null;
     for (const edge of doc.edges) {
       const fromPos = renderedPositionMap.get(edge.from);
       const toPos = renderedPositionMap.get(edge.to);
@@ -3399,11 +3399,35 @@ export function App() {
       const linearDistance = Math.sqrt(distance);
       const isLayoutEdge = layoutEdgeAnalysis.layoutEdgeIds.has(edge.id);
       const isRoutedEdge = Boolean(edgeRoutes[edge.id] || edgeBends[edge.id] || (route && route.points.length > 1));
-      const routePenalty = linearDistance <= 4 ? 0 : (isLayoutEdge ? 0 : 8) + (isRoutedEdge ? 6 : 0);
+      const routeDistance = route ? routeLength([endpoints.from, ...route.points, endpoints.to]) : 0;
+      const routeLengthPenalty = isRoutedEdge && !isLayoutEdge
+        ? Math.min(18, Math.max(0, (routeDistance - 240) / 70))
+        : 0;
+      const routePenalty = linearDistance <= 3
+        ? 0
+        : (isLayoutEdge ? 0 : 8) + (isRoutedEdge ? 6 + routeLengthPenalty : 0);
       const score = linearDistance + routePenalty;
       if (!best || score < best.score || (score === best.score && distance < best.distance)) {
         best = { edgeId: edge.id, endpoints, route, distance, score };
       }
+      if (isLayoutEdge && distance <= 8 * 8) {
+        const layoutScore = linearDistance;
+        if (
+          !bestNearbyLayoutEdge ||
+          layoutScore < bestNearbyLayoutEdge.score ||
+          (layoutScore === bestNearbyLayoutEdge.score && distance < bestNearbyLayoutEdge.distance)
+        ) {
+          bestNearbyLayoutEdge = { edgeId: edge.id, endpoints, route, distance, score: layoutScore };
+        }
+      }
+    }
+    if (
+      bestNearbyLayoutEdge &&
+      best &&
+      best.edgeId !== bestNearbyLayoutEdge.edgeId &&
+      !layoutEdgeAnalysis.layoutEdgeIds.has(best.edgeId)
+    ) {
+      return bestNearbyLayoutEdge;
     }
     return best && best.distance <= 18 * 18 ? best : null;
   };

@@ -644,6 +644,12 @@ test('large routed manual edge does not block selecting nearby layout edges', as
   await clickRenderedPathAt('e1', 0.45);
   await expect(window.getByTestId('edge-path-e1')).toHaveClass(/edge-path-selected/);
   await expect(window.getByTestId('edge-path-e4')).not.toHaveClass(/edge-path-selected/);
+  await clickRenderedPathAt('e2', 0.45);
+  await expect(window.getByTestId('edge-path-e2')).toHaveClass(/edge-path-selected/);
+  await expect(window.getByTestId('edge-path-e4')).not.toHaveClass(/edge-path-selected/);
+  await clickRenderedPathAt('e3', 0.5);
+  await expect(window.getByTestId('edge-path-e3')).toHaveClass(/edge-path-selected/);
+  await expect(window.getByTestId('edge-path-e4')).not.toHaveClass(/edge-path-selected/);
 
   await app.close();
 });
