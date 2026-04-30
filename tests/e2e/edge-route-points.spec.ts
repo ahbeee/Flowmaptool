@@ -1,5 +1,71 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import { join } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+async function triggerMenuAction(
+  app: Awaited<ReturnType<typeof electron.launch>>,
+  action: 'file:open' | 'file:save'
+) {
+  await app.evaluate(({ BrowserWindow }, menuAction) => {
+    const targetWindow = BrowserWindow.getAllWindows()[0];
+    targetWindow.webContents.send('flowmaptool:menuAction', menuAction);
+  }, action);
+}
+
+function createManualRouteFixture() {
+  return {
+    schemaVersion: 1,
+    doc: {
+      schemaVersion: 1,
+      nodes: [
+        { id: 'n1', label: 'Root' },
+        { id: 'n2', label: 'One' },
+        { id: 'n3', label: 'Two' }
+      ],
+      edges: [
+        { id: 'e1', from: 'n1', to: 'n2', role: 'layout' },
+        { id: 'e2', from: 'n1', to: 'n3', role: 'layout' },
+        {
+          id: 'e3',
+          from: 'n3',
+          to: 'n2',
+          role: 'manual',
+          anchors: { from: 'back', to: 'body' }
+        }
+      ],
+      meta: {
+        nextNodeSeq: 4,
+        nextEdgeSeq: 4
+      },
+      settings: {
+        themeId: 'blue-gray',
+        spacing: {
+          horizontal: 48,
+          vertical: 48
+        },
+        defaultShape: 'plain',
+        defaultEdgeStyle: {
+          width: 2,
+          lineType: 'solid',
+          color: '#64748b'
+        },
+        tags: [
+          { id: 'tag-blue', name: 'Blue', color: '#3b82f6' },
+          { id: 'tag-pink', name: 'Pending', color: '#ec4899' },
+          { id: 'tag-green', name: 'Done', color: '#22c55e' },
+          { id: 'tag-orange', name: 'Orange', color: '#f97316' }
+        ]
+      }
+    },
+    ui: {
+      layoutDirection: 'horizontal',
+      nodeOffsetsByDirection: { horizontal: {}, vertical: {} },
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} },
+      toolbarVisible: true
+    }
+  };
+}
 
 test('selected edge supports multiple editable route points', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
@@ -165,4 +231,64 @@ test('selected automatic manual route exposes editable route points', async () =
 
   await expect.poll(() => window.getByTestId('edge-path-e7').getAttribute('d')).not.toBe(beforeDrag);
   await app.close();
+});
+
+test('manual route edits are saved and restored from qflow files', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('manual-route-persistence.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createManualRouteFixture(), null, 2), 'utf-8');
+
+  const launchOpenedFixture = async () => {
+    const app = await electron.launch({
+      args: [mainEntry],
+      env: {
+        ...process.env,
+        FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+      }
+    });
+    const window = await app.firstWindow();
+    await expect(window.getByTestId('node-n1')).toBeVisible();
+    await triggerMenuAction(app, 'file:open');
+    await expect(window.getByTestId('node-n3')).toBeVisible();
+    await expect(window.getByTestId('edge-path-e3')).toBeVisible();
+    return { app, window };
+  };
+
+  const firstRun = await launchOpenedFixture();
+  const firstPath = firstRun.window.getByTestId('edge-path-e3');
+  const selectPoint = await firstPath.evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() * 0.45);
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await firstRun.window.mouse.click(selectPoint.x, selectPoint.y);
+  await expect.poll(() => firstRun.window.locator('.edge-bend-handle').count()).toBeGreaterThan(1);
+
+  const beforeEditPath = await firstPath.getAttribute('d');
+  const handleBox = await firstRun.window.locator('.edge-bend-handle').first().boundingBox();
+  if (!handleBox) throw new Error('edge route handle not found');
+  const handleCenter = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+  await firstRun.window.mouse.move(handleCenter.x, handleCenter.y);
+  await firstRun.window.mouse.down();
+  await firstRun.window.mouse.move(handleCenter.x + 28, handleCenter.y - 70, { steps: 8 });
+  await expect(firstRun.window.getByTestId('edge-route-drag-preview')).toBeVisible();
+  await firstRun.window.mouse.up();
+
+  await expect.poll(() => firstPath.getAttribute('d')).not.toBe(beforeEditPath);
+  const editedPath = await firstPath.getAttribute('d');
+  await triggerMenuAction(firstRun.app, 'file:save');
+  await expect(firstRun.window.getByTestId('file-status')).toContainText('Saved:');
+  await firstRun.app.close();
+
+  const saved = JSON.parse(await readFile(fixturePath, 'utf-8')) as {
+    ui?: { edgeRoutesByDirection?: { horizontal?: Record<string, { points?: unknown[] }> } };
+  };
+  expect(saved.ui?.edgeRoutesByDirection?.horizontal?.e3?.points?.length).toBeGreaterThan(1);
+
+  const secondRun = await launchOpenedFixture();
+  await expect.poll(() => secondRun.window.getByTestId('edge-path-e3').getAttribute('d')).toBe(editedPath);
+  await secondRun.app.close();
 });
