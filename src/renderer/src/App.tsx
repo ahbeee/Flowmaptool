@@ -800,6 +800,54 @@ function segmentIntersectsBox(from: Point, to: Point, box: NodeBox, padding = 8)
   );
 }
 
+function distancePointToSegment(point: Point, from: Point, to: Point): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 0.0001) return Math.sqrt(distanceSquared(point, from));
+  const t = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared));
+  const projection = { x: from.x + t * dx, y: from.y + t * dy };
+  return Math.sqrt(distanceSquared(point, projection));
+}
+
+function distancePointToBox(point: Point, box: NodeBox): number {
+  const dx = point.x < box.left ? box.left - point.x : point.x > box.right ? point.x - box.right : 0;
+  const dy = point.y < box.top ? box.top - point.y : point.y > box.bottom ? point.y - box.bottom : 0;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function segmentBoxDistance(from: Point, to: Point, box: NodeBox): number {
+  if (segmentIntersectsBox(from, to, box, 0)) return 0;
+  const epsilon = 0.001;
+  if (Math.abs(from.y - to.y) <= epsilon) {
+    const y = from.y;
+    const minX = Math.min(from.x, to.x);
+    const maxX = Math.max(from.x, to.x);
+    const dx = maxX < box.left ? box.left - maxX : minX > box.right ? minX - box.right : 0;
+    const dy = y < box.top ? box.top - y : y > box.bottom ? y - box.bottom : 0;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  if (Math.abs(from.x - to.x) <= epsilon) {
+    const x = from.x;
+    const minY = Math.min(from.y, to.y);
+    const maxY = Math.max(from.y, to.y);
+    const dx = x < box.left ? box.left - x : x > box.right ? x - box.right : 0;
+    const dy = maxY < box.top ? box.top - maxY : minY > box.bottom ? minY - box.bottom : 0;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  const corners = [
+    { x: box.left, y: box.top },
+    { x: box.right, y: box.top },
+    { x: box.right, y: box.bottom },
+    { x: box.left, y: box.bottom }
+  ];
+  return Math.min(
+    distancePointToBox(from, box),
+    distancePointToBox(to, box),
+    ...corners.map(corner => distancePointToSegment(corner, from, to))
+  );
+}
+
 function routeObstacleCount(points: Point[], fromId: NodeId, toId: NodeId, nodeBoxes: Map<NodeId, NodeBox>): number {
   let count = 0;
   for (let index = 0; index < points.length - 1; index += 1) {
@@ -814,16 +862,18 @@ function routeObstacleCount(points: Point[], fromId: NodeId, toId: NodeId, nodeB
 }
 
 function routeClearancePenalty(points: Point[], fromId: NodeId, toId: NodeId, nodeBoxes: Map<NodeId, NodeBox>): number {
-  let count = 0;
+  let penalty = 0;
+  const desiredClearance = 96;
   for (let index = 0; index < points.length - 1; index += 1) {
     const from = points[index];
     const to = points[index + 1];
     for (const [nodeId, box] of nodeBoxes.entries()) {
       if (nodeId === fromId || nodeId === toId) continue;
-      if (segmentIntersectsBox(from, to, box, 28)) count += 1;
+      const missingClearance = Math.max(0, desiredClearance - segmentBoxDistance(from, to, box));
+      penalty += missingClearance * missingClearance;
     }
   }
-  return count;
+  return penalty;
 }
 
 function routeTurnCount(points: Point[]): number {
