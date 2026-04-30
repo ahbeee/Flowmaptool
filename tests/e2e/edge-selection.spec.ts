@@ -89,3 +89,57 @@ test('large back edge does not block selecting inner layout edges', async () => 
 
   await app.close();
 });
+
+test('loop back edge still allows selecting adjacent tree edges', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    await sourceNode.hover();
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+  const clickPathAt = async (edgeId: string, ratio: number) => {
+    const point = await window.getByTestId(`edge-path-${edgeId}`).evaluate((path, pathRatio) => {
+      const svgPath = path as SVGPathElement;
+      const matrix = svgPath.getScreenCTM();
+      if (!matrix) throw new Error('path matrix not found');
+      const pointOnPath = svgPath.getPointAtLength(svgPath.getTotalLength() * pathRatio);
+      const screenPoint = pointOnPath.matrixTransform(matrix);
+      return { x: screenPoint.x, y: screenPoint.y };
+    }, ratio);
+    await window.mouse.click(point.x, point.y);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await connectByHandle('n4', 'n1');
+
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(5);
+
+  await clickPathAt('e1', 0.45);
+  await expect(window.getByTestId('edge-path-e1')).toHaveClass(/edge-path-selected/);
+
+  await clickPathAt('e3', 0.55);
+  await expect(window.getByTestId('edge-path-e3')).toHaveClass(/edge-path-selected/);
+
+  await clickPathAt('e4', 0.55);
+  await expect(window.getByTestId('edge-path-e4')).toHaveClass(/edge-path-selected/);
+
+  await clickPathAt('e5', 0.5);
+  await expect(window.getByTestId('edge-path-e5')).toHaveClass(/edge-path-selected/);
+
+  await app.close();
+});
