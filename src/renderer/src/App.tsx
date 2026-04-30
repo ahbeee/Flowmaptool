@@ -3292,7 +3292,7 @@ export function App() {
     window.addEventListener('pointerup', onPointerUp);
   };
 
-  const findEdgeHitAtPoint = (point: Point) => {
+  const findEdgeHitAtPoint = (point: Point, preferredEdgeId?: string) => {
     let best:
       | {
           edgeId: string;
@@ -3314,6 +3314,9 @@ export function App() {
       const forceBend = edgeForceBendMap.get(edge.id) || false;
       const path = edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route);
       const distance = distanceToPathSquared(point, path);
+      if (preferredEdgeId === edge.id && distance <= 18 * 18) {
+        return { edgeId: edge.id, endpoints, route, distance, score: -1 };
+      }
       const linearDistance = Math.sqrt(distance);
       const isLayoutEdge = layoutEdgeAnalysis.layoutEdgeIds.has(edge.id);
       const isRoutedEdge = Boolean(edgeRoutes[edge.id] || edgeBends[edge.id] || (route && route.points.length > 1));
@@ -3451,7 +3454,7 @@ export function App() {
     event.stopPropagation();
     const start = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
     if (!start) return;
-    const edgeHit = findEdgeHitAtPoint(start);
+    const edgeHit = findEdgeHitAtPoint(start, event.currentTarget.dataset.edgeId);
     if (!edgeHit) return;
     const svg = event.currentTarget.ownerSVGElement;
     startEdgeSegmentDragAtPoint(edgeHit.edgeId, edgeHit.endpoints, edgeHit.route, start, (clientX, clientY) =>
@@ -4300,6 +4303,7 @@ export function App() {
                       <path
                         key={edge.id}
                         data-testid={`edge-path-${edge.id}`}
+                        data-edge-id={edge.id}
                         d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
                         className={selected ? 'edge-path edge-path-selected' : 'edge-path'}
                         style={{
@@ -4318,7 +4322,7 @@ export function App() {
                             return;
                           }
                           const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
-                          const edgeHit = point ? findEdgeHitAtPoint(point) : null;
+                          const edgeHit = point ? findEdgeHitAtPoint(point, event.currentTarget.dataset.edgeId) : null;
                           setSelectedEdgeId(edgeHit?.edgeId || edge.id);
                           setSelectedRoutePoint(null);
                           setSelectedNodeIds([]);
@@ -4328,7 +4332,7 @@ export function App() {
                           event.stopPropagation();
                           const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
                           if (!point) return;
-                          const edgeHit = findEdgeHitAtPoint(point);
+                          const edgeHit = findEdgeHitAtPoint(point, event.currentTarget.dataset.edgeId);
                           addRoutePointToEdgeAtPoint(edgeHit?.edgeId || edge.id, point);
                         }}
                       />

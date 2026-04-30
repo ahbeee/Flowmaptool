@@ -540,3 +540,59 @@ test('front and back handles create directionally distinct manual routes', async
   expect(frontPath).not.toBe(backPath);
   await frontCase.app.close();
 });
+
+test('opposite manual connections between the same nodes remain distinct and selectable', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const clickPathAt = async (edgeId: string, ratio: number) => {
+    const point = await window.getByTestId(`edge-path-${edgeId}`).evaluate((path, pathRatio) => {
+      const svgPath = path as SVGPathElement;
+      const matrix = svgPath.getScreenCTM();
+      if (!matrix) throw new Error('path matrix not found');
+      const pointOnPath = svgPath.getPointAtLength(svgPath.getTotalLength() * pathRatio);
+      const screenPoint = pointOnPath.matrixTransform(matrix);
+      return { x: screenPoint.x, y: screenPoint.y };
+    }, ratio);
+    await window.mouse.click(point.x, point.y);
+  };
+
+  await createChild('n1');
+  await createChild('n2');
+
+  const childBackHandle = window.getByTestId('node-n3').locator('.node-connect-handle');
+  const rootNode = window.getByTestId('node-n1');
+  await window.getByTestId('node-n3').hover();
+  await expect(childBackHandle).toHaveCSS('opacity', '1');
+  await childBackHandle.dragTo(rootNode);
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
+
+  const rootFrontHandle = rootNode.locator('.node-connect-handle-front');
+  const childNode = window.getByTestId('node-n3');
+  await rootNode.hover();
+  await expect(rootFrontHandle).toHaveCSS('opacity', '1');
+  await rootFrontHandle.dragTo(childNode);
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+
+  const backPath = await window.getByTestId('edge-path-e3').getAttribute('d');
+  const frontPath = await window.getByTestId('edge-path-e4').getAttribute('d');
+  expect(backPath).toBeTruthy();
+  expect(frontPath).toBeTruthy();
+  expect(frontPath).not.toBe(backPath);
+
+  await clickPathAt('e3', 0.5);
+  await expect(window.getByTestId('edge-path-e3')).toHaveClass(/edge-path-selected/);
+  await clickPathAt('e4', 0.5);
+  await expect(window.getByTestId('edge-path-e4')).toHaveClass(/edge-path-selected/);
+
+  await app.close();
+});
