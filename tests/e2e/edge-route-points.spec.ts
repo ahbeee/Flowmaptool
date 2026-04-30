@@ -415,5 +415,20 @@ test('user adjusted manual route stays stable while selecting other objects', as
   await window.getByTestId('canvas-surface').click({ position: { x: 16, y: 16 } });
   await expect.poll(() => edgePath.getAttribute('d')).toBe(adjustedPath);
 
+  const routeBoxBeforeMove = await edgePath.boundingBox();
+  const root = window.getByTestId('node-n1');
+  const rootBox = await root.boundingBox();
+  if (!routeBoxBeforeMove || !rootBox) throw new Error('expected root and manual route to be measurable');
+  await window.mouse.move(rootBox.x + rootBox.width / 2, rootBox.y + rootBox.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(rootBox.x + rootBox.width / 2 + 96, rootBox.y + rootBox.height / 2 + 64, {
+    steps: 8
+  });
+  await window.mouse.up();
+
+  const routeBoxAfterMove = await edgePath.boundingBox();
+  if (!routeBoxAfterMove) throw new Error('expected manual route to remain measurable after root move');
+  expect(routeBoxAfterMove.x).toBeGreaterThan(routeBoxBeforeMove.x + 30);
+
   await app.close();
 });

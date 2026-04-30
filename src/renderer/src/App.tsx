@@ -165,6 +165,8 @@ type DragState = {
   startX: number;
   startY: number;
   startOffsets: Record<NodeId, NodeOffset>;
+  startEdgeBends: EdgeBendMap;
+  startEdgeRoutes: EdgeRouteMap;
 };
 type MarqueeState = {
   startX: number;
@@ -311,6 +313,48 @@ function cloneEdgeRoutesByDirection(value: EdgeRoutesByDirection): EdgeRoutesByD
     horizontal: cloneEdgeRouteMap(value.horizontal),
     vertical: cloneEdgeRouteMap(value.vertical)
   };
+}
+
+function translateEdgeBendsForMovedNodes(
+  doc: FlowDoc,
+  bends: EdgeBendMap,
+  movedNodeIds: Set<NodeId>,
+  deltaX: number,
+  deltaY: number
+): EdgeBendMap {
+  if (deltaX === 0 && deltaY === 0) return bends;
+  let changed = false;
+  const next = { ...bends };
+  for (const edge of doc.edges) {
+    const bend = bends[edge.id];
+    if (!bend) continue;
+    if (!movedNodeIds.has(edge.from) || !movedNodeIds.has(edge.to)) continue;
+    next[edge.id] = { x: bend.x + deltaX, y: bend.y + deltaY };
+    changed = true;
+  }
+  return changed ? next : bends;
+}
+
+function translateEdgeRoutesForMovedNodes(
+  doc: FlowDoc,
+  routes: EdgeRouteMap,
+  movedNodeIds: Set<NodeId>,
+  deltaX: number,
+  deltaY: number
+): EdgeRouteMap {
+  if (deltaX === 0 && deltaY === 0) return routes;
+  let changed = false;
+  const next = { ...routes };
+  for (const edge of doc.edges) {
+    const route = routes[edge.id];
+    if (!route) continue;
+    if (!movedNodeIds.has(edge.from) || !movedNodeIds.has(edge.to)) continue;
+    next[edge.id] = {
+      points: route.points.map(point => ({ x: point.x + deltaX, y: point.y + deltaY }))
+    };
+    changed = true;
+  }
+  return changed ? next : routes;
 }
 
 function getEdgeUiSnapshot(tab: TabDocument): EdgeUiSnapshot {
@@ -3052,8 +3096,12 @@ export function App() {
       const deltaY = pointer.y - dragState.startY;
       if (!dragDidMoveRef.current && Math.hypot(deltaX, deltaY) < dragThreshold) return;
       dragDidMoveRef.current = true;
-      setCurrentNodeOffsets(prev => {
+      updateActiveTab(tab => {
+        const direction = tab.layoutDirection;
+        const prev = tab.nodeOffsetsByDirection[direction];
         let next = { ...prev };
+        let appliedDeltaX = deltaX;
+        let appliedDeltaY = deltaY;
         for (const nodeId of dragState.nodeIds) {
           const startOffset = dragState.startOffsets[nodeId] || { dx: 0, dy: 0 };
           next[nodeId] = { dx: startOffset.dx + deltaX, dy: startOffset.dy + deltaY };
@@ -3091,6 +3139,8 @@ export function App() {
               const current = getNodeOffset(snapped, nodeId);
               snapped[nodeId] = { dx: current.dx + snapDx, dy: current.dy + snapDy };
             }
+            appliedDeltaX += snapDx;
+            appliedDeltaY += snapDy;
             next = snapped;
           }
         }
@@ -3121,10 +3171,33 @@ export function App() {
             bottom: base.y + offset.dy + size.height
           };
           if (staticBoxes.some(box => boxesOverlap(movingBox, box, dragCollisionGap))) {
-            return prev;
+            return tab;
           }
         }
-        return next;
+        const nextBendsForDirection =
+          dragState.nodeIds.length > 1
+            ? translateEdgeBendsForMovedNodes(doc, dragState.startEdgeBends, dragNodeSet, appliedDeltaX, appliedDeltaY)
+            : tab.edgeBendsByDirection[direction];
+        const nextRoutesForDirection =
+          dragState.nodeIds.length > 1
+            ? translateEdgeRoutesForMovedNodes(doc, dragState.startEdgeRoutes, dragNodeSet, appliedDeltaX, appliedDeltaY)
+            : tab.edgeRoutesByDirection[direction];
+
+        return {
+          ...tab,
+          nodeOffsetsByDirection: {
+            ...tab.nodeOffsetsByDirection,
+            [direction]: next
+          },
+          edgeBendsByDirection: {
+            ...tab.edgeBendsByDirection,
+            [direction]: nextBendsForDirection
+          },
+          edgeRoutesByDirection: {
+            ...tab.edgeRoutesByDirection,
+            [direction]: nextRoutesForDirection
+          }
+        };
       });
       if (dragState.nodeIds.length === 1) {
         const x = pointer.x;
@@ -3232,7 +3305,7 @@ export function App() {
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('mouseup', onPointerUp);
     };
-  }, [autoPanCanvas, commitDoc, doc, dragState, dropParentTargetId, getCanvasContentPoint, layout.positions, layoutDirection, layoutSpacing, nodeSizeMap, primaryRootNodeId, renderedPositionMap, restoreCurrentNodeOffsets, rootNodeIds, setCurrentNodeOffsets]);
+  }, [autoPanCanvas, commitDoc, doc, dragState, dropParentTargetId, getCanvasContentPoint, layout.positions, layoutDirection, layoutSpacing, nodeSizeMap, primaryRootNodeId, renderedPositionMap, restoreCurrentNodeOffsets, rootNodeIds, setCurrentNodeOffsets, updateActiveTab]);
 
   const findNodeAtCanvasPoint = React.useCallback((x: number, y: number): NodeId | null => {
     const ordered = [...layout.positions].reverse();
@@ -3551,7 +3624,9 @@ export function App() {
       anchorNodeId: nodeId,
       startX: startPoint.x,
       startY: startPoint.y,
-      startOffsets
+      startOffsets,
+      startEdgeBends: cloneEdgeBendMap(edgeBends),
+      startEdgeRoutes: cloneEdgeRouteMap(edgeRoutes)
     });
   };
 
