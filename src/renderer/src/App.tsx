@@ -1220,6 +1220,46 @@ function routeFromBend(bend?: EdgeBend): EdgeRoute | undefined {
   return bend ? { points: [bend] } : undefined;
 }
 
+function compactRoutePoints(points: Point[]): Point[] {
+  return points.filter((point, index) => {
+    if (index === 0) return true;
+    const previous = points[index - 1];
+    return Math.abs(point.x - previous.x) > 1 || Math.abs(point.y - previous.y) > 1;
+  });
+}
+
+function routeFromDraggedControl(from: Point, to: Point, direction: LayoutDirection, pointer: Point): EdgeRoute {
+  if (direction === 'horizontal') {
+    const sign = to.x >= from.x ? 1 : -1;
+    const distance = Math.max(48, Math.abs(to.x - from.x));
+    const offset = Math.min(72, distance / 3);
+    const entryX = from.x + sign * offset;
+    const exitX = to.x - sign * offset;
+    return {
+      points: compactRoutePoints([
+        { x: entryX, y: from.y },
+        { x: entryX, y: pointer.y },
+        { x: exitX, y: pointer.y },
+        { x: exitX, y: to.y }
+      ])
+    };
+  }
+
+  const sign = to.y >= from.y ? 1 : -1;
+  const distance = Math.max(48, Math.abs(to.y - from.y));
+  const offset = Math.min(72, distance / 3);
+  const entryY = from.y + sign * offset;
+  const exitY = to.y - sign * offset;
+  return {
+    points: compactRoutePoints([
+      { x: from.x, y: entryY },
+      { x: pointer.x, y: entryY },
+      { x: pointer.x, y: exitY },
+      { x: to.x, y: exitY }
+    ])
+  };
+}
+
 function distanceSquared(a: Point, b: Point): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -2138,6 +2178,18 @@ export function App() {
     nodeSizeMap,
     renderedPositionMap
   ]);
+
+  const buildDraggedEdgeRoute = React.useCallback((edgeId: string, pointer: Point): EdgeRoute | undefined => {
+    const edge = doc.edges.find(candidate => candidate.id === edgeId);
+    if (!edge) return undefined;
+    const fromPos = renderedPositionMap.get(edge.from);
+    const toPos = renderedPositionMap.get(edge.to);
+    if (!fromPos || !toPos) return undefined;
+    const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+    const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+    return routeFromDraggedControl(endpoints.from, endpoints.to, layoutDirection, pointer);
+  }, [doc.edges, getRenderedEdgeEndpoints, layoutDirection, nodeSizeMap, renderedPositionMap]);
 
   const tryCreateEdge = React.useCallback(
     (from: NodeId, to: NodeId, anchors?: EdgeAnchors) => {
@@ -3203,12 +3255,13 @@ export function App() {
       autoPanCanvas(event);
       const pointer = getCanvasContentPoint(event.clientX, event.clientY);
       if (!pointer) return;
-      const { x, y } = pointer;
-      setCurrentEdgeBends(prev => ({ ...prev, [edgeBendDrag.edgeId]: { x, y } }));
-      setCurrentEdgeRoutes(prev => {
+      const route = buildDraggedEdgeRoute(edgeBendDrag.edgeId, pointer);
+      if (!route) return;
+      setCurrentEdgeBends(prev => {
         const { [edgeBendDrag.edgeId]: _removed, ...rest } = prev;
         return rest;
       });
+      setCurrentEdgeRoutes(prev => ({ ...prev, [edgeBendDrag.edgeId]: route }));
     };
     const finishEdgeBend = (event: PointerEvent | MouseEvent) => {
       event.preventDefault();
@@ -3228,6 +3281,7 @@ export function App() {
     };
   }, [
     autoPanCanvas,
+    buildDraggedEdgeRoute,
     commitCurrentEdgeUiSnapshot,
     edgeBendDrag,
     getCanvasContentPoint,
@@ -3295,11 +3349,13 @@ export function App() {
       if (!didDrag && distanceSquared(start, pointer) < 16) return;
       didDrag = true;
       suppressNextEdgeClickRef.current = true;
-      setCurrentEdgeBends(prev => ({ ...prev, [edgeId]: pointer }));
-      setCurrentEdgeRoutes(prev => {
+      const route = buildDraggedEdgeRoute(edgeId, pointer);
+      if (!route) return;
+      setCurrentEdgeBends(prev => {
         const { [edgeId]: _removed, ...rest } = prev;
         return rest;
       });
+      setCurrentEdgeRoutes(prev => ({ ...prev, [edgeId]: route }));
     };
     const onPointerUp = () => {
       if (didDrag) {

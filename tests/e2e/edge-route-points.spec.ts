@@ -67,7 +67,7 @@ function createManualRouteFixture() {
   };
 }
 
-test('edge segment drag creates one bend without route point controls', async () => {
+test('edge segment drag keeps a clean routed bend without route point controls', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
   const window = await app.firstWindow();
@@ -108,6 +108,10 @@ test('edge segment drag creates one bend without route point controls', async ()
 
   await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
   await expect.poll(() => edgePath.getAttribute('d')).not.toBe(automaticPath);
+  await expect.poll(() => edgePath.getAttribute('d')).toContain('L');
+  const draggedPath = await edgePath.getAttribute('d');
+  expect(draggedPath).toBeTruthy();
+  expect((draggedPath?.match(/\bL\b/g) || []).length).toBeGreaterThanOrEqual(3);
   await window.getByRole('button', { name: 'Reset Bend' }).click();
   await expect.poll(() => edgePath.getAttribute('d')).toBe(automaticPath);
 
