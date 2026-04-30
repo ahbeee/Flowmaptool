@@ -22,6 +22,7 @@ import {
   type EdgeLineType,
   type EdgeAnchor,
   type EdgeAnchors,
+  type EdgeId,
   type EdgeStyle,
   type NodeId,
   type NodeShape,
@@ -1349,6 +1350,56 @@ function routeFromDraggedControl(
   };
 }
 
+function isForwardIncomingManualEdge(
+  edge: FlowEdge,
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  layoutEdgeIds: Set<EdgeId>
+): boolean {
+  if (edge.role !== 'manual' || layoutEdgeIds.has(edge.id)) return false;
+  if (edge.anchors?.from === 'front' || edge.anchors?.to === 'back') return false;
+  return direction === 'horizontal'
+    ? to.x > from.x + 12
+    : to.y > from.y + 12;
+}
+
+function routeForwardIncomingConverge(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  primaryGap: number
+): EdgeRoute | undefined {
+  const inset = Math.max(18, Math.min(48, primaryGap * 0.65));
+  const minSegment = 10;
+
+  if (direction === 'horizontal') {
+    const directDistance = to.x - from.x;
+    if (directDistance <= minSegment * 2) return undefined;
+    let trunkX = to.x - inset;
+    if (trunkX <= from.x + minSegment || trunkX >= to.x - minSegment) {
+      trunkX = from.x + directDistance / 2;
+    }
+    if (trunkX <= from.x + minSegment || trunkX >= to.x - minSegment) return undefined;
+    return routeFromPoints(compactRoutePoints([
+      { x: trunkX, y: from.y },
+      { x: trunkX, y: to.y }
+    ]));
+  }
+
+  const directDistance = to.y - from.y;
+  if (directDistance <= minSegment * 2) return undefined;
+  let trunkY = to.y - inset;
+  if (trunkY <= from.y + minSegment || trunkY >= to.y - minSegment) {
+    trunkY = from.y + directDistance / 2;
+  }
+  if (trunkY <= from.y + minSegment || trunkY >= to.y - minSegment) return undefined;
+  return routeFromPoints(compactRoutePoints([
+    { x: from.x, y: trunkY },
+    { x: to.x, y: trunkY }
+  ]));
+}
+
 function distanceSquared(a: Point, b: Point): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -2300,6 +2351,25 @@ export function App() {
 
   const autoEdgeRouteMap = React.useMemo(() => {
     const map = new Map<string, EdgeRoute>();
+    const forwardIncomingManualEdgesByTarget = new Map<NodeId, Set<EdgeId>>();
+
+    for (const edge of doc.edges) {
+      if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
+      if (!edgeForceBendMap.get(edge.id)) continue;
+      const fromPos = renderedPositionMap.get(edge.from);
+      const toPos = renderedPositionMap.get(edge.to);
+      if (!fromPos || !toPos) continue;
+      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
+      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
+      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+      if (!isForwardIncomingManualEdge(edge, endpoints.from, endpoints.to, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds)) {
+        continue;
+      }
+      const group = forwardIncomingManualEdgesByTarget.get(edge.to) || new Set<EdgeId>();
+      group.add(edge.id);
+      forwardIncomingManualEdgesByTarget.set(edge.to, group);
+    }
+
     for (const edge of doc.edges) {
       if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
       if (!edgeForceBendMap.get(edge.id)) continue;
@@ -2310,7 +2380,15 @@ export function App() {
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
       const routeNodeBoxes = getRouteNodeBoxes(edge);
-      const route = computeAutoEdgeRoute(
+      const forwardIncomingManualGroup = forwardIncomingManualEdgesByTarget.get(edge.to);
+      const route = forwardIncomingManualGroup && forwardIncomingManualGroup.size >= 2 && forwardIncomingManualGroup.has(edge.id)
+        ? routeForwardIncomingConverge(
+          endpoints.from,
+          endpoints.to,
+          layoutDirection,
+          layoutDirection === 'horizontal' ? doc.settings.spacing.horizontal : doc.settings.spacing.vertical
+        )
+        : computeAutoEdgeRoute(
         endpoints.from,
         endpoints.to,
         layoutDirection,
@@ -2324,6 +2402,8 @@ export function App() {
     return map;
   }, [
     doc.edges,
+    doc.settings.spacing.horizontal,
+    doc.settings.spacing.vertical,
     edgeBends,
     edgeForceBendMap,
     edgeLaneMap,
@@ -2331,6 +2411,7 @@ export function App() {
     getRenderedEdgeEndpoints,
     getRouteNodeBoxes,
     layoutDirection,
+    layoutEdgeAnalysis.layoutEdgeIds,
     nodeSizeMap,
     renderedPositionMap
   ]);

@@ -123,6 +123,77 @@ test('nearby manual back edges use separate automatic lanes', async () => {
   await app.close();
 });
 
+test('multiple forward manual incoming edges share an orthogonal converge route', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await createChild('n3');
+  await createChild('n3');
+  await createChild('n4');
+  await createChild('n8');
+  await createChild('n8');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(9);
+
+  await connectByHandle('n5', 'n8');
+  await connectByHandle('n6', 'n8');
+  await connectByHandle('n7', 'n8');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(12);
+
+  const commonTrunkX = await window.evaluate(() => {
+    const routes = ['e10', 'e11', 'e12'].map(edgeId => {
+      const path = document.querySelector(`[data-testid="edge-path-${edgeId}"]`);
+      if (!(path instanceof SVGPathElement)) throw new Error(`missing path ${edgeId}`);
+      const numbers = (path.getAttribute('d') || '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+      const pairs: { x: number; y: number }[] = [];
+      for (let index = 0; index < numbers.length - 1; index += 2) {
+        pairs.push({ x: numbers[index], y: numbers[index + 1] });
+      }
+      const xRanges = new Map<number, { minY: number; maxY: number; count: number }>();
+      for (const pair of pairs) {
+        const roundedX = Math.round(pair.x);
+        const range = xRanges.get(roundedX) || { minY: pair.y, maxY: pair.y, count: 0 };
+        range.minY = Math.min(range.minY, pair.y);
+        range.maxY = Math.max(range.maxY, pair.y);
+        range.count += 1;
+        xRanges.set(roundedX, range);
+      }
+      return [...xRanges.entries()]
+        .filter(([, range]) => range.count >= 2 && range.maxY - range.minY >= 18)
+        .map(([x]) => x);
+    });
+
+    return routes[0].find(x => routes.every(route => route.includes(x))) || null;
+  });
+
+  expect(commonTrunkX).not.toBeNull();
+
+  await app.close();
+});
+
 test('reverse manual connections preserve source and target direction', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
 
