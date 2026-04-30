@@ -44,7 +44,7 @@ pnpm dist:win
 - Mouse interactions: node selection, marquee selection, root drag, child reparenting, right-drag edge creation, edge selection, bend dragging, and reset bend.
 - Auto layout for horizontal and vertical maps with configurable spacing, compact node sizing, multi-parent layout, root merge behavior, and fixed-spacing reflow.
 - Node styling: theme presets, font family, font size, text style, text color, background color, shape, tags, and default new-node style.
-- Edge styling: width, line type, color, manual route points, and automatic route reset.
+- Edge styling: width, line type, color, bend/control handle routing, and automatic route reset.
 - View controls: zoom, fit to graph, toolbar visibility, and right-side style panel.
 - Export and packaging: PNG export, Windows portable app, and Windows installer.
 - Validation coverage for bad file UX, old file migration, PNG export quality, 500-node / 1000-edge performance, and core UI workflows.
@@ -77,5 +77,5 @@ pnpm dist:win
 - Improve cross-layer and back-reference routing such as node-to-root, node-to-ancestor, sibling-to-sibling, and branch-to-branch connections.
 - Avoid routing manual edges through node bodies when a clear path exists above, below, or between branches.
 - Preserve user-adjusted edge routes after layout refreshes, node selection changes, and document reloads.
-- Keep `Reset Bend` scoped to clearing manual route points for selected edges without changing node positions or unrelated edges.
+- Keep `Reset Bend` scoped to clearing manual edge bends/routes for selected edges without changing node positions or unrelated edges.
 - Separate multiple nearby manual edges into readable lanes instead of drawing them directly on top of each other.

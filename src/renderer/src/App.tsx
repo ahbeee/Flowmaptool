@@ -190,7 +190,7 @@ type InteractionHistory = {
   future: InteractionHistoryEntry[];
 };
 type EdgeBendDragState = { edgeId: string; pointIndex: number };
-type EdgeRoutePointSelection = { edgeId: string; pointIndex: number };
+type EdgeRouteControlSelection = { edgeId: string; pointIndex: number };
 type ConnectDragState = {
   fromNodeId: NodeId;
   anchors: EdgeAnchors;
@@ -1567,7 +1567,7 @@ export function App() {
   const [activeTabId, setActiveTabId] = React.useState('tab-1');
   const [tabCounter, setTabCounter] = React.useState(2);
   const [selectedEdgeId, setSelectedEdgeId] = React.useState('');
-  const [selectedRoutePoint, setSelectedRoutePoint] = React.useState<EdgeRoutePointSelection | null>(null);
+  const [selectedRouteControl, setSelectedRouteControl] = React.useState<EdgeRouteControlSelection | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = React.useState<NodeId[]>([]);
   const selectedNodeIdsRef = React.useRef<NodeId[]>([]);
   const [copiedSelection, setCopiedSelection] = React.useState<CopiedSelection | null>(null);
@@ -1656,7 +1656,7 @@ export function App() {
     stopConnectDragListeners();
     stopEdgeSegmentDragListeners();
     setSelectedEdgeId('');
-    setSelectedRoutePoint(null);
+    setSelectedRouteControl(null);
     setSelectedNodeIds(defaultNodeId ? [defaultNodeId] : []);
     setCopiedSelection(null);
     setEditingNodeId(null);
@@ -2442,16 +2442,16 @@ export function App() {
   }, [doc.edges, doc.nodes, selectedEdgeId]);
 
   React.useEffect(() => {
-    if (!selectedRoutePoint) return;
-    if (selectedRoutePoint.edgeId !== selectedEdgeId) {
-      setSelectedRoutePoint(null);
+    if (!selectedRouteControl) return;
+    if (selectedRouteControl.edgeId !== selectedEdgeId) {
+      setSelectedRouteControl(null);
       return;
     }
-    const route = edgeRoutes[selectedRoutePoint.edgeId];
-    if (!route || !route.points[selectedRoutePoint.pointIndex]) {
-      setSelectedRoutePoint(null);
+    const route = edgeRoutes[selectedRouteControl.edgeId];
+    if (!route || !route.points[selectedRouteControl.pointIndex]) {
+      setSelectedRouteControl(null);
     }
-  }, [edgeRoutes, selectedEdgeId, selectedRoutePoint]);
+  }, [edgeRoutes, selectedEdgeId, selectedRouteControl]);
 
   React.useEffect(() => {
     if (!editingNodeId) return;
@@ -2509,7 +2509,7 @@ export function App() {
     if (!selectedEdgeId) return;
     commitDoc(prev => removeEdge(prev, selectedEdgeId));
     setSelectedEdgeId('');
-    setSelectedRoutePoint(null);
+    setSelectedRouteControl(null);
   }, [commitDoc, selectedEdgeId]);
 
   const deleteSelectedNodes = React.useCallback(() => {
@@ -2677,13 +2677,13 @@ export function App() {
     setSelectedNodeIds([next]);
     selectedNodeIdsRef.current = [next];
     setSelectedEdgeId('');
-    setSelectedRoutePoint(null);
+    setSelectedRouteControl(null);
     return true;
   }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
 
   const resetSelectedEdgeBend = React.useCallback(() => {
     if (!selectedEdgeId) return;
-    setSelectedRoutePoint(null);
+    setSelectedRouteControl(null);
     commitEdgeUiChange((snapshot, direction) => {
       const nextBends = cloneEdgeBendsByDirection(snapshot.edgeBendsByDirection);
       const nextRoutes = cloneEdgeRoutesByDirection(snapshot.edgeRoutesByDirection);
@@ -3284,7 +3284,7 @@ export function App() {
   ) => {
     stopEdgeSegmentDragListeners();
     setSelectedEdgeId(edgeId);
-    setSelectedRoutePoint(null);
+    setSelectedRouteControl(null);
     setSelectedNodeIds([]);
     const initialEdgeUiSnapshot = getEdgeUiSnapshot(activeTab);
     let didDrag = false;
@@ -3306,7 +3306,7 @@ export function App() {
         commitCurrentEdgeUiSnapshot(initialEdgeUiSnapshot);
       }
       setSelectedEdgeId(edgeId);
-      setSelectedRoutePoint(null);
+      setSelectedRouteControl(null);
       setSelectedNodeIds([]);
       stopEdgeSegmentDragListeners();
     };
@@ -3461,7 +3461,7 @@ export function App() {
     edgeBendDragStartSnapshotRef.current = getEdgeUiSnapshot(activeTab);
     setSelectedEdgeId(edgeId);
     setSelectedNodeIds([]);
-    setSelectedRoutePoint({ edgeId, pointIndex });
+    setSelectedRouteControl({ edgeId, pointIndex });
     setEdgeBendDrag({ edgeId, pointIndex });
   };
 
@@ -4304,7 +4304,7 @@ export function App() {
                           const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
                           const edgeHit = point ? findEdgeHitAtPoint(point, event.currentTarget.dataset.edgeId) : null;
                           setSelectedEdgeId(edgeHit?.edgeId || edge.id);
-                          setSelectedRoutePoint(null);
+                          setSelectedRouteControl(null);
                           setSelectedNodeIds([]);
                         }}
                       />
@@ -4416,7 +4416,7 @@ export function App() {
                         <circle
                           data-testid={`edge-route-point-${pointIndex}`}
                           className={
-                            selectedRoutePoint?.edgeId === edge.id && selectedRoutePoint.pointIndex === pointIndex
+                            selectedRouteControl?.edgeId === edge.id && selectedRouteControl.pointIndex === pointIndex
                               ? 'edge-bend-handle edge-bend-handle-selected'
                               : 'edge-bend-handle'
                           }
