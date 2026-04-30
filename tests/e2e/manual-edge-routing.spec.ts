@@ -229,6 +229,15 @@ test('front connect handle preserves source side intent', async () => {
     return Math.abs(start.x - rootRect.left) <= 3;
   });
   expect(startsAtRootFront).toBe(true);
+  const endsAtTargetFront = await window.getByTestId('edge-path-e4').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    const targetNode = document.querySelector('[data-testid="node-n4"]');
+    if (!matrix || !(targetNode instanceof HTMLElement)) return false;
+    const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+    const targetRect = targetNode.getBoundingClientRect();
+    return Math.abs(end.x - targetRect.left) <= 3;
+  });
+  expect(endsAtTargetFront).toBe(true);
 
   await app.close();
 });
