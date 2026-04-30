@@ -110,15 +110,36 @@ test('selected edge supports multiple editable route points', async () => {
   await expect(window.getByRole('button', { name: 'Delete Route Point' })).toBeDisabled();
 
   const edgePoint = await window.getByTestId('edge-path-e2').evaluate((path: SVGPathElement) => {
-    const point = path.getPointAtLength(path.getTotalLength() * 0.25);
+    const length = path.getTotalLength();
+    const point = path.getPointAtLength(length * 0.25);
+    const nextPoint = path.getPointAtLength(Math.min(length, length * 0.25 + 8));
     const matrix = path.getScreenCTM();
     if (!matrix) throw new Error('edge path screen matrix not found');
     const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
-    return { x: screenPoint.x, y: screenPoint.y };
+    const screenNextPoint = new DOMPoint(nextPoint.x, nextPoint.y).matrixTransform(matrix);
+    const dx = screenNextPoint.x - screenPoint.x;
+    const dy = screenNextPoint.y - screenPoint.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const normal =
+      lengthSquared <= 0.0001
+        ? { x: 0, y: 1 }
+        : { x: -dy / Math.sqrt(lengthSquared), y: dx / Math.sqrt(lengthSquared) };
+    return {
+      pathX: screenPoint.x,
+      pathY: screenPoint.y,
+      clickX: screenPoint.x + normal.x * 16,
+      clickY: screenPoint.y + normal.y * 16
+    };
   });
-  await window.mouse.dblclick(edgePoint.x, edgePoint.y);
+  await window.mouse.dblclick(edgePoint.clickX, edgePoint.clickY);
   await expect(window.locator('.edge-bend-handle')).toHaveCount(2);
   await expect(window.locator('.edge-bend-handle-selected')).toHaveCount(1);
+  const insertedCenter = await window.locator('.edge-bend-handle-selected').boundingBox();
+  if (!insertedCenter) throw new Error('selected inserted route handle not found');
+  const insertedPoint = { x: insertedCenter.x + insertedCenter.width / 2, y: insertedCenter.y + insertedCenter.height / 2 };
+  const distanceToPathPoint = Math.hypot(insertedPoint.x - edgePoint.pathX, insertedPoint.y - edgePoint.pathY);
+  const distanceToClickPoint = Math.hypot(insertedPoint.x - edgePoint.clickX, insertedPoint.y - edgePoint.clickY);
+  expect(distanceToPathPoint).toBeLessThan(distanceToClickPoint);
   await window.keyboard.press('Delete');
   await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
   await expect(window.getByTestId('edge-path-e2')).toBeVisible();
@@ -204,7 +225,9 @@ test('selected automatic manual route exposes editable route points', async () =
     const sourceNode = window.getByTestId(`node-${fromId}`);
     const handle = sourceNode.locator('.node-connect-handle');
     const target = window.getByTestId(`node-${toId}`);
-    await sourceNode.hover();
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
     await expect(handle).toHaveCSS('opacity', '1');
     await handle.dragTo(target);
   };

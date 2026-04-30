@@ -142,7 +142,9 @@ test('reverse manual connections preserve source and target direction', async ()
       const sourceNode = window.getByTestId(`node-${fromId}`);
       const handle = sourceNode.locator('.node-connect-handle');
       const target = window.getByTestId(`node-${toId}`);
-      await sourceNode.hover();
+      const sourceBox = await sourceNode.boundingBox();
+      if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+      await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
       await expect(handle).toHaveCSS('opacity', '1');
       await handle.dragTo(target);
     };
@@ -226,7 +228,9 @@ test('selecting nodes does not mutate automatic manual routes', async () => {
     const sourceNode = window.getByTestId(`node-${fromId}`);
     const handle = sourceNode.locator('.node-connect-handle');
     const target = window.getByTestId(`node-${toId}`);
-    await sourceNode.hover();
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
     await expect(handle).toHaveCSS('opacity', '1');
     await handle.dragTo(target);
   };
@@ -332,7 +336,9 @@ test('long labels reflow descendants without breaking cross branch manual routes
     const sourceNode = window.getByTestId(`node-${fromId}`);
     const handle = sourceNode.locator('.node-connect-handle');
     const target = window.getByTestId(`node-${toId}`);
-    await sourceNode.hover();
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
     await expect(handle).toHaveCSS('opacity', '1');
     await handle.dragTo(target);
   };
