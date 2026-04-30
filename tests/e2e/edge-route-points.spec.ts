@@ -111,3 +111,58 @@ test('selected edge supports multiple editable route points', async () => {
 
   await app.close();
 });
+
+test('selected automatic manual route exposes editable route points', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    await sourceNode.hover();
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await createChild('n2');
+  await createChild('n3');
+  await createChild('n3');
+  await connectByHandle('n7', 'n2');
+
+  const selectPoint = await window.getByTestId('edge-path-e7').evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() * 0.5);
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await window.mouse.click(selectPoint.x, selectPoint.y);
+
+  await expect.poll(() => window.locator('.edge-bend-handle').count()).toBeGreaterThan(1);
+  const beforeDrag = await window.getByTestId('edge-path-e7').getAttribute('d');
+  const handleBox = await window.locator('.edge-bend-handle').first().boundingBox();
+  if (!handleBox) throw new Error('edge route handle not found');
+  const center = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+
+  await window.mouse.move(center.x, center.y);
+  await window.mouse.down();
+  await window.mouse.move(center.x + 40, center.y - 60, { steps: 8 });
+  await expect(window.getByTestId('edge-route-drag-preview')).toBeVisible();
+  await window.mouse.up();
+
+  await expect.poll(() => window.getByTestId('edge-path-e7').getAttribute('d')).not.toBe(beforeDrag);
+  await app.close();
+});

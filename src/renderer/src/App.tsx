@@ -4294,9 +4294,18 @@ export function App() {
                     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
                     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
                     const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+                    const isForwardAlignedEdge =
+                      layoutDirection === 'horizontal'
+                        ? endpoints.to.x >= endpoints.from.x && Math.abs(endpoints.to.y - endpoints.from.y) <= 2
+                        : endpoints.to.y >= endpoints.from.y && Math.abs(endpoints.to.x - endpoints.from.x) <= 2;
+                    const automaticManualRoute =
+                      layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) || isForwardAlignedEdge
+                        ? undefined
+                        : autoEdgeRouteMap.get(edge.id);
                     const route =
                       edgeRoutes[edge.id] ||
                       routeFromBend(edgeBends[edge.id]) ||
+                      automaticManualRoute ||
                       routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
                     return route.points.map((point, pointIndex) => (
                       <g key={`bend-${edge.id}-${pointIndex}`}>

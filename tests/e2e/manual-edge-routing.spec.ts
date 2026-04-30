@@ -232,3 +232,66 @@ test('front connect handle preserves source side intent', async () => {
 
   await app.close();
 });
+
+test('front and back handles create directionally distinct manual routes', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+
+  const buildBaseTree = async () => {
+    const app = await electron.launch({ args: [mainEntry] });
+    const window = await app.firstWindow();
+    const createChild = async (parentId: string) => {
+      const parent = window.getByTestId(`node-${parentId}`);
+      await parent.click();
+      await expect(parent).toHaveClass(/flow-node-selected/);
+      await window.keyboard.press('Tab');
+      await window.keyboard.press('Escape');
+    };
+
+    await createChild('n1');
+    await createChild('n1');
+    await createChild('n2');
+    await createChild('n2');
+    return { app, window };
+  };
+
+  const backCase = await buildBaseTree();
+  const node4BackHandle = backCase.window.getByTestId('node-n4').locator('.node-connect-handle');
+  const rootNode = backCase.window.getByTestId('node-n1');
+  await backCase.window.getByTestId('node-n4').hover();
+  await expect(node4BackHandle).toHaveCSS('opacity', '1');
+  await node4BackHandle.dragTo(rootNode);
+  await expect(backCase.window.locator('[data-testid^="edge-path-"]')).toHaveCount(5);
+  const backPath = await backCase.window.getByTestId('edge-path-e5').getAttribute('d');
+  const backStartsAtNode4Back = await backCase.window.getByTestId('edge-path-e5').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    const node = document.querySelector('[data-testid="node-n4"]');
+    if (!matrix || !(node instanceof HTMLElement)) return false;
+    const start = path.getPointAtLength(0).matrixTransform(matrix);
+    const rect = node.getBoundingClientRect();
+    return Math.abs(start.x - rect.right) <= 4;
+  });
+  expect(backStartsAtNode4Back).toBe(true);
+  await backCase.app.close();
+
+  const frontCase = await buildBaseTree();
+  const rootFrontHandle = frontCase.window.getByTestId('node-n1').locator('.node-connect-handle-front');
+  const node4 = frontCase.window.getByTestId('node-n4');
+  await frontCase.window.getByTestId('node-n1').hover();
+  await expect(rootFrontHandle).toHaveCSS('opacity', '1');
+  await rootFrontHandle.dragTo(node4);
+  await expect(frontCase.window.locator('[data-testid^="edge-path-"]')).toHaveCount(5);
+  const frontPath = await frontCase.window.getByTestId('edge-path-e5').getAttribute('d');
+  const frontStartsAtRootFront = await frontCase.window.getByTestId('edge-path-e5').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    const node = document.querySelector('[data-testid="node-n1"]');
+    if (!matrix || !(node instanceof HTMLElement)) return false;
+    const start = path.getPointAtLength(0).matrixTransform(matrix);
+    const rect = node.getBoundingClientRect();
+    return Math.abs(start.x - rect.left) <= 4;
+  });
+  expect(frontStartsAtRootFront).toBe(true);
+  expect(frontPath).toBeTruthy();
+  expect(backPath).toBeTruthy();
+  expect(frontPath).not.toBe(backPath);
+  await frontCase.app.close();
+});
