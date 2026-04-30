@@ -596,3 +596,54 @@ test('opposite manual connections between the same nodes remain distinct and sel
 
   await app.close();
 });
+
+test('large routed manual edge does not block selecting nearby layout edges', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const createChild = async (parentId: string) => {
+    const parent = window.getByTestId(`node-${parentId}`);
+    await parent.click();
+    await expect(parent).toHaveClass(/flow-node-selected/);
+    await window.keyboard.press('Tab');
+    await window.keyboard.press('Escape');
+  };
+
+  const connectByBackHandle = async (fromId: string, toId: string) => {
+    const sourceNode = window.getByTestId(`node-${fromId}`);
+    const handle = sourceNode.locator('.node-connect-handle');
+    const target = window.getByTestId(`node-${toId}`);
+    const sourceBox = await sourceNode.boundingBox();
+    if (!sourceBox) throw new Error(`source node ${fromId} not found`);
+    await window.mouse.move(sourceBox.x + sourceBox.width - 2, sourceBox.y + sourceBox.height / 2);
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.dragTo(target);
+  };
+
+  const clickRenderedPathAt = async (edgeId: string, ratio: number) => {
+    const point = await window.getByTestId(`edge-path-${edgeId}`).evaluate((path, pathRatio) => {
+      const svgPath = path as SVGPathElement;
+      const matrix = svgPath.getScreenCTM();
+      if (!matrix) throw new Error('path matrix not found');
+      const pointOnPath = svgPath.getPointAtLength(svgPath.getTotalLength() * pathRatio);
+      const screenPoint = pointOnPath.matrixTransform(matrix);
+      return { x: screenPoint.x, y: screenPoint.y };
+    }, ratio);
+    await window.mouse.click(point.x, point.y);
+  };
+
+  await createChild('n1');
+  await createChild('n1');
+  await createChild('n2');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
+
+  await connectByBackHandle('n4', 'n1');
+  await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+
+  await clickRenderedPathAt('e1', 0.45);
+  await expect(window.getByTestId('edge-path-e1')).toHaveClass(/edge-path-selected/);
+  await expect(window.getByTestId('edge-path-e4')).not.toHaveClass(/edge-path-selected/);
+
+  await app.close();
+});

@@ -3348,6 +3348,19 @@ export function App() {
     setSelectedEdgeId('');
   };
 
+  const onCanvasDoubleClick = (event: React.MouseEvent<Element>) => {
+    if (event.target !== event.currentTarget) return;
+    if (isNodeLabelInputTarget(event.target)) return;
+    if (editingNodeIdRef.current) commitEditingNode();
+    const pointer = getCanvasContentPoint(event.clientX, event.clientY);
+    if (!pointer) return;
+    const edgeHit = findEdgeHitAtPoint(pointer);
+    if (!edgeHit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    addRoutePointToEdgeAtPoint(edgeHit.edgeId, pointer);
+  };
+
   const onNodePointerDown = (event: React.PointerEvent<HTMLButtonElement>, nodeId: NodeId) => {
     if (isNodeLabelInputTarget(event.target)) return;
     if (editingNodeIdRef.current) commitEditingNode();
@@ -4275,6 +4288,7 @@ export function App() {
                 data-testid="canvas-surface"
                 style={{ width: canvasSize.width, height: canvasSize.height, zoom: canvasZoom }}
                 onPointerDown={onCanvasPointerDown}
+                onDoubleClick={onCanvasDoubleClick}
                 onMouseDownCapture={onCanvasMouseDownCapture}
                 onMouseUpCapture={onCanvasMouseUpCapture}
                 onWheel={onCanvasWheel}
@@ -4285,6 +4299,7 @@ export function App() {
                   aria-label="edge-layer"
                   style={{ width: canvasSize.width, height: canvasSize.height }}
                   onPointerDown={onCanvasPointerDown}
+                  onDoubleClick={onCanvasDoubleClick}
                 >
                   {doc.edges.map(edge => {
                     const fromPos = renderedPositionMap.get(edge.from);
