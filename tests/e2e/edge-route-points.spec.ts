@@ -184,3 +184,61 @@ test('legacy route can be opened and reset without route point editing', async (
   expect(saved.ui?.edgeBendsByDirection?.horizontal?.e3).toBeUndefined();
   expect(saved.ui?.edgeRoutesByDirection?.horizontal?.e3).toBeUndefined();
 });
+
+test('manual routed edge persists after save and reopen', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('manual-route-persist.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createManualRouteFixture(), null, 2), 'utf-8');
+
+  const openFixture = async () => {
+    const app = await electron.launch({
+      args: [mainEntry],
+      env: {
+        ...process.env,
+        FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+      }
+    });
+    const window = await app.firstWindow();
+    await expect(window.getByTestId('node-n1')).toBeVisible();
+    await triggerMenuAction(app, 'file:open');
+    await expect(window.getByTestId('edge-path-e3')).toBeVisible();
+    return { app, window };
+  };
+
+  const firstRun = await openFixture();
+  const edgePath = firstRun.window.getByTestId('edge-path-e3');
+  const selectPoint = await edgePath.evaluate((path: SVGPathElement) => {
+    const point = path.getPointAtLength(path.getTotalLength() * 0.42);
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+    return { x: screenPoint.x, y: screenPoint.y };
+  });
+  await firstRun.window.mouse.click(selectPoint.x, selectPoint.y);
+  await expect(firstRun.window.locator('.edge-bend-handle')).toHaveCount(1);
+
+  const handleBox = await firstRun.window.locator('.edge-bend-handle').boundingBox();
+  if (!handleBox) throw new Error('manual route control handle not found');
+  await firstRun.window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await firstRun.window.mouse.down();
+  await firstRun.window.mouse.move(handleBox.x + handleBox.width / 2 + 72, handleBox.y + handleBox.height / 2 + 44, {
+    steps: 8
+  });
+  await firstRun.window.mouse.up();
+
+  const persistedPath = await edgePath.getAttribute('d');
+  expect(persistedPath).toBeTruthy();
+  await triggerMenuAction(firstRun.app, 'file:save');
+  await expect(firstRun.window.getByTestId('file-status')).toContainText('Saved:');
+  await firstRun.app.close();
+
+  const saved = JSON.parse(await readFile(fixturePath, 'utf-8')) as {
+    ui?: { edgeRoutesByDirection?: { horizontal?: Record<string, { points?: unknown[] }> } };
+  };
+  expect(saved.ui?.edgeRoutesByDirection?.horizontal?.e3?.points?.length).toBeGreaterThan(0);
+
+  const secondRun = await openFixture();
+  await expect.poll(() => secondRun.window.getByTestId('edge-path-e3').getAttribute('d')).toBe(persistedPath);
+  await secondRun.app.close();
+});
