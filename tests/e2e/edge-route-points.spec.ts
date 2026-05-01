@@ -129,6 +129,68 @@ function createDisconnectedBackEdgeFixture() {
   };
 }
 
+function createEndpointOffsetFixture() {
+  const settings = {
+    themeId: 'blue-gray',
+    spacing: {
+      horizontal: 48,
+      vertical: 48
+    },
+    defaultShape: 'plain',
+    defaultEdgeStyle: {
+      width: 2,
+      lineType: 'solid',
+      color: '#64748b'
+    },
+    tags: [
+      { id: 'tag-blue', name: 'Blue', color: '#3b82f6' },
+      { id: 'tag-pink', name: 'Pending', color: '#ec4899' },
+      { id: 'tag-green', name: 'Done', color: '#22c55e' },
+      { id: 'tag-orange', name: 'Orange', color: '#f97316' }
+    ]
+  };
+
+  return {
+    schemaVersion: 1,
+    doc: {
+      schemaVersion: 1,
+      nodes: [
+        { id: 'n1', label: 'Root' },
+        { id: 'n2', label: '1' },
+        { id: 'n3', label: '3' },
+        { id: 'n4', label: '7' },
+        { id: 'n5', label: '9' },
+        { id: 'n6', label: '2' },
+        { id: 'n7', label: '5' },
+        { id: 'n8', label: '8' }
+      ],
+      edges: [
+        { id: 'e1', from: 'n1', to: 'n2', role: 'layout' },
+        { id: 'e2', from: 'n2', to: 'n3', role: 'layout' },
+        { id: 'e3', from: 'n3', to: 'n4', role: 'layout' },
+        { id: 'e4', from: 'n4', to: 'n5', role: 'layout' },
+        { id: 'e5', from: 'n4', to: 'n2', role: 'manual', anchors: { from: 'back', to: 'front' } },
+        { id: 'e6', from: 'n1', to: 'n6', role: 'layout' },
+        { id: 'e7', from: 'n6', to: 'n7', role: 'layout' },
+        { id: 'e8', from: 'n7', to: 'n8', role: 'layout' },
+        { id: 'e9', from: 'n8', to: 'n6', role: 'manual', anchors: { from: 'front', to: 'back' } }
+      ],
+      meta: {
+        nextNodeSeq: 9,
+        nextEdgeSeq: 10
+      },
+      settings
+    },
+    ui: {
+      layoutDirection: 'horizontal',
+      nodeOffsetsByDirection: { horizontal: {}, vertical: {} },
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} },
+      toolbarVisible: true
+    }
+  };
+}
+
 function createDuplicatedBackEdgeFixture(includeManualEdges = true) {
   const settings = {
     themeId: 'blue-gray',
@@ -959,5 +1021,106 @@ test('rejected non-root drag restores adjusted manual route state', async ({}, t
   await window.mouse.up();
 
   await expect.poll(() => edgePath.getAttribute('d')).toBe(adjustedPath);
+  await app.close();
+});
+
+test('dragged manual route endpoint turns follow document spacing', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('endpoint-offset-route.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createEndpointOffsetFixture(), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+
+  const dragRouteControl = async (edgeId: string, deltaY: number) => {
+    const edgePath = window.getByTestId(`edge-path-${edgeId}`);
+    const selectPoint = await edgePath.evaluate((path: SVGPathElement) => {
+      const point = path.getPointAtLength(path.getTotalLength() * 0.5);
+      const matrix = path.getScreenCTM();
+      if (!matrix) throw new Error('edge path screen matrix not found');
+      const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+      return { x: screenPoint.x, y: screenPoint.y };
+    });
+    await window.mouse.click(selectPoint.x, selectPoint.y);
+    await expect(window.locator('.edge-bend-handle')).toHaveCount(1);
+    const handleBox = await window.locator('.edge-bend-handle').boundingBox();
+    if (!handleBox) throw new Error(`manual route control handle for ${edgeId} not found`);
+    await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await window.mouse.down();
+    await window.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2 + deltaY, {
+      steps: 8
+    });
+    await window.mouse.up();
+  };
+
+  const firstTurnX = async (edgeId: string) => window.getByTestId(`edge-path-${edgeId}`).evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('edge path screen matrix not found');
+    const total = path.getTotalLength();
+    const start = path.getPointAtLength(0).matrixTransform(matrix);
+    for (let distance = 1; distance <= total; distance += 2) {
+      const point = path.getPointAtLength(distance).matrixTransform(matrix);
+      if (Math.abs(point.y - start.y) > 3) return point.x;
+    }
+    return start.x;
+  });
+
+  await dragRouteControl('e5', -96);
+  const n4Box = await window.getByTestId('node-n4').boundingBox();
+  if (!n4Box) throw new Error('expected source node to be measurable');
+  const halfHorizontalGap = 24;
+  const turnTolerance = 16;
+  const sourceBackTurnX = n4Box.x + n4Box.width + halfHorizontalGap;
+  await expect.poll(() => firstTurnX('e5')).toBeGreaterThan(sourceBackTurnX - turnTolerance);
+  await expect.poll(() => firstTurnX('e5')).toBeLessThan(sourceBackTurnX + turnTolerance);
+
+  await dragRouteControl('e9', 96);
+  const n8Box = await window.getByTestId('node-n8').boundingBox();
+  if (!n8Box) throw new Error('expected source node to be measurable');
+  const sourceFrontTurnX = n8Box.x - halfHorizontalGap;
+  await expect.poll(() => firstTurnX('e9')).toBeGreaterThan(sourceFrontTurnX - turnTolerance);
+  await expect.poll(() => firstTurnX('e9')).toBeLessThan(sourceFrontTurnX + turnTolerance);
+
+  await app.close();
+});
+
+test('automatic back edge lanes use half of vertical spacing', async ({}, testInfo) => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const fixturePath = testInfo.outputPath('automatic-lane-spacing.qflow');
+  await mkdir(dirname(fixturePath), { recursive: true });
+  await writeFile(fixturePath, JSON.stringify(createEndpointOffsetFixture(), null, 2), 'utf-8');
+
+  const app = await electron.launch({
+    args: [mainEntry],
+    env: {
+      ...process.env,
+      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: fixturePath
+    }
+  });
+  const window = await app.firstWindow();
+  await expect(window.getByTestId('node-n1')).toBeVisible();
+  await triggerMenuAction(app, 'file:open');
+
+  const sourceBox = await window.getByTestId('node-n4').boundingBox();
+  if (!sourceBox) throw new Error('expected source node to be measurable');
+  const pathBox = await window.getByTestId('edge-path-e5').evaluate((path: SVGPathElement) => {
+    const rect = path.getBoundingClientRect();
+    return { top: rect.top };
+  });
+
+  const halfVerticalGap = 24;
+  const laneTolerance = 8;
+  await expect.poll(() => Promise.resolve(sourceBox.y - pathBox.top)).toBeGreaterThan(halfVerticalGap - laneTolerance);
+  await expect.poll(() => Promise.resolve(sourceBox.y - pathBox.top)).toBeLessThan(halfVerticalGap + laneTolerance);
+
   await app.close();
 });

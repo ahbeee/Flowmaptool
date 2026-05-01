@@ -120,7 +120,7 @@ test('manual routed edge is persisted independently for H and V layouts', async 
   await window.getByLabel('Layout').selectOption('vertical');
   await selectEdge('e7');
   const initialVerticalPath = await window.getByTestId('edge-path-e7').getAttribute('d');
-  await dragBendBy(80, 24);
+  await dragBendBy(-180, 24);
   const customVerticalPath = await window.getByTestId('edge-path-e7').getAttribute('d');
   expect(customVerticalPath).toBeTruthy();
   expect(customVerticalPath).not.toBe(initialVerticalPath);

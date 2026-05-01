@@ -582,7 +582,7 @@ test('long labels reflow descendants without breaking cross branch manual routes
   await app.close();
 });
 
-test('front connect handle preserves source side intent', async () => {
+test('front connect handle to node body infers the opposite target side', async () => {
   const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const app = await electron.launch({ args: [mainEntry] });
   const window = await app.firstWindow();
@@ -616,24 +616,24 @@ test('front connect handle preserves source side intent', async () => {
   await window.mouse.up();
   await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
 
-  const startsAtRootFront = await window.getByTestId('edge-path-e4').evaluate((path: SVGPathElement) => {
-    const matrix = path.getScreenCTM();
-    const rootNode = document.querySelector('[data-testid="node-n1"]');
-    if (!matrix || !(rootNode instanceof HTMLElement)) return false;
-    const start = path.getPointAtLength(0).matrixTransform(matrix);
-    const rootRect = rootNode.getBoundingClientRect();
-    return Math.abs(start.x - rootRect.left) <= 3;
-  });
-  expect(startsAtRootFront).toBe(true);
-  const endsAtTargetFront = await window.getByTestId('edge-path-e4').evaluate((path: SVGPathElement) => {
+  const startsAtTargetBack = await window.getByTestId('edge-path-e4').evaluate((path: SVGPathElement) => {
     const matrix = path.getScreenCTM();
     const targetNode = document.querySelector('[data-testid="node-n4"]');
     if (!matrix || !(targetNode instanceof HTMLElement)) return false;
-    const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+    const start = path.getPointAtLength(0).matrixTransform(matrix);
     const targetRect = targetNode.getBoundingClientRect();
-    return Math.abs(end.x - targetRect.left) <= 3;
+    return Math.abs(start.x - targetRect.right) <= 3;
   });
-  expect(endsAtTargetFront).toBe(true);
+  expect(startsAtTargetBack).toBe(true);
+  const endsAtRootFront = await window.getByTestId('edge-path-e4').evaluate((path: SVGPathElement) => {
+    const matrix = path.getScreenCTM();
+    const rootNode = document.querySelector('[data-testid="node-n1"]');
+    if (!matrix || !(rootNode instanceof HTMLElement)) return false;
+    const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+    const rootRect = rootNode.getBoundingClientRect();
+    return Math.abs(end.x - rootRect.left) <= 3;
+  });
+  expect(endsAtRootFront).toBe(true);
 
   await app.close();
 });
@@ -679,22 +679,23 @@ test('front and back handles create directionally distinct manual routes', async
   await backCase.app.close();
 
   const frontCase = await buildBaseTree();
-  const rootFrontHandle = frontCase.window.getByTestId('node-n1').locator('.node-connect-handle-front');
+  const node4FrontHandle = frontCase.window.getByTestId('node-n4').locator('.node-connect-handle-front');
   const node4 = frontCase.window.getByTestId('node-n4');
-  await frontCase.window.getByTestId('node-n1').hover();
-  await expect(rootFrontHandle).toHaveCSS('opacity', '1');
-  await rootFrontHandle.dragTo(node4);
+  const rootNodeForFrontCase = frontCase.window.getByTestId('node-n1');
+  await node4.hover();
+  await expect(node4FrontHandle).toHaveCSS('opacity', '1');
+  await node4FrontHandle.dragTo(rootNodeForFrontCase);
   await expect(frontCase.window.locator('[data-testid^="edge-path-"]')).toHaveCount(5);
   const frontPath = await frontCase.window.getByTestId('edge-path-e5').getAttribute('d');
-  const frontStartsAtRootFront = await frontCase.window.getByTestId('edge-path-e5').evaluate((path: SVGPathElement) => {
+  const frontStartsAtNode4Front = await frontCase.window.getByTestId('edge-path-e5').evaluate((path: SVGPathElement) => {
     const matrix = path.getScreenCTM();
-    const node = document.querySelector('[data-testid="node-n1"]');
+    const node = document.querySelector('[data-testid="node-n4"]');
     if (!matrix || !(node instanceof HTMLElement)) return false;
     const start = path.getPointAtLength(0).matrixTransform(matrix);
     const rect = node.getBoundingClientRect();
     return Math.abs(start.x - rect.left) <= 4;
   });
-  expect(frontStartsAtRootFront).toBe(true);
+  expect(frontStartsAtNode4Front).toBe(true);
   expect(frontPath).toBeTruthy();
   expect(backPath).toBeTruthy();
   expect(frontPath).not.toBe(backPath);
@@ -736,11 +737,10 @@ test('opposite manual connections between the same nodes remain distinct and sel
   await childBackHandle.dragTo(rootNode);
   await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
 
-  const rootFrontHandle = rootNode.locator('.node-connect-handle-front');
-  const childNode = window.getByTestId('node-n3');
-  await rootNode.hover();
-  await expect(rootFrontHandle).toHaveCSS('opacity', '1');
-  await rootFrontHandle.dragTo(childNode);
+  const childFrontHandle = window.getByTestId('node-n3').locator('.node-connect-handle-front');
+  await window.getByTestId('node-n3').hover();
+  await expect(childFrontHandle).toHaveCSS('opacity', '1');
+  await childFrontHandle.dragTo(rootNode);
   await expect(window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
 
   const backPath = await window.getByTestId('edge-path-e3').getAttribute('d');

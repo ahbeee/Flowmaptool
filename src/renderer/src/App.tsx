@@ -78,6 +78,8 @@ const CHILD_NODE_STYLE: NodeStyle = {
 };
 const SPACING_MIN = 0;
 const SPACING_MAX = 320;
+const ADVANCED_ROUTE_NODE_LIMIT = 300;
+const ADVANCED_ROUTE_EDGE_LIMIT = 800;
 const FONT_FAMILIES = ['Roboto', 'Segoe UI', 'Arial', 'Microsoft JhengHei', 'Noto Sans TC'];
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 32, 48, 64];
 const EDGE_WIDTHS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -179,6 +181,11 @@ type EdgeBend = { x: number; y: number };
 type EdgeBendMap = Record<string, EdgeBend>;
 type EdgeBendsByDirection = Record<LayoutDirection, EdgeBendMap>;
 type EdgeRoute = { points: Point[] };
+type RouteSpacing = { primary: number; secondary: number };
+type DraggedRouteEndpointOffsets = {
+  source?: number;
+  target?: number;
+};
 type EdgeRouteMap = Record<string, EdgeRoute>;
 type EdgeRoutesByDirection = Record<LayoutDirection, EdgeRouteMap>;
 type EdgeUiSnapshot = {
@@ -278,6 +285,10 @@ function reverseEdgeAnchors(anchors: EdgeAnchors | undefined): EdgeAnchors | und
 
 function isNodeSideAnchor(anchor: EdgeAnchors['from'] | undefined): anchor is 'front' | 'back' {
   return anchor === 'front' || anchor === 'back';
+}
+
+function oppositeNodeSideAnchor(anchor: 'front' | 'back'): 'front' | 'back' {
+  return anchor === 'front' ? 'back' : 'front';
 }
 
 function emptyOffsetsByDirection(): NodeOffsetsByDirection {
@@ -1064,6 +1075,44 @@ function chooseBestRoute(
   return best ? routeFromPoints(best.points.slice(1, -1)) : undefined;
 }
 
+function chooseBestSnappedRoute(
+  candidates: Array<{ points: Point[]; laneDistance: number; pointerDistance?: number }>,
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>,
+  preferClearance = false
+): EdgeRoute | undefined {
+  const [best] = candidates
+    .map(candidate => ({
+      ...candidate,
+      obstacleCount: routeObstacleCount(candidate.points, fromId, toId, nodeBoxes),
+      clearancePenalty: Math.min(50000, routeClearancePenalty(candidate.points, fromId, toId, nodeBoxes)),
+      length: routeLength(candidate.points),
+      turns: routeTurnCount(candidate.points)
+    }))
+    .sort((left, right) => {
+      const common = left.obstacleCount - right.obstacleCount;
+      if (common !== 0) return common;
+      if (preferClearance) {
+        return (
+          left.clearancePenalty - right.clearancePenalty ||
+          left.laneDistance - right.laneDistance ||
+          (left.pointerDistance || 0) - (right.pointerDistance || 0) ||
+          left.turns - right.turns ||
+          left.length - right.length
+        );
+      }
+      return (
+        left.laneDistance - right.laneDistance ||
+        (left.pointerDistance || 0) - (right.pointerDistance || 0) ||
+        left.clearancePenalty - right.clearancePenalty ||
+        left.turns - right.turns ||
+        left.length - right.length
+      );
+    });
+  return best ? routeFromPoints(best.points.slice(1, -1)) : undefined;
+}
+
 function computeAutoEdgeRoute(
   from: Point,
   to: Point,
@@ -1071,45 +1120,62 @@ function computeAutoEdgeRoute(
   fromId: NodeId,
   toId: NodeId,
   nodeBoxes: Map<NodeId, NodeBox>,
-  routeLane = 0
+  routeLane = 0,
+  spacing: RouteSpacing = { primary: 48, secondary: 48 },
+  anchors?: EdgeAnchors
 ): EdgeRoute | undefined {
   const obstacles = edgeCorridorObstacleBoxes(from, to, direction, fromId, toId, nodeBoxes);
   const isBackEdge = direction === 'horizontal' ? to.x < from.x : to.y < from.y;
   if (!isBackEdge && obstacles.length === 0) return undefined;
 
-  const clearance = 48;
+  const primaryClearance = getEndpointSpacingOffset(spacing.primary) || 24;
+  const secondaryClearance = getEndpointSpacingOffset(spacing.secondary) || 24;
   const lanePadding = Math.min(72, Math.max(0, routeLane) * 14);
   const graphBounds = getNodeBoxesBounds([...nodeBoxes.values()]);
 
   if (direction === 'horizontal') {
+    const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
+    const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
     if (isBackEdge && graphBounds) {
-      const obstacleBounds = getNodeBoxesBounds(obstacles);
-      const laneBounds = obstacleBounds || graphBounds;
-      const topLane = laneBounds.top - clearance - lanePadding;
-      const bottomLane = laneBounds.bottom + clearance + lanePadding;
-      const graphTopLane = graphBounds.top - clearance - lanePadding;
-      const graphBottomLane = graphBounds.bottom + clearance + lanePadding;
-      const outerX = Math.max(graphBounds.right + clearance + lanePadding, from.x + clearance, to.x + clearance);
-      const leftLane = Math.min(graphBounds.left - clearance - lanePadding, to.x - clearance);
-      const sourceExitX = from.x + clearance;
-      const targetEntryX = to.x - clearance;
-      return chooseBestRoute([
-        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: topLane }, { x: targetEntryX, y: topLane }, { x: targetEntryX, y: to.y }, to],
-        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: bottomLane }, { x: targetEntryX, y: bottomLane }, { x: targetEntryX, y: to.y }, to],
-        [from, { x: outerX, y: from.y }, { x: outerX, y: graphTopLane }, { x: to.x, y: graphTopLane }, to],
-        [from, { x: outerX, y: from.y }, { x: outerX, y: graphBottomLane }, { x: to.x, y: graphBottomLane }, to],
-        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: graphTopLane }, { x: leftLane, y: graphTopLane }, { x: leftLane, y: to.y }, to],
-        [from, { x: sourceExitX, y: from.y }, { x: sourceExitX, y: graphBottomLane }, { x: leftLane, y: graphBottomLane }, { x: leftLane, y: to.y }, to]
-      ], fromId, toId, nodeBoxes);
+      const sourceExitX = from.x + sourceSign * primaryClearance;
+      const targetEntryX = to.x + targetSign * primaryClearance;
+      const sourceBox = nodeBoxes.get(fromId);
+      const targetBox = nodeBoxes.get(toId);
+      const sourcePreferredLanes = sourceBox
+        ? [sourceBox.top - secondaryClearance - lanePadding, sourceBox.bottom + secondaryClearance + lanePadding]
+        : [from.y];
+      const targetPreferredLanes = targetBox
+        ? [targetBox.top - secondaryClearance - lanePadding, targetBox.bottom + secondaryClearance + lanePadding]
+        : [to.y];
+      const laneCandidates = uniqueSortedNumbers([
+        ...getDraggedRouteLaneCandidates(from, to, direction, from, nodeBoxes, spacing, false),
+        ...sourcePreferredLanes,
+        ...targetPreferredLanes
+      ]);
+      const routes = laneCandidates.map(lane => ({
+        laneDistance: Math.min(
+          ...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred)),
+          ...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))
+        ),
+        points: [
+          from,
+          { x: sourceExitX, y: from.y },
+          { x: sourceExitX, y: lane },
+          { x: targetEntryX, y: lane },
+          { x: targetEntryX, y: to.y },
+          to
+        ]
+      }));
+      return chooseBestSnappedRoute(routes, fromId, toId, nodeBoxes);
     }
 
     const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
     if (!bounds) return routeFromBend(computeAutoEdgeBend(from, to, direction, fromId, toId, nodeBoxes));
-    const topLane = bounds.top - clearance - lanePadding;
-    const bottomLane = bounds.bottom + clearance + lanePadding;
+    const topLane = bounds.top - secondaryClearance - lanePadding;
+    const bottomLane = bounds.bottom + secondaryClearance + lanePadding;
     const dx = Math.max(80, Math.abs(to.x - from.x));
-    const entryX = from.x + Math.min(72, dx / 3);
-    const exitX = to.x - Math.min(72, dx / 3);
+    const entryX = from.x + Math.min(primaryClearance, dx / 3);
+    const exitX = to.x - Math.min(primaryClearance, dx / 3);
     return chooseBestRoute(
       [
         [from, { x: entryX, y: from.y }, { x: entryX, y: topLane }, { x: exitX, y: topLane }, { x: exitX, y: to.y }, to],
@@ -1121,34 +1187,48 @@ function computeAutoEdgeRoute(
     );
   }
 
+  const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
+  const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
   if (isBackEdge && graphBounds) {
-    const obstacleBounds = getNodeBoxesBounds(obstacles);
-    const laneBounds = obstacleBounds || graphBounds;
-    const leftLane = laneBounds.left - clearance - lanePadding;
-    const rightLane = laneBounds.right + clearance + lanePadding;
-    const graphLeftLane = graphBounds.left - clearance - lanePadding;
-    const graphRightLane = graphBounds.right + clearance + lanePadding;
-    const outerY = Math.max(graphBounds.bottom + clearance + lanePadding, from.y + clearance, to.y + clearance);
-    const topLane = Math.min(graphBounds.top - clearance - lanePadding, to.y - clearance);
-    const sourceExitY = from.y + clearance;
-    const targetEntryY = to.y - clearance;
-    return chooseBestRoute([
-      [from, { x: from.x, y: sourceExitY }, { x: leftLane, y: sourceExitY }, { x: leftLane, y: targetEntryY }, { x: to.x, y: targetEntryY }, to],
-      [from, { x: from.x, y: sourceExitY }, { x: rightLane, y: sourceExitY }, { x: rightLane, y: targetEntryY }, { x: to.x, y: targetEntryY }, to],
-      [from, { x: from.x, y: outerY }, { x: graphLeftLane, y: outerY }, { x: graphLeftLane, y: to.y }, to],
-      [from, { x: from.x, y: outerY }, { x: graphRightLane, y: outerY }, { x: graphRightLane, y: to.y }, to],
-      [from, { x: from.x, y: sourceExitY }, { x: graphLeftLane, y: sourceExitY }, { x: graphLeftLane, y: topLane }, { x: to.x, y: topLane }, to],
-      [from, { x: from.x, y: sourceExitY }, { x: graphRightLane, y: sourceExitY }, { x: graphRightLane, y: topLane }, { x: to.x, y: topLane }, to]
-    ], fromId, toId, nodeBoxes);
+    const sourceExitY = from.y + sourceSign * primaryClearance;
+    const targetEntryY = to.y + targetSign * primaryClearance;
+    const sourceBox = nodeBoxes.get(fromId);
+    const targetBox = nodeBoxes.get(toId);
+    const sourcePreferredLanes = sourceBox
+      ? [sourceBox.left - secondaryClearance - lanePadding, sourceBox.right + secondaryClearance + lanePadding]
+      : [from.x];
+    const targetPreferredLanes = targetBox
+      ? [targetBox.left - secondaryClearance - lanePadding, targetBox.right + secondaryClearance + lanePadding]
+      : [to.x];
+    const laneCandidates = uniqueSortedNumbers([
+      ...getDraggedRouteLaneCandidates(from, to, direction, from, nodeBoxes, spacing, false),
+      ...sourcePreferredLanes,
+      ...targetPreferredLanes
+    ]);
+    const routes = laneCandidates.map(lane => ({
+      laneDistance: Math.min(
+        ...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred)),
+        ...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))
+      ),
+      points: [
+        from,
+        { x: from.x, y: sourceExitY },
+        { x: lane, y: sourceExitY },
+        { x: lane, y: targetEntryY },
+        { x: to.x, y: targetEntryY },
+        to
+      ]
+    }));
+    return chooseBestSnappedRoute(routes, fromId, toId, nodeBoxes);
   }
 
   const bounds = getNodeBoxesBounds(obstacles) || graphBounds;
   if (!bounds) return routeFromBend(computeAutoEdgeBend(from, to, direction, fromId, toId, nodeBoxes));
-  const leftLane = bounds.left - clearance - lanePadding;
-  const rightLane = bounds.right + clearance + lanePadding;
+  const leftLane = bounds.left - secondaryClearance - lanePadding;
+  const rightLane = bounds.right + secondaryClearance + lanePadding;
   const dy = Math.max(80, Math.abs(to.y - from.y));
-  const entryY = from.y + Math.min(72, dy / 3);
-  const exitY = to.y - Math.min(72, dy / 3);
+  const entryY = from.y + Math.min(primaryClearance, dy / 3);
+  const exitY = to.y - Math.min(primaryClearance, dy / 3);
   return chooseBestRoute(
     [
       [from, { x: from.x, y: entryY }, { x: leftLane, y: entryY }, { x: leftLane, y: exitY }, { x: to.x, y: exitY }, to],
@@ -1314,20 +1394,108 @@ function getRouteTangentSign(
   return to.y >= from.y ? 1 : -1;
 }
 
+const MIN_DRAGGED_ROUTE_ENDPOINT_OFFSET = 10;
+
+function getDraggedRouteOffset(distance: number, neighborOffset?: number): number {
+  const fallback = Math.min(72, distance / 3);
+  if (typeof neighborOffset !== 'number' || !Number.isFinite(neighborOffset)) return fallback;
+  return Math.min(
+    Math.max(MIN_DRAGGED_ROUTE_ENDPOINT_OFFSET, distance - MIN_DRAGGED_ROUTE_ENDPOINT_OFFSET),
+    Math.max(MIN_DRAGGED_ROUTE_ENDPOINT_OFFSET, neighborOffset)
+  );
+}
+
+function getEndpointSpacingOffset(
+  spacing: number
+): number | undefined {
+  if (!Number.isFinite(spacing)) return undefined;
+  const routeGap = Math.max(MIN_DRAGGED_ROUTE_ENDPOINT_OFFSET * 2, spacing);
+  return routeGap / 2;
+}
+
+function getRouteSpacingOffsets(spacing: RouteSpacing): { primary: number; secondary: number } {
+  return {
+    primary: getEndpointSpacingOffset(spacing.primary) || 24,
+    secondary: getEndpointSpacingOffset(spacing.secondary) || 24
+  };
+}
+
+function uniqueSortedNumbers(values: number[]): number[] {
+  const seen = new Set<number>();
+  const result: number[] = [];
+  for (const value of values.sort((left, right) => left - right)) {
+    const rounded = Math.round(value * 10) / 10;
+    if (seen.has(rounded)) continue;
+    seen.add(rounded);
+    result.push(value);
+  }
+  return result;
+}
+
+function getDraggedRouteLaneCandidates(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  pointer: Point,
+  nodeBoxes: Map<NodeId, NodeBox>,
+  spacing: RouteSpacing,
+  includeEndpointLanes = true
+): number[] {
+  const { secondary } = getRouteSpacingOffsets(spacing);
+  const bounds = getNodeBoxesBounds([...nodeBoxes.values()]);
+  const candidates: number[] = [];
+
+  if (direction === 'horizontal') {
+    if (includeEndpointLanes) candidates.push(from.y, to.y);
+    const boxes = [...nodeBoxes.values()].sort((left, right) => left.top - right.top || left.left - right.left);
+    for (const box of boxes) {
+      candidates.push(box.top - secondary, box.bottom + secondary);
+    }
+    for (let index = 1; index < boxes.length; index += 1) {
+      const previous = boxes[index - 1];
+      const current = boxes[index];
+      if (current.top >= previous.bottom) {
+        candidates.push(previous.bottom + (current.top - previous.bottom) / 2);
+      }
+    }
+    if (bounds) candidates.push(bounds.top - secondary, bounds.bottom + secondary);
+    if (candidates.length === 0) candidates.push(pointer.y);
+    return uniqueSortedNumbers(candidates);
+  }
+
+  if (includeEndpointLanes) candidates.push(from.x, to.x);
+  const boxes = [...nodeBoxes.values()].sort((left, right) => left.left - right.left || left.top - right.top);
+  for (const box of boxes) {
+    candidates.push(box.left - secondary, box.right + secondary);
+  }
+  for (let index = 1; index < boxes.length; index += 1) {
+    const previous = boxes[index - 1];
+    const current = boxes[index];
+    if (current.left >= previous.right) {
+      candidates.push(previous.right + (current.left - previous.right) / 2);
+    }
+  }
+  if (bounds) candidates.push(bounds.left - secondary, bounds.right + secondary);
+  if (candidates.length === 0) candidates.push(pointer.x);
+  return uniqueSortedNumbers(candidates);
+}
+
 function routeFromDraggedControl(
   from: Point,
   to: Point,
   direction: LayoutDirection,
   pointer: Point,
-  anchors?: EdgeAnchors
+  anchors?: EdgeAnchors,
+  endpointOffsets?: DraggedRouteEndpointOffsets
 ): EdgeRoute {
   if (direction === 'horizontal') {
     const distance = Math.max(48, Math.abs(to.x - from.x));
-    const offset = Math.min(72, distance / 3);
     const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
     const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
-    const entryX = from.x + sourceSign * offset;
-    const exitX = to.x + targetSign * offset;
+    const sourceOffset = getDraggedRouteOffset(distance, endpointOffsets?.source);
+    const targetOffset = getDraggedRouteOffset(distance, endpointOffsets?.target);
+    const entryX = from.x + sourceSign * sourceOffset;
+    const exitX = to.x + targetSign * targetOffset;
     return {
       points: compactRoutePoints([
         { x: entryX, y: from.y },
@@ -1339,11 +1507,12 @@ function routeFromDraggedControl(
   }
 
   const distance = Math.max(48, Math.abs(to.y - from.y));
-  const offset = Math.min(72, distance / 3);
   const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
   const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
-  const entryY = from.y + sourceSign * offset;
-  const exitY = to.y + targetSign * offset;
+  const sourceOffset = getDraggedRouteOffset(distance, endpointOffsets?.source);
+  const targetOffset = getDraggedRouteOffset(distance, endpointOffsets?.target);
+  const entryY = from.y + sourceSign * sourceOffset;
+  const exitY = to.y + targetSign * targetOffset;
   return {
     points: compactRoutePoints([
       { x: from.x, y: entryY },
@@ -1352,6 +1521,46 @@ function routeFromDraggedControl(
       { x: to.x, y: exitY }
     ])
   };
+}
+
+function routeFromSnappedDraggedControl(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  pointer: Point,
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>,
+  spacing: RouteSpacing,
+  anchors?: EdgeAnchors,
+  endpointOffsets?: DraggedRouteEndpointOffsets
+): EdgeRoute {
+  const candidates = getDraggedRouteLaneCandidates(from, to, direction, pointer, nodeBoxes, spacing, false);
+  const pointerLane = direction === 'horizontal' ? pointer.y : pointer.x;
+  const snappedCandidates = candidates.map(lane => {
+    const snappedPointer = direction === 'horizontal'
+      ? { x: pointer.x, y: lane }
+      : { x: lane, y: pointer.y };
+    const route = routeFromDraggedControl(from, to, direction, snappedPointer, anchors, endpointOffsets);
+    const points = [from, ...route.points, to];
+    return {
+      route,
+      laneDistance: Math.abs(lane - pointerLane),
+      obstacleCount: routeObstacleCount(points, fromId, toId, nodeBoxes),
+      clearancePenalty: Math.min(50000, routeClearancePenalty(points, fromId, toId, nodeBoxes)),
+      turns: routeTurnCount(points),
+      length: routeLength(points)
+    };
+  });
+  const scoredRoutes = snappedCandidates.sort((left, right) => (
+    left.obstacleCount - right.obstacleCount ||
+    left.laneDistance - right.laneDistance ||
+    left.clearancePenalty - right.clearancePenalty ||
+    left.turns - right.turns ||
+    left.length - right.length
+  ));
+
+  return scoredRoutes[0]?.route || routeFromDraggedControl(from, to, direction, pointer, anchors, endpointOffsets);
 }
 
 function isForwardIncomingManualEdge(
@@ -1567,6 +1776,18 @@ function edgeSeq(edgeId: string): number {
   return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
 }
 
+function edgeOrder(edge: FlowEdge): number {
+  return typeof edge.order === 'number' && Number.isFinite(edge.order) ? edge.order : edgeSeq(edge.id);
+}
+
+function compareEdgeOrder(a: FlowEdge, b: FlowEdge): number {
+  return edgeOrder(a) - edgeOrder(b) || edgeSeq(a.id) - edgeSeq(b.id) || a.id.localeCompare(b.id);
+}
+
+function isLayoutEdge(edge: FlowEdge): boolean {
+  return edge.role !== 'manual';
+}
+
 function analyzeLayoutEdges(doc: FlowDoc): LayoutEdgeAnalysis {
   const nodeIds = new Set(doc.nodes.map(node => node.id));
   const incomingCount = new Map<NodeId, number>();
@@ -1576,13 +1797,13 @@ function analyzeLayoutEdges(doc: FlowDoc): LayoutEdgeAnalysis {
     outgoing.set(node.id, []);
   }
   for (const edge of doc.edges) {
-    if (edge.role === 'manual') continue;
+    if (!isLayoutEdge(edge)) continue;
     if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) continue;
     incomingCount.set(edge.to, (incomingCount.get(edge.to) || 0) + 1);
     outgoing.get(edge.from)?.push(edge);
   }
   for (const edges of outgoing.values()) {
-    edges.sort((a, b) => edgeSeq(a.id) - edgeSeq(b.id));
+    edges.sort(compareEdgeOrder);
   }
 
   const rootIds = doc.nodes
@@ -1712,10 +1933,21 @@ function getNodeIdFromEventTarget(target: EventTarget | null | undefined): NodeI
 }
 
 function getPrimaryParentId(doc: FlowDoc, nodeId: NodeId): NodeId | null {
-  const incoming = doc.edges
-    .filter(edge => edge.to === nodeId)
-    .sort((a, b) => edgeSeq(a.id) - edgeSeq(b.id) || a.id.localeCompare(b.id));
-  return incoming[0]?.from || null;
+  return getPrimaryParentEdge(doc, nodeId)?.from || null;
+}
+
+function getPrimaryParentEdge(doc: FlowDoc, nodeId: NodeId): FlowEdge | null {
+  const incoming = doc.edges.filter(edge => edge.to === nodeId && isLayoutEdge(edge)).sort(compareEdgeOrder);
+  return incoming[0] || null;
+}
+
+function getOrderedLayoutChildEdges(doc: FlowDoc, parentId: NodeId): FlowEdge[] {
+  const primaryByChild = new Map<NodeId, FlowEdge>();
+  for (const edge of doc.edges.filter(edge => edge.from === parentId && isLayoutEdge(edge)).sort(compareEdgeOrder)) {
+    const primaryEdge = getPrimaryParentEdge(doc, edge.to);
+    if (primaryEdge?.id === edge.id) primaryByChild.set(edge.to, edge);
+  }
+  return [...primaryByChild.values()].sort(compareEdgeOrder);
 }
 
 function getNodeIdFromViewportPoint(clientX: number, clientY: number): NodeId | null {
@@ -1731,9 +1963,12 @@ type ConnectHandleHit = { nodeId: NodeId; anchor: EdgeAnchor };
 
 function resolveDraggedEdgeAnchors(sourceAnchors: EdgeAnchors, targetAnchor?: EdgeAnchor): EdgeAnchors | null {
   const sourceAnchor = sourceAnchors.from === 'front' ? 'front' : 'back';
-  if (!targetAnchor || targetAnchor === 'body') return sourceAnchors;
-  if (sourceAnchor === targetAnchor) return null;
-  return { ...sourceAnchors, to: targetAnchor };
+  const resolvedTargetAnchor =
+    targetAnchor && targetAnchor !== 'body' && targetAnchor !== 'auto'
+      ? targetAnchor
+      : oppositeNodeSideAnchor(sourceAnchor);
+  if (sourceAnchor === resolvedTargetAnchor) return null;
+  return { ...sourceAnchors, to: resolvedTargetAnchor };
 }
 
 function getViewportConnectHandleHit(
@@ -1798,6 +2033,7 @@ export function App() {
   const [dropParentTargetId, setDropParentTargetId] = React.useState<NodeId | null>(null);
   const [fileMessage, setFileMessage] = React.useState('Ready');
   const [canvasZoom, setCanvasZoom] = React.useState(1);
+  const [newTagColor, setNewTagColor] = React.useState(COLOR_SWATCHES[0]);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const dragDidMoveRef = React.useRef(false);
   const suppressNextEdgeClickRef = React.useRef(false);
@@ -2294,6 +2530,9 @@ export function App() {
     [layoutDirection, layoutEdgeAnalysis.layoutEdgeIds, rootNodeIds]
   );
 
+  const useAdvancedAutoRouting =
+    doc.nodes.length <= ADVANCED_ROUTE_NODE_LIMIT && doc.edges.length <= ADVANCED_ROUTE_EDGE_LIMIT;
+
   const edgeForceBendMap = React.useMemo(() => {
     const map = new Map<string, boolean>();
     for (const edge of doc.edges) {
@@ -2303,6 +2542,10 @@ export function App() {
       const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
       const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
       const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
+      if (!useAdvancedAutoRouting && edge.role !== 'manual') {
+        map.set(edge.id, !layoutEdgeAnalysis.layoutEdgeIds.has(edge.id));
+        continue;
+      }
       const routeNodeBoxes = getRouteNodeBoxes(edge);
       map.set(
         edge.id,
@@ -2315,10 +2558,12 @@ export function App() {
     doc.edges,
     getRenderedEdgeEndpoints,
     getRouteNodeBoxes,
+    layoutSpacing,
     layoutDirection,
     layoutEdgeAnalysis.layoutEdgeIds,
     nodeSizeMap,
-    renderedPositionMap
+    renderedPositionMap,
+    useAdvancedAutoRouting
   ]);
 
   const edgeLaneMap = React.useMemo(() => {
@@ -2360,6 +2605,7 @@ export function App() {
     for (const edge of doc.edges) {
       if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
       if (!edgeForceBendMap.get(edge.id)) continue;
+      if (!useAdvancedAutoRouting && edge.role !== 'manual') continue;
       const fromPos = renderedPositionMap.get(edge.from);
       const toPos = renderedPositionMap.get(edge.to);
       if (!fromPos || !toPos) continue;
@@ -2377,6 +2623,7 @@ export function App() {
     for (const edge of doc.edges) {
       if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
       if (!edgeForceBendMap.get(edge.id)) continue;
+      if (!useAdvancedAutoRouting && edge.role !== 'manual') continue;
       const fromPos = renderedPositionMap.get(edge.from);
       const toPos = renderedPositionMap.get(edge.to);
       if (!fromPos || !toPos) continue;
@@ -2399,7 +2646,9 @@ export function App() {
         edge.from,
         edge.to,
         routeNodeBoxes,
-        edgeLaneMap.get(edge.id) || 0
+        edgeLaneMap.get(edge.id) || 0,
+        layoutSpacing,
+        edge.anchors
       );
       if (route) map.set(edge.id, route);
     }
@@ -2417,7 +2666,8 @@ export function App() {
     layoutDirection,
     layoutEdgeAnalysis.layoutEdgeIds,
     nodeSizeMap,
-    renderedPositionMap
+    renderedPositionMap,
+    useAdvancedAutoRouting
   ]);
 
   const buildDraggedEdgeRoute = React.useCallback((edgeId: string, pointer: Point): EdgeRoute | undefined => {
@@ -2429,8 +2679,31 @@ export function App() {
     const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
     const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
     const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-    return routeFromDraggedControl(endpoints.from, endpoints.to, layoutDirection, pointer, edge.anchors);
-  }, [doc.edges, getRenderedEdgeEndpoints, layoutDirection, nodeSizeMap, renderedPositionMap]);
+    const endpointOffsets: DraggedRouteEndpointOffsets = {
+      source: getEndpointSpacingOffset(layoutSpacing.primary),
+      target: getEndpointSpacingOffset(layoutSpacing.primary)
+    };
+    return routeFromSnappedDraggedControl(
+      endpoints.from,
+      endpoints.to,
+      layoutDirection,
+      pointer,
+      edge.from,
+      edge.to,
+      getRouteNodeBoxes(edge),
+      layoutSpacing,
+      edge.anchors,
+      endpointOffsets
+    );
+  }, [
+    doc.edges,
+    getRenderedEdgeEndpoints,
+    getRouteNodeBoxes,
+    layoutSpacing,
+    layoutDirection,
+    nodeSizeMap,
+    renderedPositionMap
+  ]);
 
   const tryCreateEdge = React.useCallback(
     (from: NodeId, to: NodeId, anchors?: EdgeAnchors) => {
@@ -2469,6 +2742,7 @@ export function App() {
       if (!validation.ok) {
         if (validation.reason === 'self-edge') setFileMessage('Connect blocked: source and target are the same node');
         if (validation.reason === 'duplicate-edge') setFileMessage('Connect blocked: edge already exists');
+        if (validation.reason === 'same-side-anchors') setFileMessage('Connect blocked: use opposite node handles');
         return false;
       }
       const shouldNormalizeAttachedRoot =
@@ -2990,6 +3264,48 @@ export function App() {
     return true;
   }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
 
+  const reorderSelectedNodeSibling = React.useCallback(
+    (direction: -1 | 1) => {
+      const currentSelection = selectedNodeIdsRef.current;
+      if (currentSelection.length !== 1) return false;
+      const selectedNodeId = currentSelection[0];
+      let changed = false;
+      commitDoc(prev => {
+        const parentEdge = getPrimaryParentEdge(prev, selectedNodeId);
+        if (!parentEdge) return prev;
+        const siblings = getOrderedLayoutChildEdges(prev, parentEdge.from);
+        const selectedIndex = siblings.findIndex(edge => edge.id === parentEdge.id);
+        const targetIndex = selectedIndex + direction;
+        if (selectedIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) return prev;
+
+        const siblingOrderById = new Map<string, number>();
+        siblings.forEach((edge, index) => {
+          siblingOrderById.set(edge.id, typeof edge.order === 'number' ? edge.order : index + 1);
+        });
+        const selectedOrder = siblingOrderById.get(siblings[selectedIndex].id)!;
+        const targetOrder = siblingOrderById.get(siblings[targetIndex].id)!;
+        siblingOrderById.set(siblings[selectedIndex].id, targetOrder);
+        siblingOrderById.set(siblings[targetIndex].id, selectedOrder);
+        changed = true;
+
+        return {
+          ...prev,
+          edges: prev.edges.map(edge =>
+            siblingOrderById.has(edge.id) ? { ...edge, order: siblingOrderById.get(edge.id)! } : edge
+          )
+        };
+      });
+      if (changed) {
+        setSelectedNodeIds([selectedNodeId]);
+        selectedNodeIdsRef.current = [selectedNodeId];
+        setSelectedEdgeId('');
+        setSelectedRouteControl(null);
+      }
+      return changed;
+    },
+    [commitDoc]
+  );
+
   const resetSelectedEdgeBend = React.useCallback(() => {
     if (!selectedEdgeId) return;
     setSelectedRouteControl(null);
@@ -3084,19 +3400,12 @@ export function App() {
 
   const addCustomTag = React.useCallback(() => {
     const id = nextCustomTagId(doc.settings.tags);
-    commitDoc(prev => upsertTag(prev, { id, name: 'New Tag', color: '#64748b' }));
-  }, [commitDoc, doc.settings.tags]);
+    commitDoc(prev => upsertTag(prev, { id, name: 'New Tag', color: newTagColor }));
+  }, [commitDoc, doc.settings.tags, newTagColor]);
 
   const renameTag = React.useCallback(
     (tag: FlowTag, name: string) => {
       commitDoc(prev => upsertTag(prev, { ...tag, name }));
-    },
-    [commitDoc]
-  );
-
-  const recolorTag = React.useCallback(
-    (tag: FlowTag, color: string) => {
-      commitDoc(prev => upsertTag(prev, { ...tag, color }));
     },
     [commitDoc]
   );
@@ -3183,6 +3492,11 @@ export function App() {
         createSiblingNodeFromSelection();
         return;
       }
+      if (mod && latestSelectedNodeIds.length === 1 && (key === 'arrowup' || key === 'arrowdown')) {
+        event.preventDefault();
+        reorderSelectedNodeSibling(key === 'arrowdown' ? 1 : -1);
+        return;
+      }
       if (latestSelectedNodeIds.length > 0 && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
         event.preventDefault();
         selectNodeByDirection(key);
@@ -3218,6 +3532,7 @@ export function App() {
     openDocument,
     pasteSelectedNodes,
     redoInteraction,
+    reorderSelectedNodeSibling,
     saveDocument,
     selectNodeByDirection,
     setCanvasZoom,
@@ -3696,6 +4011,7 @@ export function App() {
     };
     let best: EdgeHitCandidate | null = null;
     let bestNearbyLayoutEdge: EdgeHitCandidate | null = null;
+    let preferred: EdgeHitCandidate | null = null;
     for (const edge of doc.edges) {
       const fromPos = renderedPositionMap.get(edge.from);
       const toPos = renderedPositionMap.get(edge.to);
@@ -3708,9 +4024,6 @@ export function App() {
       const forceBend = edgeForceBendMap.get(edge.id) || false;
       const path = edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route);
       const distance = distanceToPathSquared(point, path);
-      if (preferredEdgeId === edge.id && distance <= 18 * 18) {
-        return { edgeId: edge.id, endpoints, route, distance, score: -1 };
-      }
       const linearDistance = Math.sqrt(distance);
       const isLayoutEdge = layoutEdgeAnalysis.layoutEdgeIds.has(edge.id);
       const isRoutedEdge = Boolean(edgeRoutes[edge.id] || edgeBends[edge.id] || (route && route.points.length > 1));
@@ -3721,11 +4034,15 @@ export function App() {
       const routePenalty = linearDistance <= 3
         ? 0
         : (isLayoutEdge ? 0 : 8) + (isRoutedEdge ? 6 + routeLengthPenalty : 0);
-      const score = linearDistance + routePenalty;
+      const preferredBonus = preferredEdgeId === edge.id && distance <= 18 * 18 ? 16 : 0;
+      const score = linearDistance + routePenalty - preferredBonus;
+      if (preferredEdgeId === edge.id && distance <= 18 * 18) {
+        preferred = { edgeId: edge.id, endpoints, route, distance, score };
+      }
       if (!best || score < best.score || (score === best.score && distance < best.distance)) {
         best = { edgeId: edge.id, endpoints, route, distance, score };
       }
-      if (isLayoutEdge && distance <= 8 * 8) {
+      if (isLayoutEdge && distance <= 12 * 12) {
         const layoutScore = linearDistance;
         if (
           !bestNearbyLayoutEdge ||
@@ -3735,6 +4052,16 @@ export function App() {
           bestNearbyLayoutEdge = { edgeId: edge.id, endpoints, route, distance, score: layoutScore };
         }
       }
+    }
+    if (
+      bestNearbyLayoutEdge &&
+      preferred &&
+      !layoutEdgeAnalysis.layoutEdgeIds.has(preferred.edgeId)
+    ) {
+      return bestNearbyLayoutEdge;
+    }
+    if (preferred) {
+      return preferred;
     }
     if (
       bestNearbyLayoutEdge &&
@@ -4150,9 +4477,6 @@ export function App() {
   );
   const selectedShapeMixed = hasMixedValues(selectedEffectiveShapes);
   const selectedShape = sameValues(selectedEffectiveShapes);
-  const selectedEffectiveTagIds = selectedNodes.map(node => node.style?.tagId || '');
-  const selectedTagIdMixed = hasMixedValues(selectedEffectiveTagIds);
-  const selectedTagId = sameValues(selectedEffectiveTagIds);
   const selectedEffectiveEdgeStyles = selectedStyleEdges.map(edge =>
     effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle)
   );
@@ -4429,6 +4753,8 @@ export function App() {
       <div className="toolbar-toggle-row">
         <button
           type="button"
+          aria-label="Bold"
+          title="Bold"
           className={isAllBold ? 'mode-btn-active' : hasMixedBold ? 'mode-btn-mixed' : ''}
           onClick={() => applySelectedNodeStyle({ bold: !isAllBold })}
         >
@@ -4436,6 +4762,8 @@ export function App() {
         </button>
         <button
           type="button"
+          aria-label="Italic"
+          title="Italic"
           className={isAllItalic ? 'mode-btn-active' : hasMixedItalic ? 'mode-btn-mixed' : ''}
           onClick={() => applySelectedNodeStyle({ italic: !isAllItalic })}
         >
@@ -4443,6 +4771,8 @@ export function App() {
         </button>
         <button
           type="button"
+          aria-label="Underline"
+          title="Underline"
           className={isAllUnderline ? 'mode-btn-active' : hasMixedUnderline ? 'mode-btn-mixed' : ''}
           onClick={() => applySelectedNodeStyle({ underline: !isAllUnderline })}
         >
@@ -4454,6 +4784,8 @@ export function App() {
           <button
             key={align}
             type="button"
+            aria-label={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
+            title={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
             className={selectedTextAlign === align ? 'mode-btn-active' : ''}
             onClick={() => applySelectedNodeStyle({ textAlign: align })}
           >
@@ -4502,31 +4834,32 @@ export function App() {
             applySelectedEdgeStyle
           )
         : null}
-      <label className="toolbar-field">
-        <span>Tag</span>
-        <select
-          value={selectedTagIdMixed ? MIXED_OPTION : selectedTagId || ''}
-          onChange={event => {
-            if (event.target.value === MIXED_OPTION) return;
-            applySelectedNodeStyle({ tagId: event.target.value || undefined });
-          }}
-        >
-          {selectedTagIdMixed ? (
-            <option value={MIXED_OPTION} disabled>
-              Mixed
-            </option>
-          ) : null}
-          <option value="">None</option>
-          {doc.settings.tags.map(tag => (
-            <option key={tag.id} value={tag.id}>
-              {tag.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <div className="tag-list">
-        <div className="tag-list-header">
-          <span>Tag List</span>
+        <div className="tag-list-create">
+          <span>Tag Color</span>
+          <details className="color-dropdown tag-color-picker">
+            <summary aria-label="New tag color">
+              <span className="color-preview" style={{ backgroundColor: newTagColor }} />
+              <span className="color-dropdown-label">{newTagColor.toUpperCase()}</span>
+            </summary>
+            <div className="color-swatch-grid" role="group" aria-label="New tag color options">
+              {COLOR_SWATCHES.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  className={
+                    newTagColor.toLowerCase() === color.toLowerCase() ? 'color-swatch color-swatch-active' : 'color-swatch'
+                  }
+                  style={{ backgroundColor: color }}
+                  aria-label={`New tag color ${color}`}
+                  onClick={event => {
+                    setNewTagColor(color);
+                    event.currentTarget.closest('details')?.removeAttribute('open');
+                  }}
+                />
+              ))}
+            </div>
+          </details>
           <button type="button" aria-label="Add tag" title="Add tag" onClick={addCustomTag}>
             +
           </button>
@@ -4536,12 +4869,10 @@ export function App() {
             <button
               type="button"
               className="tag-color-button"
-              aria-label={`Change tag color ${tag.name}`}
+              aria-label={`Apply tag ${tag.name}`}
+              title={`Apply tag ${tag.name}`}
               style={{ backgroundColor: tag.color }}
-              onClick={() => {
-                const currentIndex = COLOR_SWATCHES.findIndex(color => color.toLowerCase() === tag.color.toLowerCase());
-                recolorTag(tag, COLOR_SWATCHES[(currentIndex + 1) % COLOR_SWATCHES.length]);
-              }}
+              onClick={() => applySelectedNodeStyle({ tagId: tag.id })}
             />
             <input value={tag.name} onChange={event => renameTag(tag, event.target.value)} />
             <button type="button" aria-label={`Delete tag ${tag.name}`} onClick={() => removeTagById(tag.id)}>
@@ -4813,7 +5144,7 @@ export function App() {
                           className="edge-bend-hit-area"
                           cx={point.x}
                           cy={point.y}
-                          r={16}
+                          r={9}
                           onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
                           onContextMenu={event => {
                             event.preventDefault();
@@ -4890,7 +5221,7 @@ export function App() {
                           ? 'true'
                           : undefined
                       }
-                      data-tag-name={nodeTag?.name}
+                      data-tag-name={nodeTag?.name || undefined}
                       style={{
                         left: rendered.x,
                         top: rendered.y,
@@ -4900,7 +5231,6 @@ export function App() {
                       }}
                       data-testid={`node-${node.id}`}
                       type="button"
-                      title={node.style?.tagId ? tagNameById.get(node.style.tagId) || '' : ''}
                       onPointerDown={event => onNodePointerDown(event, node.id)}
                       onMouseUp={event => onNodeMouseUp(event, node.id)}
                       onContextMenu={onNodeContextMenu}
@@ -4930,7 +5260,7 @@ export function App() {
                           autoFocus
                         />
                       ) : (
-                        <div>{node.label}</div>
+                        <div className="node-label">{node.label}</div>
                       )}
                       {nodeTag ? (
                         <span

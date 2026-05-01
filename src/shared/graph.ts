@@ -13,6 +13,7 @@ export type FlowEdge = {
   id: EdgeId;
   from: NodeId;
   to: NodeId;
+  order?: number;
   style?: EdgeStyle;
   role?: EdgeRole;
   anchors?: EdgeAnchors;
@@ -80,7 +81,7 @@ export type FlowDoc = {
 
 export type EdgeValidationResult =
   | { ok: true }
-  | { ok: false; reason: 'unknown-node' | 'self-edge' | 'duplicate-edge' };
+  | { ok: false; reason: 'unknown-node' | 'self-edge' | 'duplicate-edge' | 'same-side-anchors' };
 
 type LegacyFlowDoc = {
   schemaVersion?: number;
@@ -203,6 +204,10 @@ function sanitizeEdgeAnchors(input: unknown): EdgeAnchors | undefined {
   };
 }
 
+function sanitizeEdgeOrder(input: unknown): number | undefined {
+  return typeof input === 'number' && Number.isFinite(input) ? input : undefined;
+}
+
 function sanitizeEdges(input: LegacyFlowDoc['edges'], validNodeIds: Set<string>): FlowEdge[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
@@ -230,7 +235,15 @@ function sanitizeEdges(input: LegacyFlowDoc['edges'], validNodeIds: Set<string>)
     seen.add(id);
     const role = sanitizeEdgeRole(rawEdge.role);
     const anchors = sanitizeEdgeAnchors(rawEdge.anchors);
-    edges.push({ id, from, to, ...(role ? { role } : {}), ...(anchors ? { anchors } : {}) });
+    const order = sanitizeEdgeOrder(rawEdge.order);
+    edges.push({
+      id,
+      from,
+      to,
+      ...(typeof order === 'number' ? { order } : {}),
+      ...(role ? { role } : {}),
+      ...(anchors ? { anchors } : {})
+    });
   }
   return edges;
 }
@@ -406,6 +419,7 @@ export function updateEdgeStyle(doc: FlowDoc, edgeIds: EdgeId[], patch: EdgeStyl
             id: edge.id,
             from: edge.from,
             to: edge.to,
+            ...(typeof edge.order === 'number' ? { order: edge.order } : {}),
             ...(edge.role ? { role: edge.role } : {}),
             ...(edge.anchors ? { anchors: edge.anchors } : {})
           };
@@ -440,7 +454,7 @@ export function updateSettings(doc: FlowDoc, patch: Partial<FlowSettings>): Flow
 export function upsertTag(doc: FlowDoc, tag: FlowTag): FlowDoc {
   const nextTag = {
     id: tag.id,
-    name: tag.name.trim() || 'Tag',
+    name: tag.name,
     color: sanitizeHexColor(tag.color, '#64748b')
   };
   const exists = doc.settings.tags.some(item => item.id === nextTag.id);
@@ -491,6 +505,7 @@ export function addEdge(
     id: nextEdgeId(doc),
     from,
     to,
+    order: doc.meta.nextEdgeSeq,
     ...(role !== 'layout' ? { role } : {}),
     ...(anchors ? { anchors } : {}),
     style: { ...doc.settings.defaultEdgeStyle }
@@ -527,6 +542,12 @@ export function validateEdge(
   }
   if (from === to) {
     return { ok: false, reason: 'self-edge' };
+  }
+  if (
+    (anchors?.from === 'front' && anchors.to === 'front') ||
+    (anchors?.from === 'back' && anchors.to === 'back')
+  ) {
+    return { ok: false, reason: 'same-side-anchors' };
   }
   const exists = doc.edges.some(
     edge => edge.from === from && edge.to === to && edgeRole(edge) === role && sameAnchors(edge.anchors, anchors)

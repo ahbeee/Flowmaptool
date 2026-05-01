@@ -103,7 +103,31 @@ function installApplicationMenu() {
       ]
     },
     { role: 'viewMenu' },
-    { role: 'help', submenu: [] }
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Node editing', enabled: false },
+        { label: 'Edit selected node', accelerator: 'Space', enabled: false },
+        { label: 'Add child node', accelerator: 'Tab', enabled: false },
+        { label: 'Add sibling node', accelerator: 'Enter', enabled: false },
+        { label: 'Delete selected node or edge', accelerator: 'Delete', enabled: false },
+        { label: 'Copy selected nodes', accelerator: 'CmdOrCtrl+C', enabled: false },
+        { label: 'Paste copied nodes', accelerator: 'CmdOrCtrl+V', enabled: false },
+        { label: 'Move sibling up / down: Ctrl+Up / Ctrl+Down', enabled: false },
+        { type: 'separator' },
+        { label: 'Selection and edges', enabled: false },
+        { label: 'Multi-select nodes: Ctrl+Click', enabled: false },
+        { label: 'Marquee select: drag empty canvas', enabled: false },
+        { label: 'Create manual edge: drag a node handle', enabled: false },
+        { label: 'Adjust selected edge route: drag its control point', enabled: false },
+        { label: 'Reset selected edge bend: right toolbar Reset Bend', enabled: false },
+        { type: 'separator' },
+        { label: 'Canvas', enabled: false },
+        { label: 'Zoom: Ctrl+Mouse Wheel', enabled: false },
+        { label: 'Fit graph to view: right toolbar Fit', enabled: false },
+        { label: 'Switch layout: right toolbar Layout', enabled: false }
+      ]
+    }
   ]);
   Menu.setApplicationMenu(menu);
 }

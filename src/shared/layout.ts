@@ -1,4 +1,4 @@
-import type { FlowDoc, NodeId } from './graph';
+import type { FlowDoc, FlowEdge, NodeId } from './graph';
 
 export type LayoutDirection = 'horizontal' | 'vertical';
 
@@ -121,39 +121,65 @@ function edgeSeq(edgeId: string): number {
   return Number.isNaN(value) ? Number.MAX_SAFE_INTEGER : value;
 }
 
+function edgeOrder(edge: FlowEdge): number {
+  return typeof edge.order === 'number' && Number.isFinite(edge.order) ? edge.order : edgeSeq(edge.id);
+}
+
+function compareEdgeOrder(a: FlowEdge, b: FlowEdge): number {
+  return edgeOrder(a) - edgeOrder(b) || edgeSeq(a.id) - edgeSeq(b.id) || a.id.localeCompare(b.id);
+}
+
+function isPrimaryLayoutEdge(edge: FlowEdge): boolean {
+  if (edge.role === 'manual') return false;
+  return nodeSeq(edge.from) < nodeSeq(edge.to);
+}
+
 function buildPrimaryParentMap(doc: FlowDoc): Map<NodeId, NodeId | null> {
-  const incoming = new Map<NodeId, string[]>();
-  const parentByEdge = new Map<string, NodeId>();
+  const incoming = new Map<NodeId, FlowEdge[]>();
   for (const node of doc.nodes) {
     incoming.set(node.id, []);
   }
   for (const edge of doc.edges) {
     if (!incoming.has(edge.to)) continue;
-    incoming.get(edge.to)!.push(edge.id);
-    parentByEdge.set(edge.id, edge.from);
+    if (!isPrimaryLayoutEdge(edge)) continue;
+    incoming.get(edge.to)!.push(edge);
   }
-  for (const edgeIds of incoming.values()) {
-    edgeIds.sort((a, b) => edgeSeq(a) - edgeSeq(b));
+  for (const edges of incoming.values()) {
+    edges.sort(compareEdgeOrder);
   }
   const parentMap = new Map<NodeId, NodeId | null>();
   for (const node of doc.nodes) {
-    const firstEdgeId = incoming.get(node.id)?.[0];
-    parentMap.set(node.id, firstEdgeId ? parentByEdge.get(firstEdgeId) || null : null);
+    const firstEdge = incoming.get(node.id)?.[0];
+    parentMap.set(node.id, firstEdge ? firstEdge.from : null);
   }
   return parentMap;
 }
 
 function buildPrimaryChildrenMap(doc: FlowDoc, parentMap: Map<NodeId, NodeId | null>): Map<NodeId, NodeId[]> {
   const childrenMap = new Map<NodeId, NodeId[]>();
+  const primaryEdgeByChild = new Map<NodeId, FlowEdge>();
   for (const node of doc.nodes) {
     childrenMap.set(node.id, []);
+  }
+  for (const edge of doc.edges) {
+    if (parentMap.get(edge.to) === edge.from && !primaryEdgeByChild.has(edge.to)) {
+      primaryEdgeByChild.set(edge.to, edge);
+    }
   }
   for (const [nodeId, parentId] of parentMap.entries()) {
     if (!parentId || !childrenMap.has(parentId)) continue;
     childrenMap.get(parentId)!.push(nodeId);
   }
   for (const children of childrenMap.values()) {
-    children.sort(compareNodeId);
+    children.sort((a, b) => {
+      const edgeA = primaryEdgeByChild.get(a);
+      const edgeB = primaryEdgeByChild.get(b);
+      if (edgeA && edgeB) {
+        const order = compareEdgeOrder(edgeA, edgeB);
+        if (order !== 0) return order;
+      }
+      return compareNodeId(a, b);
+    });
   }
   return childrenMap;
 }
@@ -247,6 +273,7 @@ function applyMultiParentCentering(
   for (const node of doc.nodes) incomingByNode.set(node.id, []);
   for (const edge of doc.edges) {
     if (!incomingByNode.has(edge.to)) continue;
+    if (!isPrimaryLayoutEdge(edge)) continue;
     incomingByNode.get(edge.to)!.push(edge.from);
   }
 
