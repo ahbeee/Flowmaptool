@@ -276,6 +276,10 @@ function reverseEdgeAnchors(anchors: EdgeAnchors | undefined): EdgeAnchors | und
   };
 }
 
+function isNodeSideAnchor(anchor: EdgeAnchors['from'] | undefined): anchor is 'front' | 'back' {
+  return anchor === 'front' || anchor === 'back';
+}
+
 function emptyOffsetsByDirection(): NodeOffsetsByDirection {
   return { horizontal: {}, vertical: {} };
 }
@@ -2441,7 +2445,16 @@ export function App() {
       let nextTo = to;
       let nextAnchors = anchors;
       const sameComponentBeforeConnect = new Set(collectConnectedComponent(doc, from)).has(to);
-      if (to === primaryRootNodeId && from !== to && !sameComponentBeforeConnect) {
+      const isExplicitOppositeHandleConnection = Boolean(
+        isNodeSideAnchor(anchors?.from) &&
+          isNodeSideAnchor(anchors.to) &&
+          anchors.from !== anchors.to
+      );
+      if (from === primaryRootNodeId && to !== from && isExplicitOppositeHandleConnection) {
+        nextFrom = to;
+        nextTo = from;
+        nextAnchors = reverseEdgeAnchors(anchors);
+      } else if (to === primaryRootNodeId && from !== to && !sameComponentBeforeConnect) {
         nextFrom = to;
         nextTo = from;
         nextAnchors = reverseEdgeAnchors(anchors);
@@ -2451,7 +2464,8 @@ export function App() {
       const mergedComponentNodeIds = mergesTwoComponents
         ? new Set([...fromComponent, ...collectConnectedComponent(doc, nextTo)])
         : null;
-      const validation = validateEdge(doc, nextFrom, nextTo);
+      const edgeRole = mergesTwoComponents ? 'layout' : 'manual';
+      const validation = validateEdge(doc, nextFrom, nextTo, edgeRole, nextAnchors);
       if (!validation.ok) {
         if (validation.reason === 'self-edge') setFileMessage('Connect blocked: source and target are the same node');
         if (validation.reason === 'duplicate-edge') setFileMessage('Connect blocked: edge already exists');
@@ -2459,7 +2473,6 @@ export function App() {
       }
       const shouldNormalizeAttachedRoot =
         rootNodeIds.has(nextTo) && nextTo !== primaryRootNodeId;
-      const edgeRole = mergesTwoComponents ? 'layout' : 'manual';
       commitDoc(prev => {
         const withEdge = addEdge(prev, nextFrom, nextTo, edgeRole, nextAnchors);
         return shouldNormalizeAttachedRoot
@@ -3424,7 +3437,11 @@ export function App() {
         const rootBaseAfter = nextLayout.positions.find(pos => pos.id === anchorRootId);
         commitDoc(() => nextDoc);
         if (rootRenderedBefore && rootBaseAfter) {
-          const nextComponentIds = collectConnectedComponent(nextDoc, anchorRootId);
+          const nextComponentIds = collectEdgeComponent(
+            nextDoc,
+            anchorRootId,
+            nextLayoutEdgeAnalysis.layoutEdgeIds
+          );
           const preservedOffset = {
             dx: rootRenderedBefore.x - rootBaseAfter.x,
             dy: rootRenderedBefore.y - rootBaseAfter.y
@@ -3795,7 +3812,9 @@ export function App() {
     const nextSelection: NodeId[] = [nodeId];
     setSelectedNodeIds(nextSelection);
     selectedNodeIdsRef.current = nextSelection;
-    const connectedNodeIds = isRootNode ? collectConnectedComponent(doc, nodeId) : [nodeId];
+    const connectedNodeIds = isRootNode
+      ? collectEdgeComponent(doc, nodeId, layoutEdgeAnalysis.layoutEdgeIds)
+      : [nodeId];
     const startOffsets: Record<NodeId, NodeOffset> = {};
     for (const id of connectedNodeIds) {
       startOffsets[id] = getNodeOffset(nodeOffsets, id);

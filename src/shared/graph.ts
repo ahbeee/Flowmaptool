@@ -479,7 +479,7 @@ export function addEdge(
   role: EdgeRole = 'layout',
   anchors?: EdgeAnchors
 ): FlowDoc {
-  const validation = validateEdge(doc, from, to);
+  const validation = validateEdge(doc, from, to, role, anchors);
   if (!validation.ok) {
     if (validation.reason === 'unknown-node') {
       throw new Error(`unknown node id: ${from} or ${to}`);
@@ -505,7 +505,21 @@ export function addEdge(
   };
 }
 
-export function validateEdge(doc: FlowDoc, from: NodeId, to: NodeId): EdgeValidationResult {
+function edgeRole(edge: FlowEdge): EdgeRole {
+  return edge.role || 'layout';
+}
+
+function sameAnchors(a?: EdgeAnchors, b?: EdgeAnchors): boolean {
+  return (a?.from || 'auto') === (b?.from || 'auto') && (a?.to || 'auto') === (b?.to || 'auto');
+}
+
+export function validateEdge(
+  doc: FlowDoc,
+  from: NodeId,
+  to: NodeId,
+  role: EdgeRole = 'layout',
+  anchors?: EdgeAnchors
+): EdgeValidationResult {
   const fromExists = doc.nodes.some(node => node.id === from);
   const toExists = doc.nodes.some(node => node.id === to);
   if (!fromExists || !toExists) {
@@ -514,7 +528,9 @@ export function validateEdge(doc: FlowDoc, from: NodeId, to: NodeId): EdgeValida
   if (from === to) {
     return { ok: false, reason: 'self-edge' };
   }
-  const exists = doc.edges.some(edge => edge.from === from && edge.to === to);
+  const exists = doc.edges.some(
+    edge => edge.from === from && edge.to === to && edgeRole(edge) === role && sameAnchors(edge.anchors, anchors)
+  );
   if (exists) {
     return { ok: false, reason: 'duplicate-edge' };
   }

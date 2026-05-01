@@ -158,6 +158,22 @@ describe('graph model', () => {
     expect(validateEdge(doc, 'n2', 'n1')).toEqual({ ok: true });
   });
 
+  it('allows distinct manual edge anchors between the same nodes', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'A');
+    doc = addNode(doc, 'B');
+    doc = addEdge(doc, 'n1', 'n2', 'manual', { from: 'back', to: 'front' });
+
+    expect(validateEdge(doc, 'n1', 'n2', 'manual', { from: 'back', to: 'front' })).toEqual({
+      ok: false,
+      reason: 'duplicate-edge'
+    });
+    expect(validateEdge(doc, 'n1', 'n2', 'manual', { from: 'front', to: 'back' })).toEqual({ ok: true });
+
+    doc = addEdge(doc, 'n1', 'n2', 'manual', { from: 'front', to: 'back' });
+    expect(doc.edges).toHaveLength(2);
+  });
+
   it('reparents by replacing the primary incoming edge', () => {
     let doc = createEmptyDoc();
     doc = addNode(doc, 'A');

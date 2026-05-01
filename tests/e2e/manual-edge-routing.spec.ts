@@ -854,6 +854,30 @@ test('manual handle connections require opposite source and target sides', async
     });
   };
 
+  const getEdgeEndpointSides = async (window: Page, edgeId: string, fromId: string, toId: string) =>
+    window.getByTestId(`edge-path-${edgeId}`).evaluate(
+      (path, args) => {
+        const matrix = (path as SVGPathElement).getScreenCTM();
+        const fromNode = document.querySelector(`[data-testid="node-${args.fromId}"]`);
+        const toNode = document.querySelector(`[data-testid="node-${args.toId}"]`);
+        if (!matrix || !(fromNode instanceof HTMLElement) || !(toNode instanceof HTMLElement)) {
+          throw new Error('edge endpoint geometry not found');
+        }
+        const svgPath = path as SVGPathElement;
+        const start = svgPath.getPointAtLength(0).matrixTransform(matrix);
+        const end = svgPath.getPointAtLength(svgPath.getTotalLength()).matrixTransform(matrix);
+        const fromRect = fromNode.getBoundingClientRect();
+        const toRect = toNode.getBoundingClientRect();
+        return {
+          startsAtFromFront: Math.abs(start.x - fromRect.left) <= 6,
+          startsAtFromBack: Math.abs(start.x - fromRect.right) <= 6,
+          endsAtToFront: Math.abs(end.x - toRect.left) <= 6,
+          endsAtToBack: Math.abs(end.x - toRect.right) <= 6
+        };
+      },
+      { fromId, toId }
+    );
+
   const sameBack = await openBaseTree();
   await dragBetweenHandles(sameBack.window, 'n4', '.node-connect-handle', 'n1', '.node-connect-handle');
   await expect(sameBack.window.locator('[data-testid^="edge-path-"]')).toHaveCount(3);
@@ -867,10 +891,24 @@ test('manual handle connections require opposite source and target sides', async
   const backToFront = await openBaseTree();
   await dragBetweenHandles(backToFront.window, 'n4', '.node-connect-handle', 'n1', '.node-connect-handle-front');
   await expect(backToFront.window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+  const backToFrontSides = await getEdgeEndpointSides(backToFront.window, 'e4', 'n4', 'n1');
+  expect(backToFrontSides.startsAtFromBack).toBe(true);
+  expect(backToFrontSides.endsAtToFront).toBe(true);
   await backToFront.app.close();
 
   const frontToBack = await openBaseTree();
   await dragBetweenHandles(frontToBack.window, 'n1', '.node-connect-handle-front', 'n4', '.node-connect-handle');
   await expect(frontToBack.window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+  const frontToBackSides = await getEdgeEndpointSides(frontToBack.window, 'e4', 'n4', 'n1');
+  expect(frontToBackSides.startsAtFromBack).toBe(true);
+  expect(frontToBackSides.endsAtToFront).toBe(true);
   await frontToBack.app.close();
+
+  const rootBackToFront = await openBaseTree();
+  await dragBetweenHandles(rootBackToFront.window, 'n1', '.node-connect-handle', 'n4', '.node-connect-handle-front');
+  await expect(rootBackToFront.window.locator('[data-testid^="edge-path-"]')).toHaveCount(4);
+  const rootBackToFrontSides = await getEdgeEndpointSides(rootBackToFront.window, 'e4', 'n4', 'n1');
+  expect(rootBackToFrontSides.startsAtFromFront).toBe(true);
+  expect(rootBackToFrontSides.endsAtToBack).toBe(true);
+  await rootBackToFront.app.close();
 });
