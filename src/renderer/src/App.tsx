@@ -24,6 +24,7 @@ import {
   type EdgeAnchors,
   type EdgeId,
   type EdgeStyle,
+  type FlowNode,
   type NodeId,
   type NodeShape,
   type NodeStyle,
@@ -1961,6 +1962,79 @@ function isNodeLabelInputTarget(target: EventTarget | null): boolean {
 
 type ConnectHandleHit = { nodeId: NodeId; anchor: EdgeAnchor };
 
+type OutlineTreeNode = {
+  node: FlowNode;
+  children: OutlineTreeNode[];
+};
+
+function nodeSeq(nodeId: NodeId): number {
+  const match = /^n(\d+)$/.exec(String(nodeId));
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+}
+
+function compareNodeIdOrder(a: NodeId, b: NodeId): number {
+  return nodeSeq(a) - nodeSeq(b) || String(a).localeCompare(String(b));
+}
+
+function compareOutlineEdges(a: FlowEdge, b: FlowEdge): number {
+  return compareEdgeOrder(a, b) || compareNodeIdOrder(a.to, b.to);
+}
+
+function buildOutlineTree(doc: FlowDoc): OutlineTreeNode[] {
+  const nodeById = new Map<NodeId, FlowNode>();
+  for (const node of doc.nodes) {
+    nodeById.set(node.id, node);
+  }
+
+  const primaryIncoming = new Map<NodeId, FlowEdge>();
+  for (const edge of doc.edges) {
+    if (!isLayoutEdge(edge) || edge.from === edge.to) continue;
+    if (!nodeById.has(edge.from) || !nodeById.has(edge.to)) continue;
+    const current = primaryIncoming.get(edge.to);
+    if (!current || compareOutlineEdges(edge, current) < 0) {
+      primaryIncoming.set(edge.to, edge);
+    }
+  }
+
+  const childEdgesByParent = new Map<NodeId, FlowEdge[]>();
+  for (const edge of doc.edges) {
+    if (!isLayoutEdge(edge)) continue;
+    if (primaryIncoming.get(edge.to)?.id !== edge.id) continue;
+    const list = childEdgesByParent.get(edge.from) || [];
+    list.push(edge);
+    childEdgesByParent.set(edge.from, list);
+  }
+  for (const list of childEdgesByParent.values()) {
+    list.sort(compareOutlineEdges);
+  }
+
+  const visited = new Set<NodeId>();
+  const buildNode = (node: FlowNode, stack: Set<NodeId>): OutlineTreeNode => {
+    visited.add(node.id);
+    if (stack.has(node.id)) return { node, children: [] };
+    const nextStack = new Set(stack);
+    nextStack.add(node.id);
+    const children = (childEdgesByParent.get(node.id) || [])
+      .map(edge => nodeById.get(edge.to))
+      .filter((child): child is FlowNode => Boolean(child))
+      .filter(child => !nextStack.has(child.id))
+      .map(child => buildNode(child, nextStack));
+    return { node, children };
+  };
+
+  const roots = doc.nodes
+    .filter(node => !primaryIncoming.has(node.id))
+    .sort((a, b) => compareNodeIdOrder(a.id, b.id));
+  const tree = roots.map(root => buildNode(root, new Set<NodeId>()));
+  const leftovers = doc.nodes
+    .filter(node => !visited.has(node.id))
+    .sort((a, b) => compareNodeIdOrder(a.id, b.id))
+    .map(node => buildNode(node, new Set<NodeId>()));
+  return [...tree, ...leftovers];
+}
+
 function resolveDraggedEdgeAnchors(sourceAnchors: EdgeAnchors, targetAnchor?: EdgeAnchor): EdgeAnchors | null {
   const sourceAnchor = sourceAnchors.from === 'front' ? 'front' : 'back';
   const resolvedTargetAnchor =
@@ -2034,7 +2108,10 @@ export function App() {
   const [fileMessage, setFileMessage] = React.useState('Ready');
   const [canvasZoom, setCanvasZoom] = React.useState(1);
   const [newTagColor, setNewTagColor] = React.useState(COLOR_SWATCHES[0]);
+  const [outlineVisible, setOutlineVisible] = React.useState(true);
+  const [collapsedOutlineNodeIds, setCollapsedOutlineNodeIds] = React.useState<Set<NodeId>>(() => new Set());
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
+  const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const dragDidMoveRef = React.useRef(false);
   const suppressNextEdgeClickRef = React.useRef(false);
   const pendingRightConnectFromRef = React.useRef<NodeId | null>(null);
@@ -2064,6 +2141,7 @@ export function App() {
     () => ({ ...doc, edges: layoutEdgeAnalysis.layoutEdges }),
     [doc, layoutEdgeAnalysis.layoutEdges]
   );
+  const outlineTree = React.useMemo(() => buildOutlineTree(doc), [doc]);
   const rootNodeIds = layoutEdgeAnalysis.rootNodeIds;
   const primaryRootNodeId = React.useMemo(
     () => doc.nodes.find(node => rootNodeIds.has(node.id))?.id || '',
@@ -2073,6 +2151,7 @@ export function App() {
     () => doc.nodes.filter(node => selectedNodeIds.includes(node.id)),
     [doc.nodes, selectedNodeIds]
   );
+  const selectedNodeIdSet = React.useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
   const selectedStyleEdges = React.useMemo(() => {
     if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
     if (selectedNodeIds.length === 0) return [];
@@ -2294,10 +2373,11 @@ export function App() {
     (clientX: number, clientY: number): Point | null => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
-      const rect = canvas.getBoundingClientRect();
+      const surface = canvasSurfaceRef.current;
+      const rect = surface?.getBoundingClientRect() || canvas.getBoundingClientRect();
       return {
-        x: (clientX - rect.left + canvas.scrollLeft) / canvasZoom,
-        y: (clientY - rect.top + canvas.scrollTop) / canvasZoom
+        x: (clientX - rect.left) / canvasZoom,
+        y: (clientY - rect.top) / canvasZoom
       };
     },
     [canvasZoom]
@@ -2471,6 +2551,21 @@ export function App() {
     }
     return map;
   }, [layout.positions, nodeOffsets]);
+
+  const scrollNodeIntoCanvas = React.useCallback(
+    (nodeId: NodeId) => {
+      const canvas = canvasRef.current;
+      const rendered = renderedPositionMap.get(nodeId);
+      if (!canvas || !rendered) return;
+      const size = nodeSizeMap[nodeId] || DEFAULT_NODE_SIZE;
+      canvas.scrollTo({
+        left: Math.max(0, (rendered.x + size.width / 2) * canvasZoom - canvas.clientWidth / 2),
+        top: Math.max(0, (rendered.y + size.height / 2) * canvasZoom - canvas.clientHeight / 2),
+        behavior: 'auto'
+      });
+    },
+    [canvasZoom, nodeSizeMap, renderedPositionMap]
+  );
 
   const nodeBoxMap = React.useMemo(() => {
     const map = new Map<NodeId, NodeBox>();
@@ -3147,6 +3242,30 @@ export function App() {
     if (currentNode?.label === nextLabel) return;
     commitDoc(prev => updateNodeLabel(prev, nodeId, nextLabel));
   }, [commitDoc, doc.nodes]);
+
+  const selectOutlineNode = React.useCallback(
+    (nodeId: NodeId) => {
+      if (editingNodeIdRef.current) commitEditingNode();
+      setSelectedNodeIds([nodeId]);
+      selectedNodeIdsRef.current = [nodeId];
+      setSelectedEdgeId('');
+      setSelectedRouteControl(null);
+      requestAnimationFrame(() => scrollNodeIntoCanvas(nodeId));
+    },
+    [commitEditingNode, scrollNodeIntoCanvas]
+  );
+
+  const toggleOutlineNode = React.useCallback((nodeId: NodeId) => {
+    setCollapsedOutlineNodeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  }, []);
 
   const createLinkedNodeFromSelection = React.useCallback(() => {
     const currentSelection = selectedNodeIdsRef.current;
@@ -4931,6 +5050,52 @@ export function App() {
     </>
   );
 
+  const renderOutlineNodes = (items: OutlineTreeNode[], depth = 0): React.ReactNode =>
+    items.map(item => {
+      const hasChildren = item.children.length > 0;
+      const collapsed = collapsedOutlineNodeIds.has(item.node.id);
+      const selected = selectedNodeIdSet.has(item.node.id);
+      const label = item.node.label.trim() || 'Untitled Node';
+
+      return (
+        <React.Fragment key={item.node.id}>
+          <div
+            className={selected ? 'outline-row outline-row-selected' : 'outline-row'}
+            style={{ paddingLeft: 8 + depth * 16 }}
+          >
+            <button
+              type="button"
+              className="outline-disclosure"
+              data-testid={`outline-toggle-${item.node.id}`}
+              disabled={!hasChildren}
+              onClick={() => toggleOutlineNode(item.node.id)}
+              title={collapsed ? 'Expand' : 'Collapse'}
+            >
+              {hasChildren ? (collapsed ? '▸' : '▾') : ''}
+            </button>
+            <button
+              type="button"
+              className={selected ? 'outline-node-button outline-node-selected' : 'outline-node-button'}
+              data-testid={`outline-node-${item.node.id}`}
+              onClick={() => selectOutlineNode(item.node.id)}
+              title={label}
+            >
+              {label}
+            </button>
+          </div>
+          {hasChildren && !collapsed ? renderOutlineNodes(item.children, depth + 1) : null}
+        </React.Fragment>
+      );
+    });
+
+  const workspaceClassName = [
+    'canvas-workspace',
+    outlineVisible ? 'canvas-workspace-outline-visible' : '',
+    activeTab.toolbarVisible ? 'canvas-workspace-toolbar-visible' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <main className="app">
       <header className="tabs-header">
@@ -4956,14 +5121,25 @@ export function App() {
             +
           </button>
         </div>
-        <button
-          type="button"
-          className="toolbar-toggle-btn"
-          onClick={() => setToolbarVisible(!activeTab.toolbarVisible)}
-          title={activeTab.toolbarVisible ? 'Hide toolbar' : 'Show toolbar'}
-        >
-          {activeTab.toolbarVisible ? '▧' : '▨'}
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="outline-toggle-btn"
+            data-testid="outline-toggle"
+            onClick={() => setOutlineVisible(prev => !prev)}
+            title={outlineVisible ? 'Hide outline' : 'Show outline'}
+          >
+            {outlineVisible ? '☰' : '☷'}
+          </button>
+          <button
+            type="button"
+            className="toolbar-toggle-btn"
+            onClick={() => setToolbarVisible(!activeTab.toolbarVisible)}
+            title={activeTab.toolbarVisible ? 'Hide toolbar' : 'Show toolbar'}
+          >
+            {activeTab.toolbarVisible ? '▧' : '▨'}
+          </button>
+        </div>
       </header>
 
       {fileMessage !== 'Ready' ? (
@@ -4977,7 +5153,20 @@ export function App() {
       ) : null}
 
       <section className="panel canvas-panel">
-        <div className="canvas-workspace">
+        <div className={workspaceClassName}>
+          {outlineVisible ? (
+            <aside className="outline-panel" data-testid="outline-panel">
+              <div className="outline-panel-header">
+                <span>Outline</span>
+                <button type="button" data-testid="outline-hide" onClick={() => setOutlineVisible(false)} title="Hide outline">
+                  x
+                </button>
+              </div>
+              <div className="outline-tree">
+                {outlineTree.length > 0 ? renderOutlineNodes(outlineTree) : <p className="outline-empty">No nodes</p>}
+              </div>
+            </aside>
+          ) : null}
           <div className="canvas-main">
             <h2>
               Flow Canvas ({layoutDirection === 'horizontal' ? 'Horizontal' : 'Vertical'} Auto Layout)
@@ -4989,6 +5178,7 @@ export function App() {
               style={{ background: activeTheme.canvas }}
             >
               <div
+                ref={canvasSurfaceRef}
                 className={isLiveCanvasInteraction ? 'canvas-surface' : 'canvas-surface canvas-surface-animated'}
                 data-testid="canvas-surface"
                 style={{ width: canvasSize.width, height: canvasSize.height, zoom: canvasZoom }}

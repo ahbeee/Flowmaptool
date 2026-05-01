@@ -17,6 +17,7 @@ test('marquee selection stays aligned after zoom', async () => {
   await createChild('n1');
   await createChild('n2');
   await expect(window.locator('[data-testid^="node-"]')).toHaveCount(3);
+  await window.getByTestId('canvas-surface').click({ position: { x: 8, y: 8 } });
 
   await window.keyboard.down('Control');
   await window.mouse.wheel(0, -700);

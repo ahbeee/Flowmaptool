@@ -97,6 +97,13 @@ select {
   padding: 6px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.outline-toggle-btn,
 .toolbar-toggle-btn {
   border: 1px solid #94a3b8;
   border-radius: 6px;
@@ -107,6 +114,7 @@ select {
   cursor: pointer;
 }
 
+.outline-toggle-btn:hover,
 .toolbar-toggle-btn:hover {
   background: #f8fafc;
 }
@@ -135,13 +143,108 @@ select {
 
 .canvas-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: start;
 }
 
+.canvas-workspace-toolbar-visible {
+  grid-template-columns: minmax(0, 1fr) 310px;
+}
+
+.canvas-workspace-outline-visible {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.canvas-workspace-outline-visible.canvas-workspace-toolbar-visible {
+  grid-template-columns: 240px minmax(0, 1fr) 310px;
+}
+
 .canvas-main {
   min-width: 0;
+}
+
+.outline-panel {
+  align-self: stretch;
+  min-width: 0;
+  border-right: 1px solid #d1d5db;
+  padding-right: 8px;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+}
+
+.outline-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 8px;
+  font-weight: 700;
+}
+
+.outline-panel-header button {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+}
+
+.outline-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.outline-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+  min-height: 26px;
+}
+
+.outline-row-selected {
+  background: #dbeafe;
+}
+
+.outline-disclosure {
+  width: 20px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  padding: 0;
+}
+
+.outline-disclosure:disabled {
+  cursor: default;
+  color: transparent;
+}
+
+.outline-node-button {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  text-align: left;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.outline-node-button:hover,
+.outline-node-selected {
+  background: #bfdbfe;
+}
+
+.outline-empty {
+  color: #64748b;
+  margin: 8px 4px;
 }
 
 .right-toolbar-rail {
