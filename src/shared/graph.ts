@@ -7,6 +7,7 @@ export type FlowNode = {
   id: NodeId;
   label: string;
   style?: NodeStyle;
+  task?: NodeTask;
 };
 
 export type FlowEdge = {
@@ -28,6 +29,7 @@ export type FlowChecklist = {
   checkedNodeIds: NodeId[];
 };
 
+export type TaskPriority = 'low' | 'normal' | 'high' | 'critical';
 export type NodeShape = 'plain' | 'rounded' | 'pill' | 'underline' | 'square';
 export type TextAlign = 'left' | 'center' | 'right';
 export type EdgeLineType = 'solid' | 'dashed' | 'dotted';
@@ -56,6 +58,17 @@ export type NodeStyle = {
   textAlign?: TextAlign;
   shape?: NodeShape;
   tagId?: string;
+};
+
+export type NodeTask = {
+  enabled: boolean;
+  done: boolean;
+  priority: TaskPriority;
+  progress: number;
+  assignee?: string;
+  startDate?: string;
+  dueDate?: string;
+  note?: string;
 };
 
 export type FlowTag = {
@@ -298,6 +311,45 @@ function sanitizeNodeStyle(input: unknown, validTagIds?: Set<string>): NodeStyle
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+function sanitizeOptionalText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function sanitizeTaskPriority(value: unknown): TaskPriority {
+  if (value === 'low' || value === 'high' || value === 'critical') return value;
+  return 'normal';
+}
+
+function sanitizeTaskProgress(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function sanitizeNodeTask(input: unknown): NodeTask | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as Partial<NodeTask>;
+  if (raw.enabled !== true) return undefined;
+
+  const task: NodeTask = {
+    enabled: true,
+    done: raw.done === true,
+    priority: sanitizeTaskPriority(raw.priority),
+    progress: sanitizeTaskProgress(raw.progress)
+  };
+
+  const assignee = sanitizeOptionalText(raw.assignee);
+  if (assignee) task.assignee = assignee;
+  const startDate = sanitizeOptionalText(raw.startDate);
+  if (startDate) task.startDate = startDate;
+  const dueDate = sanitizeOptionalText(raw.dueDate);
+  if (dueDate) task.dueDate = dueDate;
+  const note = sanitizeOptionalText(raw.note);
+  if (note) task.note = note;
+  return task;
+}
+
 function sanitizeEdgeStyle(input: unknown): EdgeStyle | undefined {
   if (!input || typeof input !== 'object') return undefined;
   const raw = input as EdgeStyle;
@@ -365,7 +417,12 @@ export function migrateToLatest(input: unknown): FlowDoc {
   const nodes = sanitizeNodes(legacy.nodes).map(node => {
     const rawNode = Array.isArray(legacy.nodes) ? legacy.nodes.find(item => item.id === node.id) : undefined;
     const style = sanitizeNodeStyle(rawNode?.style, validTagIds);
-    return style ? { ...node, style } : node;
+    const task = sanitizeNodeTask(rawNode?.task);
+    return {
+      ...node,
+      ...(style ? { style } : {}),
+      ...(task ? { task } : {})
+    };
   });
   const validNodeIds = new Set(nodes.map(node => node.id));
   const edges = sanitizeEdges(legacy.edges, validNodeIds).map(edge => {
@@ -421,7 +478,36 @@ export function updateNodeStyle(doc: FlowDoc, nodeIds: NodeId[], patch: NodeStyl
       for (const [key, value] of Object.entries(nextStyle)) {
         if (value === undefined || value === '') delete (nextStyle as Record<string, unknown>)[key];
       }
-      return Object.keys(nextStyle).length > 0 ? { ...node, style: nextStyle } : { id: node.id, label: node.label };
+      return Object.keys(nextStyle).length > 0
+        ? { ...node, style: nextStyle }
+        : { id: node.id, label: node.label, ...(node.task ? { task: node.task } : {}) };
+    })
+  };
+}
+
+export function updateNodeTask(doc: FlowDoc, nodeIds: NodeId[], patch: Partial<NodeTask>): FlowDoc {
+  const targets = new Set(nodeIds);
+  for (const nodeId of targets) assertNodeExists(doc, nodeId);
+  return {
+    ...doc,
+    nodes: doc.nodes.map(node => {
+      if (!targets.has(node.id)) return node;
+      if (patch.enabled === false) {
+        return {
+          id: node.id,
+          label: node.label,
+          ...(node.style ? { style: node.style } : {})
+        };
+      }
+      const nextTask = sanitizeNodeTask({
+        enabled: true,
+        done: false,
+        priority: 'normal',
+        progress: 0,
+        ...(node.task || {}),
+        ...patch
+      });
+      return nextTask ? { ...node, task: nextTask } : node;
     })
   };
 }
@@ -458,7 +544,9 @@ export function resetNodeStyle(doc: FlowDoc, nodeIds: NodeId[]): FlowDoc {
   for (const nodeId of targets) assertNodeExists(doc, nodeId);
   return {
     ...doc,
-    nodes: doc.nodes.map(node => (targets.has(node.id) ? { id: node.id, label: node.label } : node))
+    nodes: doc.nodes.map(node =>
+      targets.has(node.id) ? { id: node.id, label: node.label, ...(node.task ? { task: node.task } : {}) } : node
+    )
   };
 }
 

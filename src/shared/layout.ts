@@ -129,28 +129,40 @@ function compareEdgeOrder(a: FlowEdge, b: FlowEdge): number {
   return edgeOrder(a) - edgeOrder(b) || edgeSeq(a.id) - edgeSeq(b.id) || a.id.localeCompare(b.id);
 }
 
-function isPrimaryLayoutEdge(edge: FlowEdge): boolean {
-  if (edge.role === 'manual') return false;
-  return nodeSeq(edge.from) < nodeSeq(edge.to);
+function isLayoutCandidateEdge(edge: FlowEdge): boolean {
+  return edge.role !== 'manual';
+}
+
+function wouldCreateParentCycle(
+  parentMap: Map<NodeId, NodeId | null>,
+  childId: NodeId,
+  parentId: NodeId
+): boolean {
+  let current: NodeId | null | undefined = parentId;
+  const seen = new Set<NodeId>();
+  while (current) {
+    if (current === childId) return true;
+    if (seen.has(current)) return true;
+    seen.add(current);
+    current = parentMap.get(current);
+  }
+  return false;
 }
 
 function buildPrimaryParentMap(doc: FlowDoc): Map<NodeId, NodeId | null> {
-  const incoming = new Map<NodeId, FlowEdge[]>();
-  for (const node of doc.nodes) {
-    incoming.set(node.id, []);
-  }
-  for (const edge of doc.edges) {
-    if (!incoming.has(edge.to)) continue;
-    if (!isPrimaryLayoutEdge(edge)) continue;
-    incoming.get(edge.to)!.push(edge);
-  }
-  for (const edges of incoming.values()) {
-    edges.sort(compareEdgeOrder);
-  }
+  const nodeIds = new Set(doc.nodes.map(node => node.id));
   const parentMap = new Map<NodeId, NodeId | null>();
   for (const node of doc.nodes) {
-    const firstEdge = incoming.get(node.id)?.[0];
-    parentMap.set(node.id, firstEdge ? firstEdge.from : null);
+    parentMap.set(node.id, null);
+  }
+
+  const candidates = doc.edges
+    .filter(edge => isLayoutCandidateEdge(edge) && nodeIds.has(edge.from) && nodeIds.has(edge.to))
+    .sort(compareEdgeOrder);
+  for (const edge of candidates) {
+    if (parentMap.get(edge.to)) continue;
+    if (wouldCreateParentCycle(parentMap, edge.to, edge.from)) continue;
+    parentMap.set(edge.to, edge.from);
   }
   return parentMap;
 }
@@ -273,7 +285,7 @@ function applyMultiParentCentering(
   for (const node of doc.nodes) incomingByNode.set(node.id, []);
   for (const edge of doc.edges) {
     if (!incomingByNode.has(edge.to)) continue;
-    if (!isPrimaryLayoutEdge(edge)) continue;
+    if (!isLayoutCandidateEdge(edge)) continue;
     incomingByNode.get(edge.to)!.push(edge.from);
   }
 

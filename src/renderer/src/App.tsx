@@ -13,6 +13,7 @@ import {
   updateEdgeStyle,
   updateNodeLabel,
   updateNodeStyle,
+  updateNodeTask,
   updateSettings,
   upsertTag,
   validateEdge,
@@ -29,6 +30,8 @@ import {
   type NodeId,
   type NodeShape,
   type NodeStyle,
+  type NodeTask,
+  type TaskPriority,
   type TextAlign
 } from '@shared/graph';
 import {
@@ -80,10 +83,20 @@ const CHILD_NODE_STYLE: NodeStyle = {
 };
 const SPACING_MIN = 0;
 const SPACING_MAX = 320;
+const SIDE_PANEL_MIN_WIDTH = 220;
+const SIDE_PANEL_DEFAULT_WIDTH = 360;
+const SIDE_PANEL_MAX_WIDTH = 760;
 const ADVANCED_ROUTE_NODE_LIMIT = 300;
 const ADVANCED_ROUTE_EDGE_LIMIT = 800;
 const FONT_FAMILIES = ['Roboto', 'Segoe UI', 'Arial', 'Microsoft JhengHei', 'Noto Sans TC'];
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 32, 48, 64];
+const TASK_PRIORITIES: TaskPriority[] = ['low', 'normal', 'high', 'critical'];
+const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  low: 'Low',
+  normal: 'Normal',
+  high: 'High',
+  critical: 'Critical'
+};
 const EDGE_WIDTHS = [1, 2, 3, 4, 5, 6, 7, 8];
 const EDGE_LINE_TYPES: Array<{ value: EdgeLineType; label: string }> = [
   { value: 'solid', label: 'Solid' },
@@ -203,6 +216,7 @@ type InteractionHistory = {
 };
 type EdgeBendDragState = { edgeId: string; pointIndex: number };
 type EdgeRouteControlSelection = { edgeId: string; pointIndex: number };
+type SidePanelResizeState = { pointerId: number; startX: number; startWidth: number };
 type ConnectDragState = {
   fromNodeId: NodeId;
   anchors: EdgeAnchors;
@@ -1752,6 +1766,12 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function clampSidePanelWidth(width: number): number {
+  const viewportMax =
+    typeof window === 'undefined' ? SIDE_PANEL_MAX_WIDTH : Math.max(SIDE_PANEL_MIN_WIDTH, window.innerWidth - 520);
+  return clamp(width, SIDE_PANEL_MIN_WIDTH, Math.min(SIDE_PANEL_MAX_WIDTH, viewportMax));
+}
+
 function boxesOverlap(a: NodeBox, b: NodeBox, gap = 0): boolean {
   return !(
     a.right + gap <= b.left ||
@@ -2110,9 +2130,13 @@ export function App() {
   const [canvasZoom, setCanvasZoom] = React.useState(1);
   const [newTagColor, setNewTagColor] = React.useState(COLOR_SWATCHES[0]);
   const [outlineVisible, setOutlineVisible] = React.useState(true);
+  const [taskTableVisible, setTaskTableVisible] = React.useState(false);
+  const [sidePanelWidth, setSidePanelWidth] = React.useState(SIDE_PANEL_DEFAULT_WIDTH);
+  const [sidePanelResizing, setSidePanelResizing] = React.useState(false);
   const [collapsedOutlineNodeIds, setCollapsedOutlineNodeIds] = React.useState<Set<NodeId>>(() => new Set());
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const sidePanelResizeRef = React.useRef<SidePanelResizeState | null>(null);
   const dragDidMoveRef = React.useRef(false);
   const suppressNextEdgeClickRef = React.useRef(false);
   const pendingRightConnectFromRef = React.useRef<NodeId | null>(null);
@@ -2127,6 +2151,62 @@ export function App() {
     onPointerMove: (event: PointerEvent) => void;
     onPointerUp: (event: PointerEvent) => void;
   } | null>(null);
+
+  const onSidePanelResizePointerDown = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      sidePanelResizeRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidth: sidePanelWidth
+      };
+      setSidePanelResizing(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (typeof document !== 'undefined') {
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      }
+      event.preventDefault();
+    },
+    [sidePanelWidth]
+  );
+
+  const finishSidePanelResize = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const resizeState = sidePanelResizeRef.current;
+    if (!resizeState || resizeState.pointerId !== event.pointerId) return;
+
+    sidePanelResizeRef.current = null;
+    setSidePanelResizing(false);
+    if (typeof document !== 'undefined') {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const onSidePanelResizePointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const resizeState = sidePanelResizeRef.current;
+    if (!resizeState || resizeState.pointerId !== event.pointerId) return;
+    setSidePanelWidth(clampSidePanelWidth(resizeState.startWidth + event.clientX - resizeState.startX));
+  }, []);
+
+  const onSidePanelResizeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const delta = event.key === 'ArrowLeft' ? -16 : 16;
+    setSidePanelWidth(width => clampSidePanelWidth(width + delta));
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+  }, []);
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) || tabs[0];
   const doc = activeTab.history.present;
@@ -2152,6 +2232,7 @@ export function App() {
     () => doc.nodes.filter(node => selectedNodeIds.includes(node.id)),
     [doc.nodes, selectedNodeIds]
   );
+  const nodeById = React.useMemo(() => new Map(doc.nodes.map(node => [node.id, node])), [doc.nodes]);
   const selectedNodeIdSet = React.useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
   const checkedNodeIdSet = React.useMemo(
     () => new Set(doc.checklist.checkedNodeIds),
@@ -2160,24 +2241,42 @@ export function App() {
   const tagById = React.useMemo(() => new Map(doc.settings.tags.map(tag => [tag.id, tag])), [doc.settings.tags]);
   const outlineChecklistTargetsByNodeId = React.useMemo(() => {
     const targetsByNodeId = new Map<NodeId, NodeId[]>();
-    const hasChecklistTag = (node: FlowNode) => Boolean(node.style?.tagId && tagById.has(node.style.tagId));
+    const hasChecklistTarget = (node: FlowNode) => Boolean(node.style?.tagId && tagById.has(node.style.tagId));
 
-    const visit = (item: OutlineTreeNode) => {
-      const targets: NodeId[] = [];
-      if (hasChecklistTag(item.node)) {
-        targets.push(item.node.id);
-      }
-      for (const child of item.children) {
-        if (hasChecklistTag(child.node)) {
-          targets.push(child.node.id);
-        }
-        visit(child);
+    const visit = (item: OutlineTreeNode): NodeId[] => {
+      const targets: NodeId[] = item.children.flatMap(visit);
+      if (hasChecklistTarget(item.node)) {
+        targets.unshift(item.node.id);
       }
       targetsByNodeId.set(item.node.id, targets);
+      return targets;
     };
 
     outlineTree.forEach(visit);
     return targetsByNodeId;
+  }, [outlineTree, tagById]);
+  const isChecklistNodeChecked = React.useCallback(
+    (nodeId: NodeId) => checkedNodeIdSet.has(nodeId),
+    [checkedNodeIdSet]
+  );
+  const taskTableRows = React.useMemo(() => {
+    const rows: Array<{ node: FlowNode; category: string; tagName: string }> = [];
+    const nodeLabel = (node: FlowNode) => node.label.trim() || 'Untitled Node';
+
+    const visit = (item: OutlineTreeNode, parents: FlowNode[]) => {
+      const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
+      if (tag) {
+        rows.push({
+          node: item.node,
+          category: parents.map(nodeLabel).join(' > '),
+          tagName: tag.name
+        });
+      }
+      item.children.forEach(child => visit(child, [...parents, item.node]));
+    };
+
+    outlineTree.forEach(item => visit(item, []));
+    return rows;
   }, [outlineTree, tagById]);
   const selectedStyleEdges = React.useMemo(() => {
     if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
@@ -3501,6 +3600,13 @@ export function App() {
       commitDoc(prev => updateNodeStyle(prev, selectedNodeIds, patch));
     },
     [commitDoc, selectedNodeIds]
+  );
+
+  const updateTaskTableField = React.useCallback(
+    (nodeId: NodeId, patch: Partial<NodeTask>) => {
+      commitDoc(prev => updateNodeTask(prev, [nodeId], { enabled: true, ...patch }));
+    },
+    [commitDoc]
   );
 
   const applySelectedEdgeStyle = React.useCallback(
@@ -4858,8 +4964,9 @@ export function App() {
     </>
   );
 
-  const renderNodeToolbar = () => (
-    <>
+  const renderNodeToolbar = () => {
+    return (
+      <>
       <div className="toolbar-title">Node Style</div>
       <div className="toolbar-subtitle">{selectedNodeIds.length} selected</div>
       <label className="toolbar-field">
@@ -5038,8 +5145,9 @@ export function App() {
       <button type="button" onClick={clearSelectedNodeStyle}>
         Reset Node Style
       </button>
-    </>
-  );
+      </>
+    );
+  };
 
   const renderEdgeToolbar = () => (
     <>
@@ -5092,9 +5200,9 @@ export function App() {
       const selected = selectedNodeIdSet.has(item.node.id);
       const label = item.node.label.trim() || 'Untitled Node';
       const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
-      const displayLabel = tag ? `${label} [${tag.name}]` : label;
+      const displayLabel = `${label}${tag ? ` [${tag.name}]` : ''}`;
       const checklistTargets = outlineChecklistTargetsByNodeId.get(item.node.id) || [];
-      const checkedTargetCount = checklistTargets.filter(nodeId => checkedNodeIdSet.has(nodeId)).length;
+      const checkedTargetCount = checklistTargets.filter(isChecklistNodeChecked).length;
       const canCheck = checklistTargets.length > 0;
       const checked = canCheck && checkedTargetCount === checklistTargets.length;
       const indeterminate = canCheck && checkedTargetCount > 0 && checkedTargetCount < checklistTargets.length;
@@ -5154,13 +5262,134 @@ export function App() {
       );
     });
 
+  const renderTaskTable = () => (
+    <div className="task-table-scroll">
+      {taskTableRows.length === 0 ? (
+        <p className="outline-empty">Add tags to nodes to create task rows.</p>
+      ) : (
+        <table className="task-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Category</th>
+              <th>Priority</th>
+              <th>Progress</th>
+              <th>Assignee</th>
+              <th>Start</th>
+              <th>Due</th>
+              <th>Tag</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {taskTableRows.map(row => {
+              const task = row.node.task;
+              const label = row.node.label.trim() || 'Untitled Node';
+
+              return (
+                <tr key={row.node.id}>
+                  <td>
+                    <button type="button" className="task-node-link" onClick={() => selectOutlineNode(row.node.id)}>
+                      {label}
+                    </button>
+                  </td>
+                  <td className="task-readonly-cell">{row.category || '-'}</td>
+                  <td>
+                    <select
+                      value={task?.priority || ''}
+                      onKeyDown={event => event.stopPropagation()}
+                      onChange={event =>
+                        updateTaskTableField(row.node.id, {
+                          priority: (event.currentTarget.value || 'normal') as TaskPriority
+                        })
+                      }
+                    >
+                      <option value="">-</option>
+                      {TASK_PRIORITIES.map(priority => (
+                        <option key={priority} value={priority}>
+                          {TASK_PRIORITY_LABELS[priority]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      className="task-progress-input"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={task?.progress ?? ''}
+                      onKeyDown={event => event.stopPropagation()}
+                      onChange={event =>
+                        updateTaskTableField(row.node.id, {
+                          progress:
+                            event.currentTarget.value === ''
+                              ? 0
+                              : Math.max(0, Math.min(100, Number(event.currentTarget.value)))
+                        })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      value={task?.assignee || ''}
+                      onKeyDown={event => event.stopPropagation()}
+                      onChange={event =>
+                        updateTaskTableField(row.node.id, { assignee: event.currentTarget.value || undefined })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="date"
+                      value={task?.startDate || ''}
+                      onKeyDown={event => event.stopPropagation()}
+                      onChange={event =>
+                        updateTaskTableField(row.node.id, { startDate: event.currentTarget.value || undefined })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="date"
+                      value={task?.dueDate || ''}
+                      onKeyDown={event => event.stopPropagation()}
+                      onChange={event =>
+                        updateTaskTableField(row.node.id, { dueDate: event.currentTarget.value || undefined })
+                      }
+                    />
+                  </td>
+                  <td className="task-readonly-cell">{row.tagName || '-'}</td>
+                  <td>
+                    <input
+                      className="task-notes-input"
+                      value={task?.note || ''}
+                      onKeyDown={event => event.stopPropagation()}
+                      onChange={event =>
+                        updateTaskTableField(row.node.id, { note: event.currentTarget.value || undefined })
+                      }
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+
+  const sidePanelVisible = outlineVisible || taskTableVisible;
   const workspaceClassName = [
     'canvas-workspace',
-    outlineVisible ? 'canvas-workspace-outline-visible' : '',
+    taskTableVisible ? 'canvas-workspace-task-visible' : outlineVisible ? 'canvas-workspace-outline-visible' : '',
     activeTab.toolbarVisible ? 'canvas-workspace-toolbar-visible' : ''
   ]
     .filter(Boolean)
     .join(' ');
+  const workspaceStyle = {
+    ['--side-panel-width' as string]: `${sidePanelWidth}px`
+  } as React.CSSProperties;
 
   return (
     <main className="app">
@@ -5192,10 +5421,25 @@ export function App() {
             type="button"
             className="outline-toggle-btn"
             data-testid="outline-toggle"
-            onClick={() => setOutlineVisible(prev => !prev)}
+            onClick={() => {
+              setTaskTableVisible(false);
+              setOutlineVisible(prev => !prev);
+            }}
             title={outlineVisible ? 'Hide outline' : 'Show outline'}
           >
             {outlineVisible ? '☰' : '☷'}
+          </button>
+          <button
+            type="button"
+            className="task-toggle-btn"
+            data-testid="task-toggle"
+            onClick={() => {
+              setOutlineVisible(false);
+              setTaskTableVisible(prev => !prev);
+            }}
+            title={taskTableVisible ? 'Hide tasks' : 'Show tasks'}
+          >
+            Task
           </button>
           <button
             type="button"
@@ -5219,19 +5463,49 @@ export function App() {
       ) : null}
 
       <section className="panel canvas-panel">
-        <div className={workspaceClassName}>
-          {outlineVisible ? (
-            <aside className="outline-panel" data-testid="outline-panel">
-              <div className="outline-panel-header">
-                <span>Checklist</span>
-                <button type="button" data-testid="outline-hide" onClick={() => setOutlineVisible(false)} title="Hide outline">
-                  x
-                </button>
-              </div>
-              <div className="outline-tree">
-                {outlineTree.length > 0 ? renderOutlineNodes(outlineTree) : <p className="outline-empty">No nodes</p>}
-              </div>
-            </aside>
+        <div className={workspaceClassName} style={workspaceStyle}>
+          {sidePanelVisible ? (
+            taskTableVisible ? (
+              <aside className="outline-panel task-panel" data-testid="task-panel">
+                <div className="outline-panel-header">
+                  <span>Task</span>
+                  <button type="button" data-testid="task-hide" onClick={() => setTaskTableVisible(false)} title="Hide tasks">
+                    x
+                  </button>
+                </div>
+                {renderTaskTable()}
+              </aside>
+            ) : (
+              <aside className="outline-panel" data-testid="outline-panel">
+                <div className="outline-panel-header">
+                  <span>Checklist</span>
+                  <button type="button" data-testid="outline-hide" onClick={() => setOutlineVisible(false)} title="Hide outline">
+                    x
+                  </button>
+                </div>
+                <div className="outline-tree">
+                  {outlineTree.length > 0 ? renderOutlineNodes(outlineTree) : <p className="outline-empty">No nodes</p>}
+                </div>
+              </aside>
+            )
+          ) : null}
+          {sidePanelVisible ? (
+            <div
+              className={sidePanelResizing ? 'panel-resizer panel-resizer-active' : 'panel-resizer'}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={taskTableVisible ? 'Resize task panel' : 'Resize checklist panel'}
+              aria-valuemin={SIDE_PANEL_MIN_WIDTH}
+              aria-valuemax={SIDE_PANEL_MAX_WIDTH}
+              aria-valuenow={sidePanelWidth}
+              tabIndex={0}
+              data-testid="side-panel-resizer"
+              onPointerDown={onSidePanelResizePointerDown}
+              onPointerMove={onSidePanelResizePointerMove}
+              onPointerUp={finishSidePanelResize}
+              onPointerCancel={finishSidePanelResize}
+              onKeyDown={onSidePanelResizeKeyDown}
+            />
           ) : null}
           <div className="canvas-main">
             <h2>

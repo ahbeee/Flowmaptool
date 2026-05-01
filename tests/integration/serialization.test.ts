@@ -6,7 +6,8 @@ import {
   deserialize,
   migrateToLatest,
   setNodeChecked,
-  serialize
+  serialize,
+  updateNodeTask
 } from '../../src/shared/graph';
 
 describe('serialization and migration', () => {
@@ -89,5 +90,42 @@ describe('serialization and migration', () => {
       checklist: { checkedNodeIds: ['n1', 'missing', 'n1'] }
     });
     expect(migrated.checklist.checkedNodeIds).toEqual(['n1']);
+  });
+
+  it('round-trips task metadata and sanitizes invalid task values', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'A');
+    doc = updateNodeTask(doc, ['n1'], {
+      enabled: true,
+      done: true,
+      priority: 'high',
+      progress: 37,
+      assignee: 'Amy',
+      dueDate: '2026-05-10'
+    });
+
+    const parsed = deserialize(serialize(doc));
+
+    expect(parsed.nodes[0].task).toMatchObject({
+      enabled: true,
+      done: true,
+      priority: 'high',
+      progress: 37,
+      assignee: 'Amy',
+      dueDate: '2026-05-10'
+    });
+
+    const migrated = migrateToLatest({
+      nodes: [{ id: 'n1', label: 'A', task: { enabled: true, priority: 'bad', progress: 140, assignee: '  ' } }],
+      edges: []
+    });
+
+    expect(migrated.nodes[0].task).toMatchObject({
+      enabled: true,
+      done: false,
+      priority: 'normal',
+      progress: 100
+    });
+    expect(migrated.nodes[0].task?.assignee).toBeUndefined();
   });
 });

@@ -424,6 +424,33 @@ describe('vertical layout', () => {
     expect(n9.y).toBeCloseTo(n13.y, 6);
   });
 
+  it('lays out a child behind a parent that was created later', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'Task'); // n1
+    doc = addNode(doc, 'Redynal'); // n2
+    doc = addNode(doc, 'Techsales'); // n3
+    doc = addNode(doc, 'NTT-CSR440'); // n4
+    doc = addEdge(doc, 'n1', 'n3');
+    doc = addEdge(doc, 'n2', 'n4');
+    doc = addEdge(doc, 'n3', 'n2');
+
+    const nodeSizes: NodeSizeMap = {
+      n1: { width: 90, height: 36 },
+      n2: { width: 100, height: 36 },
+      n3: { width: 100, height: 36 },
+      n4: { width: 110, height: 36 }
+    };
+    const result = layoutFlow(doc, 'horizontal', nodeSizes, { primary: 48, secondary: 24 });
+    const techsales = findPos(result, 'n3');
+    const redynal = findPos(result, 'n2');
+    const child = findPos(result, 'n4');
+
+    expect(redynal.x).toBeGreaterThan(techsales.x);
+    expect(redynal.x - (techsales.x + nodeSizes.n3.width)).toBe(48);
+    expect(redynal.y).toBeCloseTo(techsales.y, 6);
+    expect(child.x - (redynal.x + nodeSizes.n2.width)).toBe(48);
+  });
+
   it('does not let a secondary cycle edge change node layout', () => {
     let doc = createEmptyDoc();
     doc = addNode(doc, 'Root Topic'); // n1

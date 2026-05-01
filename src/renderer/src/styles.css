@@ -104,6 +104,7 @@ select {
 }
 
 .outline-toggle-btn,
+.task-toggle-btn,
 .toolbar-toggle-btn {
   border: 1px solid #94a3b8;
   border-radius: 6px;
@@ -115,6 +116,7 @@ select {
 }
 
 .outline-toggle-btn:hover,
+.task-toggle-btn:hover,
 .toolbar-toggle-btn:hover {
   background: #f8fafc;
 }
@@ -142,9 +144,11 @@ select {
 }
 
 .canvas-workspace {
+  --side-panel-width: 360px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  column-gap: 0;
+  row-gap: 10px;
   align-items: start;
 }
 
@@ -152,23 +156,59 @@ select {
   grid-template-columns: minmax(0, 1fr) 310px;
 }
 
-.canvas-workspace-outline-visible {
-  grid-template-columns: 240px minmax(0, 1fr);
+.canvas-workspace-outline-visible,
+.canvas-workspace-task-visible {
+  grid-template-columns: var(--side-panel-width) 8px minmax(0, 1fr);
 }
 
-.canvas-workspace-outline-visible.canvas-workspace-toolbar-visible {
-  grid-template-columns: 240px minmax(0, 1fr) 310px;
+.canvas-workspace-outline-visible.canvas-workspace-toolbar-visible,
+.canvas-workspace-task-visible.canvas-workspace-toolbar-visible {
+  grid-template-columns: var(--side-panel-width) 8px minmax(0, 1fr) 310px;
 }
 
 .canvas-main {
   min-width: 0;
+  padding-left: 10px;
+}
+
+.canvas-workspace:not(.canvas-workspace-outline-visible):not(.canvas-workspace-task-visible) .canvas-main {
+  padding-left: 0;
+}
+
+.panel-resizer {
+  align-self: stretch;
+  width: 8px;
+  min-height: 100%;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+
+.panel-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: #d1d5db;
+}
+
+.panel-resizer:hover::before,
+.panel-resizer-active::before {
+  left: 2px;
+  width: 3px;
+  background: #3b82f6;
+}
+
+.panel-resizer:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
 }
 
 .outline-panel {
   align-self: stretch;
   min-width: 0;
-  border-right: 1px solid #d1d5db;
-  padding-right: 8px;
   max-height: calc(100vh - 96px);
   overflow: auto;
 }
@@ -186,6 +226,78 @@ select {
   background: transparent;
   color: #475569;
   cursor: pointer;
+}
+
+.task-panel {
+  min-width: 0;
+}
+
+.task-table-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 140px);
+}
+
+.task-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 12px;
+}
+
+.task-table th,
+.task-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.task-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.task-table input,
+.task-table select {
+  width: 100%;
+  min-width: 86px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 3px 5px;
+}
+
+.task-table .task-progress-input {
+  width: 58px;
+  min-width: 58px;
+}
+
+.task-node-link {
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.task-node-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.task-readonly-cell {
+  color: #334155;
+}
+
+.task-notes-input {
+  min-width: 130px;
 }
 
 .outline-tree {
@@ -336,14 +448,46 @@ select {
 }
 
 .toolbar-field input,
-.toolbar-field select {
+.toolbar-field select,
+.toolbar-field textarea {
   width: 170px;
   padding: 6px 8px;
+}
+
+.toolbar-field textarea {
+  min-height: 54px;
+  resize: vertical;
+}
+
+.toolbar-field-stacked {
+  align-items: flex-start;
+}
+
+.toolbar-field-stacked span {
+  padding-top: 6px;
 }
 
 .toolbar-field input[type='color'] {
   height: 34px;
   padding: 2px;
+}
+
+.toolbar-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e5e7eb;
+  font-size: 14px;
+}
+
+.toolbar-checkbox-field input {
+  width: 16px;
+  height: 16px;
+  accent-color: #60a5fa;
+}
+
+.toolbar-checkbox-field span {
+  color: #e5e7eb;
 }
 
 .toolbar-section-title {
