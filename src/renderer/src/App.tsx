@@ -2157,6 +2157,28 @@ export function App() {
     () => new Set(doc.checklist.checkedNodeIds),
     [doc.checklist.checkedNodeIds]
   );
+  const tagById = React.useMemo(() => new Map(doc.settings.tags.map(tag => [tag.id, tag])), [doc.settings.tags]);
+  const outlineChecklistTargetsByNodeId = React.useMemo(() => {
+    const targetsByNodeId = new Map<NodeId, NodeId[]>();
+    const hasChecklistTag = (node: FlowNode) => Boolean(node.style?.tagId && tagById.has(node.style.tagId));
+
+    const visit = (item: OutlineTreeNode) => {
+      const targets: NodeId[] = [];
+      if (hasChecklistTag(item.node)) {
+        targets.push(item.node.id);
+      }
+      for (const child of item.children) {
+        if (hasChecklistTag(child.node)) {
+          targets.push(child.node.id);
+        }
+        visit(child);
+      }
+      targetsByNodeId.set(item.node.id, targets);
+    };
+
+    outlineTree.forEach(visit);
+    return targetsByNodeId;
+  }, [outlineTree, tagById]);
   const selectedStyleEdges = React.useMemo(() => {
     if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
     if (selectedNodeIds.length === 0) return [];
@@ -2419,9 +2441,10 @@ export function App() {
     setFileMessage('Edited');
   }, [updateActiveTab]);
 
-  const toggleChecklistNode = React.useCallback(
-    (nodeId: NodeId, checked: boolean) => {
-      commitDoc(prev => setNodeChecked(prev, nodeId, checked));
+  const toggleChecklistNodes = React.useCallback(
+    (nodeIds: NodeId[], checked: boolean) => {
+      if (nodeIds.length === 0) return;
+      commitDoc(prev => nodeIds.reduce((nextDoc, nodeId) => setNodeChecked(nextDoc, nodeId, checked), prev));
     },
     [commitDoc]
   );
@@ -5067,8 +5090,14 @@ export function App() {
       const hasChildren = item.children.length > 0;
       const collapsed = collapsedOutlineNodeIds.has(item.node.id);
       const selected = selectedNodeIdSet.has(item.node.id);
-      const checked = checkedNodeIdSet.has(item.node.id);
       const label = item.node.label.trim() || 'Untitled Node';
+      const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
+      const displayLabel = tag ? `${label} [${tag.name}]` : label;
+      const checklistTargets = outlineChecklistTargetsByNodeId.get(item.node.id) || [];
+      const checkedTargetCount = checklistTargets.filter(nodeId => checkedNodeIdSet.has(nodeId)).length;
+      const canCheck = checklistTargets.length > 0;
+      const checked = canCheck && checkedTargetCount === checklistTargets.length;
+      const indeterminate = canCheck && checkedTargetCount > 0 && checkedTargetCount < checklistTargets.length;
       const nodeButtonClassName = [
         'outline-node-button',
         selected ? 'outline-node-selected' : '',
@@ -5093,24 +5122,31 @@ export function App() {
             >
               {hasChildren ? (collapsed ? '▸' : '▾') : ''}
             </button>
-            <input
-              type="checkbox"
-              className="outline-check"
-              data-testid={`outline-check-${item.node.id}`}
-              checked={checked}
-              onChange={event => toggleChecklistNode(item.node.id, event.currentTarget.checked)}
-              onClick={event => event.stopPropagation()}
-              title={checked ? 'Mark not done' : 'Mark done'}
-              aria-label={`${checked ? 'Mark not done' : 'Mark done'}: ${label}`}
-            />
+            {canCheck ? (
+              <input
+                ref={input => {
+                  if (input) input.indeterminate = indeterminate;
+                }}
+                type="checkbox"
+                className="outline-check"
+                data-testid={`outline-check-${item.node.id}`}
+                checked={checked}
+                onChange={event => toggleChecklistNodes(checklistTargets, event.currentTarget.checked)}
+                onClick={event => event.stopPropagation()}
+                title={checked ? 'Mark related tasks not done' : 'Mark related tasks done'}
+                aria-label={`${checked ? 'Mark related tasks not done' : 'Mark related tasks done'}: ${displayLabel}`}
+              />
+            ) : (
+              <span className="outline-check-placeholder" aria-hidden="true" />
+            )}
             <button
               type="button"
               className={nodeButtonClassName}
               data-testid={`outline-node-${item.node.id}`}
               onClick={() => selectOutlineNode(item.node.id)}
-              title={label}
+              title={displayLabel}
             >
-              {label}
+              {displayLabel}
             </button>
           </div>
           {hasChildren && !collapsed ? renderOutlineNodes(item.children, depth + 1) : null}

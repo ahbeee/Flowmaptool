@@ -231,6 +231,13 @@ select {
   cursor: pointer;
 }
 
+.outline-check-placeholder {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0 2px;
+}
+
 .outline-node-button {
   flex: 1;
   min-width: 0;

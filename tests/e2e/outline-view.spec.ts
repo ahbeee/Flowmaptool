@@ -39,15 +39,17 @@ function createChecklistFixture() {
       nodes: [
         { id: 'n1', label: 'Root Topic' },
         { id: 'n2', label: 'First task' },
-        { id: 'n3', label: 'Second task' }
+        { id: 'n3', label: 'Second task', style: { tagId: 'tag-pink' } },
+        { id: 'n4', label: 'Reference only' }
       ],
       edges: [
         { id: 'e1', from: 'n1', to: 'n2', role: 'layout' },
-        { id: 'e2', from: 'n2', to: 'n3', role: 'layout' }
+        { id: 'e2', from: 'n2', to: 'n3', role: 'layout' },
+        { id: 'e3', from: 'n1', to: 'n4', role: 'layout' }
       ],
       meta: {
-        nextNodeSeq: 4,
-        nextEdgeSeq: 3
+        nextNodeSeq: 5,
+        nextEdgeSeq: 4
       },
       settings: {
         themeId: 'blue-gray',
@@ -99,11 +101,8 @@ test('outline mirrors hierarchy and selection', async () => {
   await expect(window.getByTestId('outline-node-n2')).toBeVisible();
   await expect(window.getByTestId('outline-node-n3')).toBeVisible();
 
-  await window.getByTestId('outline-check-n2').check();
-  await expect(window.getByTestId('outline-check-n2')).toBeChecked();
-  await expect(window.getByTestId('outline-node-n2')).toHaveClass(/outline-node-complete/);
-  await window.getByTestId('outline-check-n2').uncheck();
-  await expect(window.getByTestId('outline-check-n2')).not.toBeChecked();
+  await expect(window.getByTestId('outline-check-n2')).toHaveCount(0);
+  await expect(window.getByTestId('outline-check-n3')).toHaveCount(0);
 
   await window.getByTestId('outline-toggle-n2').click();
   await expect(window.getByTestId('outline-node-n3')).toHaveCount(0);
@@ -124,9 +123,14 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
   const first = await launchWithOpenPath(filePath);
 
   await triggerMenuAction(first.app, 'file:open');
+  await expect(first.window.getByTestId('outline-check-n1')).toHaveCount(0);
   await expect(first.window.getByTestId('outline-check-n2')).toBeVisible();
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Second task [Pending]');
+  await expect(first.window.getByTestId('outline-check-n3')).toBeVisible();
+  await expect(first.window.getByTestId('outline-check-n4')).toHaveCount(0);
   await first.window.getByTestId('outline-check-n2').check();
   await expect(first.window.getByTestId('outline-node-n2')).toHaveClass(/outline-node-complete/);
+  await expect(first.window.getByTestId('outline-check-n3')).toBeChecked();
   await triggerMenuAction(first.app, 'file:save');
   await expect(first.window.getByTestId('file-status')).toContainText('Saved');
   await first.app.close();
@@ -134,11 +138,13 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
   const saved = JSON.parse(await readFile(filePath, 'utf-8')) as {
     doc: { checklist?: { checkedNodeIds?: string[] } };
   };
-  expect(saved.doc.checklist?.checkedNodeIds).toContain('n2');
+  expect(saved.doc.checklist?.checkedNodeIds).toContain('n3');
+  expect(saved.doc.checklist?.checkedNodeIds).not.toContain('n2');
 
   const second = await launchWithOpenPath(filePath);
   await triggerMenuAction(second.app, 'file:open');
   await expect(second.window.getByTestId('outline-check-n2')).toBeChecked();
+  await expect(second.window.getByTestId('outline-check-n3')).toBeChecked();
   await expect(second.window.getByTestId('outline-node-n2')).toHaveClass(/outline-node-complete/);
   await second.app.close();
 });
