@@ -9,6 +9,7 @@ import {
   removeEdge,
   removeNodes,
   resetNodeStyle,
+  setNodeChecked,
   updateEdgeStyle,
   updateNodeLabel,
   updateNodeStyle,
@@ -2152,6 +2153,10 @@ export function App() {
     [doc.nodes, selectedNodeIds]
   );
   const selectedNodeIdSet = React.useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
+  const checkedNodeIdSet = React.useMemo(
+    () => new Set(doc.checklist.checkedNodeIds),
+    [doc.checklist.checkedNodeIds]
+  );
   const selectedStyleEdges = React.useMemo(() => {
     if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
     if (selectedNodeIds.length === 0) return [];
@@ -2413,6 +2418,13 @@ export function App() {
     });
     setFileMessage('Edited');
   }, [updateActiveTab]);
+
+  const toggleChecklistNode = React.useCallback(
+    (nodeId: NodeId, checked: boolean) => {
+      commitDoc(prev => setNodeChecked(prev, nodeId, checked));
+    },
+    [commitDoc]
+  );
 
   const newTab = React.useCallback(() => {
     const id = `tab-${tabCounter}`;
@@ -5055,7 +5067,15 @@ export function App() {
       const hasChildren = item.children.length > 0;
       const collapsed = collapsedOutlineNodeIds.has(item.node.id);
       const selected = selectedNodeIdSet.has(item.node.id);
+      const checked = checkedNodeIdSet.has(item.node.id);
       const label = item.node.label.trim() || 'Untitled Node';
+      const nodeButtonClassName = [
+        'outline-node-button',
+        selected ? 'outline-node-selected' : '',
+        checked ? 'outline-node-complete' : ''
+      ]
+        .filter(Boolean)
+        .join(' ');
 
       return (
         <React.Fragment key={item.node.id}>
@@ -5073,9 +5093,19 @@ export function App() {
             >
               {hasChildren ? (collapsed ? '▸' : '▾') : ''}
             </button>
+            <input
+              type="checkbox"
+              className="outline-check"
+              data-testid={`outline-check-${item.node.id}`}
+              checked={checked}
+              onChange={event => toggleChecklistNode(item.node.id, event.currentTarget.checked)}
+              onClick={event => event.stopPropagation()}
+              title={checked ? 'Mark not done' : 'Mark done'}
+              aria-label={`${checked ? 'Mark not done' : 'Mark done'}: ${label}`}
+            />
             <button
               type="button"
-              className={selected ? 'outline-node-button outline-node-selected' : 'outline-node-button'}
+              className={nodeButtonClassName}
               data-testid={`outline-node-${item.node.id}`}
               onClick={() => selectOutlineNode(item.node.id)}
               title={label}
@@ -5157,7 +5187,7 @@ export function App() {
           {outlineVisible ? (
             <aside className="outline-panel" data-testid="outline-panel">
               <div className="outline-panel-header">
-                <span>Outline</span>
+                <span>Checklist</span>
                 <button type="button" data-testid="outline-hide" onClick={() => setOutlineVisible(false)} title="Hide outline">
                   x
                 </button>

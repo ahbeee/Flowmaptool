@@ -24,6 +24,10 @@ export type FlowDocMeta = {
   nextEdgeSeq: number;
 };
 
+export type FlowChecklist = {
+  checkedNodeIds: NodeId[];
+};
+
 export type NodeShape = 'plain' | 'rounded' | 'pill' | 'underline' | 'square';
 export type TextAlign = 'left' | 'center' | 'right';
 export type EdgeLineType = 'solid' | 'dashed' | 'dotted';
@@ -77,6 +81,7 @@ export type FlowDoc = {
   edges: FlowEdge[];
   meta: FlowDocMeta;
   settings: FlowSettings;
+  checklist: FlowChecklist;
 };
 
 export type EdgeValidationResult =
@@ -89,6 +94,7 @@ type LegacyFlowDoc = {
   edges?: Array<Partial<FlowEdge> & { from?: unknown; to?: unknown; id?: unknown }>;
   meta?: Partial<FlowDocMeta>;
   settings?: Partial<FlowSettings>;
+  checklist?: Partial<FlowChecklist>;
 };
 
 const DEFAULT_TAGS: FlowTag[] = [
@@ -128,7 +134,10 @@ export function createEmptyDoc(): FlowDoc {
       nextNodeSeq: 1,
       nextEdgeSeq: 1
     },
-    settings: createDefaultSettings()
+    settings: createDefaultSettings(),
+    checklist: {
+      checkedNodeIds: []
+    }
   };
 }
 
@@ -334,6 +343,21 @@ function sanitizeSettings(input: unknown): FlowSettings {
   };
 }
 
+function sanitizeChecklist(input: LegacyFlowDoc['checklist'], validNodeIds: Set<NodeId>): FlowChecklist {
+  const checkedNodeIds: NodeId[] = [];
+  const seen = new Set<NodeId>();
+  const rawNodeIds = Array.isArray(input?.checkedNodeIds) ? input.checkedNodeIds : [];
+
+  for (const rawNodeId of rawNodeIds) {
+    const nodeId = toStringId(rawNodeId);
+    if (!nodeId || !validNodeIds.has(nodeId) || seen.has(nodeId)) continue;
+    seen.add(nodeId);
+    checkedNodeIds.push(nodeId);
+  }
+
+  return { checkedNodeIds };
+}
+
 export function migrateToLatest(input: unknown): FlowDoc {
   const legacy = (input || {}) as LegacyFlowDoc;
   const settings = sanitizeSettings(legacy.settings);
@@ -350,13 +374,15 @@ export function migrateToLatest(input: unknown): FlowDoc {
     return style ? { ...edge, style } : edge;
   });
   const meta = normalizeMeta(nodes, edges, legacy.meta);
+  const checklist = sanitizeChecklist(legacy.checklist, validNodeIds);
 
   return {
     schemaVersion: SCHEMA_VERSION,
     nodes,
     edges,
     meta,
-    settings
+    settings,
+    checklist
   };
 }
 
@@ -433,6 +459,21 @@ export function resetNodeStyle(doc: FlowDoc, nodeIds: NodeId[]): FlowDoc {
   return {
     ...doc,
     nodes: doc.nodes.map(node => (targets.has(node.id) ? { id: node.id, label: node.label } : node))
+  };
+}
+
+export function setNodeChecked(doc: FlowDoc, nodeId: NodeId, checked: boolean): FlowDoc {
+  assertNodeExists(doc, nodeId);
+  const checkedNodeIds = doc.checklist?.checkedNodeIds || [];
+  const exists = checkedNodeIds.includes(nodeId);
+  if (checked && exists) return doc;
+  if (!checked && !exists) return doc;
+
+  return {
+    ...doc,
+    checklist: {
+      checkedNodeIds: checked ? [...checkedNodeIds, nodeId] : checkedNodeIds.filter(id => id !== nodeId)
+    }
   };
 }
 
@@ -592,7 +633,10 @@ export function removeNode(doc: FlowDoc, nodeId: NodeId): FlowDoc {
   return {
     ...doc,
     nodes: doc.nodes.filter(node => node.id !== nodeId),
-    edges: doc.edges.filter(edge => edge.from !== nodeId && edge.to !== nodeId)
+    edges: doc.edges.filter(edge => edge.from !== nodeId && edge.to !== nodeId),
+    checklist: {
+      checkedNodeIds: (doc.checklist?.checkedNodeIds || []).filter(id => id !== nodeId)
+    }
   };
 }
 
@@ -605,7 +649,10 @@ export function removeNodes(doc: FlowDoc, nodeIds: NodeId[]): FlowDoc {
   return {
     ...doc,
     nodes: doc.nodes.filter(node => !toDelete.has(node.id)),
-    edges: doc.edges.filter(edge => !toDelete.has(edge.from) && !toDelete.has(edge.to))
+    edges: doc.edges.filter(edge => !toDelete.has(edge.from) && !toDelete.has(edge.to)),
+    checklist: {
+      checkedNodeIds: (doc.checklist?.checkedNodeIds || []).filter(id => !toDelete.has(id))
+    }
   };
 }
 

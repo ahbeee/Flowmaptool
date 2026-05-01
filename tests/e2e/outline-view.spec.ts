@@ -20,6 +20,12 @@ test('outline mirrors hierarchy and selection', async () => {
   await expect(window.getByTestId('outline-node-n2')).toBeVisible();
   await expect(window.getByTestId('outline-node-n3')).toBeVisible();
 
+  await window.getByTestId('outline-check-n2').check();
+  await expect(window.getByTestId('outline-check-n2')).toBeChecked();
+  await expect(window.getByTestId('outline-node-n2')).toHaveClass(/outline-node-complete/);
+  await window.getByTestId('outline-check-n2').uncheck();
+  await expect(window.getByTestId('outline-check-n2')).not.toBeChecked();
+
   await window.getByTestId('outline-toggle-n2').click();
   await expect(window.getByTestId('outline-node-n3')).toHaveCount(0);
   await window.getByTestId('outline-toggle-n2').click();

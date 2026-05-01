@@ -222,6 +222,15 @@ select {
   color: transparent;
 }
 
+.outline-check {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0 2px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
 .outline-node-button {
   flex: 1;
   min-width: 0;
@@ -240,6 +249,11 @@ select {
 .outline-node-button:hover,
 .outline-node-selected {
   background: #bfdbfe;
+}
+
+.outline-node-complete {
+  color: #64748b;
+  text-decoration: line-through;
 }
 
 .outline-empty {

@@ -5,6 +5,7 @@ import {
   createEmptyDoc,
   deserialize,
   migrateToLatest,
+  setNodeChecked,
   serialize
 } from '../../src/shared/graph';
 
@@ -71,5 +72,22 @@ describe('serialization and migration', () => {
     expect(doc.edges.map(e => [e.from, e.to])).toEqual([['n1', 'n8']]);
     expect(doc.meta.nextNodeSeq).toBe(9);
     expect(doc.meta.nextEdgeSeq).toBe(2);
+  });
+
+  it('round-trips checklist state and drops invalid checked nodes', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'A');
+    doc = addNode(doc, 'B');
+    doc = setNodeChecked(doc, 'n1', true);
+
+    const parsed = deserialize(serialize(doc));
+    expect(parsed.checklist.checkedNodeIds).toEqual(['n1']);
+
+    const migrated = migrateToLatest({
+      nodes: [{ id: 'n1', label: 'A' }],
+      edges: [],
+      checklist: { checkedNodeIds: ['n1', 'missing', 'n1'] }
+    });
+    expect(migrated.checklist.checkedNodeIds).toEqual(['n1']);
   });
 });
