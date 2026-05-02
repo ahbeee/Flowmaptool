@@ -166,6 +166,14 @@ select {
   grid-template-columns: var(--side-panel-width) 8px minmax(0, 1fr) 310px;
 }
 
+.canvas-workspace-task-expanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.canvas-workspace-task-expanded.canvas-workspace-toolbar-visible {
+  grid-template-columns: minmax(0, 1fr) 310px;
+}
+
 .canvas-main {
   min-width: 0;
   padding-left: 10px;
@@ -173,6 +181,11 @@ select {
 
 .canvas-workspace:not(.canvas-workspace-outline-visible):not(.canvas-workspace-task-visible) .canvas-main {
   padding-left: 0;
+}
+
+.canvas-workspace-task-expanded .canvas-main,
+.canvas-workspace-task-expanded .panel-resizer {
+  display: none;
 }
 
 .panel-resizer {
@@ -228,8 +241,30 @@ select {
   cursor: pointer;
 }
 
+.outline-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.outline-panel-header .outline-panel-action {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 2px 8px;
+}
+
+.outline-panel-header .outline-panel-action:hover {
+  background: #f8fafc;
+}
+
 .task-panel {
   min-width: 0;
+}
+
+.task-panel-expanded {
+  padding-left: 0;
 }
 
 .task-table-scroll {
@@ -262,6 +297,36 @@ select {
   font-weight: 700;
 }
 
+.task-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.task-sort-button:hover {
+  color: #2563eb;
+}
+
+.task-sort-indicator {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 8px;
+  color: #64748b;
+}
+
+.task-sort-indicator-active {
+  color: #0f172a;
+}
+
 .task-table input,
 .task-table select {
   width: 100%;
@@ -276,6 +341,64 @@ select {
 .task-table .task-progress-input {
   width: 58px;
   min-width: 58px;
+}
+
+.canvas-workspace-task-expanded .task-table-scroll {
+  overflow-x: hidden;
+  max-height: calc(100vh - 130px);
+}
+
+.canvas-workspace-task-expanded .task-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.canvas-workspace-task-expanded .task-table th,
+.canvas-workspace-task-expanded .task-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.canvas-workspace-task-expanded .task-table input,
+.canvas-workspace-task-expanded .task-table select,
+.canvas-workspace-task-expanded .task-table .task-progress-input,
+.canvas-workspace-task-expanded .task-notes-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.task-col-task {
+  width: 15%;
+}
+
+.task-col-category {
+  width: 21%;
+}
+
+.task-col-priority {
+  width: 9%;
+}
+
+.task-col-progress {
+  width: 8%;
+}
+
+.task-col-assignee {
+  width: 10%;
+}
+
+.task-col-start,
+.task-col-due {
+  width: 10%;
+}
+
+.task-col-tag {
+  width: 7%;
+}
+
+.task-col-notes {
+  width: 10%;
 }
 
 .task-node-link {

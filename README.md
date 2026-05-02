@@ -38,45 +38,14 @@ pnpm dist:win
 
 ## Current Scope
 
-- Multi-tab `.qflow` documents with new, open, save, save as, close, and tab switching.
-- Local-first graph model and serialization with version migration.
-- Keyboard-first editing: `Tab` adds a child, `Enter` adds a sibling, `Space` edits, `Delete` removes, `Ctrl+C` / `Ctrl+V` copies and pastes subflows, and arrow keys navigate between nodes.
-- Mouse interactions: node selection, marquee selection, root drag, child reparenting, right-drag edge creation, edge selection, bend dragging, and reset bend.
-- Auto layout for horizontal and vertical maps with configurable spacing, compact node sizing, multi-parent layout, root merge behavior, and fixed-spacing reflow.
-- Node styling: theme presets, font family, font size, text style, text color, background color, shape, tags, and default new-node style.
-- Edge styling: width, line type, color, bend/control handle routing, and automatic route reset.
-- View controls: zoom, fit to graph, toolbar visibility, and right-side style panel.
-- Export and packaging: PNG export, Windows portable app, and Windows installer.
-- Validation coverage for bad file UX, old file migration, PNG export quality, 500-node / 1000-edge performance, and core UI workflows.
-
-## Known Boundaries
-
-- Advanced manual edge routing is supported; exact QuikFlow parity remains an active improvement area rather than a release blocker.
-- Remote GitHub Actions CI is disabled by design; validation is run locally with the commands above.
-
-## Follow-Up Improvements
-
-### Right Toolbar Polish
-
-- Refine right-side toolbar interaction details after more manual use.
-- Simplify controls that are not useful in normal keyboard/mouse editing workflows.
-
-### Node Interaction Polish
-
-- Tighten node operation details that were intentionally paused after the current behavior became broadly acceptable.
-- Improve drag/reparent edge cases where a moved root, copied subtree, or manually adjusted node can still produce surprising placement.
-- Keep node spacing, node sizing, and text editing behavior consistent across horizontal and vertical layouts.
-
-### Design Feedback Items
-
-- Review the suggestions from the design feedback document and apply the items that improve practical editing density.
-
-### Advanced Manual Edge Routing
-
-- Treat advanced manual routing as active improvement work, not a deferred parity-only item.
-- Improve cross-layer and back-reference routing such as node-to-root, node-to-ancestor, sibling-to-sibling, and branch-to-branch connections.
-- Avoid routing manual edges through node bodies when a clear path exists above, below, or between branches.
-- Preserve tree-edge selection near large cross-branch routes; covered by regression tests for nested layout edges and deep branch-to-branch routes.
-- Preserve user-adjusted edge routes after layout refreshes, node selection changes, and document reloads.
-- Keep `Reset Bend` scoped to clearing manual edge bends/routes for selected edges without changing node positions or unrelated edges.
-- Separate multiple nearby manual edges into readable lanes instead of drawing them directly on top of each other.
+- Multi-tab `.qflow` documents with new, open, save, save as, close, and tab switching workflows.
+- Local-first graph model and serialization with schema migration, settings, tags, checklist state, task metadata, and manual/layout edge roles.
+- Keyboard-first editing: `Tab` adds a child, `Enter` adds a sibling, `Space` edits, `Delete` removes, `Ctrl+C` / `Ctrl+V` copies and pastes subflows, undo/redo restores document history, and arrow keys navigate between nodes.
+- Mouse interactions: node selection, marquee selection, root drag, child reparenting, right-drag edge creation, edge selection, route control editing, bend dragging, segment deletion, and reset bend.
+- Auto layout for horizontal and vertical maps with configurable spacing, compact node sizing, multi-parent layout, root merge behavior, cycle edge handling, and fixed-spacing local reflow.
+- Node styling: theme presets, font family, font size, text style, text alignment, text color, background color, shape, tags, and default new-node style.
+- Edge styling and routing: width, line type, color, front/back/body anchors, manual route lanes, bend/control handle routing, selection stability, route persistence, and automatic route reset.
+- Panels and view controls: zoom, fit to graph, toolbar visibility, right-side style panel, outline hierarchy, checklist state, and task table.
+- Task workflows: tag-derived task rows, editable priority/progress/assignee/start/due/notes fields, readonly category/tag columns, sortable task headers, and expanded task table mode.
+- Export and output: PNG export, PDF export, print, Windows portable app, and Windows installer.
+- Validation coverage for bad file UX, old file migration, PNG export quality, 500-node / 1000-edge performance, task workflows, routing workflows, and core UI behavior.

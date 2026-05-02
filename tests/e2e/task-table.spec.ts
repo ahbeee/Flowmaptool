@@ -44,3 +44,101 @@ test('task table derives tagged nodes only and keeps tag read-only', async () =>
 
   await app.close();
 });
+
+test('task table headers sort imported checklist rows', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+  const labelInput = window.locator('.node-label-input');
+
+  const root = window.getByTestId('node-n1');
+  await root.click();
+  await window.keyboard.press('Space');
+  await labelInput.fill('Root Task');
+  await labelInput.press('Enter');
+
+  await root.click();
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+  const secondTask = window.getByTestId('node-n2');
+  await secondTask.click();
+  await window.keyboard.press('Space');
+  await labelInput.fill('Bravo Task');
+  await labelInput.press('Enter');
+  await secondTask.click();
+  await window.getByLabel('Apply tag Pending').click();
+
+  await root.click();
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+  const firstTask = window.getByTestId('node-n3');
+  await firstTask.click();
+  await window.keyboard.press('Space');
+  await labelInput.fill('Alpha Task');
+  await labelInput.press('Enter');
+  await firstTask.click();
+  await window.getByLabel('Apply tag Pending').click();
+
+  await window.getByTestId('task-toggle').click();
+  const panel = window.getByTestId('task-panel');
+  const firstRowTask = panel.locator('tbody tr').first().locator('td').first();
+
+  await expect(panel.locator('tbody tr')).toHaveCount(2);
+  await expect(firstRowTask).toContainText('Bravo Task');
+
+  await window.getByTestId('task-sort-task').click();
+  await expect(firstRowTask).toContainText('Alpha Task');
+  await expect(panel.locator('th').first()).toHaveAttribute('aria-sort', 'ascending');
+
+  await window.getByTestId('task-sort-task').click();
+  await expect(firstRowTask).toContainText('Bravo Task');
+  await expect(panel.locator('th').first()).toHaveAttribute('aria-sort', 'descending');
+
+  await app.close();
+});
+
+test('task table can expand to the main workspace without horizontal table scrolling', async () => {
+  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+  const app = await electron.launch({ args: [mainEntry] });
+  const window = await app.firstWindow();
+
+  const root = window.getByTestId('node-n1');
+  await root.click();
+  await window.keyboard.press('Space');
+  const labelInput = window.locator('.node-label-input');
+  await labelInput.fill('Root Task');
+  await labelInput.press('Enter');
+
+  await root.click();
+  await window.keyboard.press('Tab');
+  await window.keyboard.press('Escape');
+
+  const child = window.getByTestId('node-n2');
+  await child.click();
+  await window.keyboard.press('Space');
+  await labelInput.fill('Very long child task title that wraps in expanded table');
+  await labelInput.press('Enter');
+  await child.click();
+  await window.getByLabel('Apply tag Pending').click();
+
+  await window.getByTestId('task-toggle').click();
+  await window.getByTestId('task-expand-toggle').click();
+
+  await expect(window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
+  await expect(window.locator('.canvas-main')).toBeHidden();
+
+  const tableBox = await window.getByTestId('task-panel').locator('.task-table').boundingBox();
+  const scrollBox = await window.getByTestId('task-panel').locator('.task-table-scroll').boundingBox();
+  expect(tableBox?.width ?? 0).toBeLessThanOrEqual((scrollBox?.width ?? 0) + 8);
+
+  const overflowX = await window
+    .getByTestId('task-panel')
+    .locator('.task-table-scroll')
+    .evaluate(el => globalThis.getComputedStyle(el).overflowX);
+  expect(overflowX).toBe('hidden');
+
+  await window.getByTestId('task-expand-toggle').click();
+  await expect(window.locator('.canvas-main')).toBeVisible();
+
+  await app.close();
+});

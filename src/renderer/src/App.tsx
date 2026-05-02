@@ -97,6 +97,30 @@ const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: 'High',
   critical: 'Critical'
 };
+const TASK_PRIORITY_SORT_ORDER = new Map<TaskPriority, number>(TASK_PRIORITIES.map((priority, index) => [priority, index]));
+const TASK_TABLE_COLUMNS = [
+  { key: 'task', label: 'Task' },
+  { key: 'category', label: 'Category' },
+  { key: 'priority', label: 'Priority' },
+  { key: 'progress', label: 'Progress' },
+  { key: 'assignee', label: 'Assignee' },
+  { key: 'start', label: 'Start' },
+  { key: 'due', label: 'Due' },
+  { key: 'tag', label: 'Tag' },
+  { key: 'notes', label: 'Notes' }
+] as const;
+type TaskTableSortKey = (typeof TASK_TABLE_COLUMNS)[number]['key'];
+type TaskTableSortDirection = 'asc' | 'desc';
+type TaskTableSort = {
+  key: TaskTableSortKey;
+  direction: TaskTableSortDirection;
+};
+type TaskTableRow = {
+  node: FlowNode;
+  category: string;
+  tagName: string;
+  originalIndex: number;
+};
 const EDGE_WIDTHS = [1, 2, 3, 4, 5, 6, 7, 8];
 const EDGE_LINE_TYPES: Array<{ value: EdgeLineType; label: string }> = [
   { value: 'solid', label: 'Solid' },
@@ -2003,6 +2027,64 @@ function compareOutlineEdges(a: FlowEdge, b: FlowEdge): number {
   return compareEdgeOrder(a, b) || compareNodeIdOrder(a.to, b.to);
 }
 
+function getTaskNodeLabel(node: FlowNode): string {
+  return node.label.trim() || 'Untitled Node';
+}
+
+function normalizeTaskSortString(value: string | undefined): string {
+  return (value || '').trim().toLocaleLowerCase();
+}
+
+function compareOptionalTaskValues(
+  left: string | number | undefined,
+  right: string | number | undefined,
+  direction: TaskTableSortDirection
+): number {
+  const leftEmpty = left === undefined || left === '';
+  const rightEmpty = right === undefined || right === '';
+  if (leftEmpty || rightEmpty) {
+    if (leftEmpty && rightEmpty) return 0;
+    return leftEmpty ? 1 : -1;
+  }
+
+  const result =
+    typeof left === 'number' && typeof right === 'number'
+      ? left - right
+      : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
+  return direction === 'asc' ? result : -result;
+}
+
+function getTaskSortValue(row: TaskTableRow, key: TaskTableSortKey): string | number | undefined {
+  const task = row.node.task;
+  switch (key) {
+    case 'task':
+      return normalizeTaskSortString(getTaskNodeLabel(row.node));
+    case 'category':
+      return normalizeTaskSortString(row.category);
+    case 'priority':
+      return task?.priority ? TASK_PRIORITY_SORT_ORDER.get(task.priority) : undefined;
+    case 'progress':
+      return task ? task.progress : undefined;
+    case 'assignee':
+      return normalizeTaskSortString(task?.assignee);
+    case 'start':
+      return task?.startDate || undefined;
+    case 'due':
+      return task?.dueDate || undefined;
+    case 'tag':
+      return normalizeTaskSortString(row.tagName);
+    case 'notes':
+      return normalizeTaskSortString(task?.note);
+  }
+}
+
+function compareTaskTableRows(left: TaskTableRow, right: TaskTableRow, sort: TaskTableSort): number {
+  return (
+    compareOptionalTaskValues(getTaskSortValue(left, sort.key), getTaskSortValue(right, sort.key), sort.direction) ||
+    left.originalIndex - right.originalIndex
+  );
+}
+
 function buildOutlineTree(doc: FlowDoc): OutlineTreeNode[] {
   const nodeById = new Map<NodeId, FlowNode>();
   for (const node of doc.nodes) {
@@ -2131,6 +2213,8 @@ export function App() {
   const [newTagColor, setNewTagColor] = React.useState(COLOR_SWATCHES[0]);
   const [outlineVisible, setOutlineVisible] = React.useState(true);
   const [taskTableVisible, setTaskTableVisible] = React.useState(false);
+  const [taskTableExpanded, setTaskTableExpanded] = React.useState(false);
+  const [taskTableSort, setTaskTableSort] = React.useState<TaskTableSort | undefined>();
   const [sidePanelWidth, setSidePanelWidth] = React.useState(SIDE_PANEL_DEFAULT_WIDTH);
   const [sidePanelResizing, setSidePanelResizing] = React.useState(false);
   const [collapsedOutlineNodeIds, setCollapsedOutlineNodeIds] = React.useState<Set<NodeId>>(() => new Set());
@@ -2260,24 +2344,24 @@ export function App() {
     [checkedNodeIdSet]
   );
   const taskTableRows = React.useMemo(() => {
-    const rows: Array<{ node: FlowNode; category: string; tagName: string }> = [];
-    const nodeLabel = (node: FlowNode) => node.label.trim() || 'Untitled Node';
+    const rows: TaskTableRow[] = [];
 
     const visit = (item: OutlineTreeNode, parents: FlowNode[]) => {
       const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
       if (tag) {
         rows.push({
           node: item.node,
-          category: parents.map(nodeLabel).join(' > '),
-          tagName: tag.name
+          category: parents.map(getTaskNodeLabel).join(' > '),
+          tagName: tag.name,
+          originalIndex: rows.length
         });
       }
       item.children.forEach(child => visit(child, [...parents, item.node]));
     };
 
     outlineTree.forEach(item => visit(item, []));
-    return rows;
-  }, [outlineTree, tagById]);
+    return taskTableSort ? [...rows].sort((left, right) => compareTaskTableRows(left, right, taskTableSort)) : rows;
+  }, [outlineTree, tagById, taskTableSort]);
   const selectedStyleEdges = React.useMemo(() => {
     if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
     if (selectedNodeIds.length === 0) return [];
@@ -3608,6 +3692,13 @@ export function App() {
     },
     [commitDoc]
   );
+
+  const toggleTaskTableSort = React.useCallback((key: TaskTableSortKey) => {
+    setTaskTableSort(prev => ({
+      key,
+      direction: prev?.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  }, []);
 
   const applySelectedEdgeStyle = React.useCallback(
     (patch: EdgeStyle) => {
@@ -5268,23 +5359,49 @@ export function App() {
         <p className="outline-empty">Add tags to nodes to create task rows.</p>
       ) : (
         <table className="task-table">
+          <colgroup>
+            <col className="task-col-task" />
+            <col className="task-col-category" />
+            <col className="task-col-priority" />
+            <col className="task-col-progress" />
+            <col className="task-col-assignee" />
+            <col className="task-col-start" />
+            <col className="task-col-due" />
+            <col className="task-col-tag" />
+            <col className="task-col-notes" />
+          </colgroup>
           <thead>
             <tr>
-              <th>Task</th>
-              <th>Category</th>
-              <th>Priority</th>
-              <th>Progress</th>
-              <th>Assignee</th>
-              <th>Start</th>
-              <th>Due</th>
-              <th>Tag</th>
-              <th>Notes</th>
+              {TASK_TABLE_COLUMNS.map(column => {
+                const active = taskTableSort?.key === column.key;
+                const direction = active ? taskTableSort.direction : undefined;
+                return (
+                  <th
+                    key={column.key}
+                    aria-sort={
+                      active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="task-sort-button"
+                      data-testid={`task-sort-${column.key}`}
+                      onClick={() => toggleTaskTableSort(column.key)}
+                    >
+                      <span>{column.label}</span>
+                      <span className={active ? 'task-sort-indicator task-sort-indicator-active' : 'task-sort-indicator'}>
+                        {active ? (direction === 'asc' ? '^' : 'v') : ''}
+                      </span>
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {taskTableRows.map(row => {
               const task = row.node.task;
-              const label = row.node.label.trim() || 'Untitled Node';
+              const label = getTaskNodeLabel(row.node);
 
               return (
                 <tr key={row.node.id}>
@@ -5383,6 +5500,7 @@ export function App() {
   const workspaceClassName = [
     'canvas-workspace',
     taskTableVisible ? 'canvas-workspace-task-visible' : outlineVisible ? 'canvas-workspace-outline-visible' : '',
+    taskTableVisible && taskTableExpanded ? 'canvas-workspace-task-expanded' : '',
     activeTab.toolbarVisible ? 'canvas-workspace-toolbar-visible' : ''
   ]
     .filter(Boolean)
@@ -5423,6 +5541,7 @@ export function App() {
             data-testid="outline-toggle"
             onClick={() => {
               setTaskTableVisible(false);
+              setTaskTableExpanded(false);
               setOutlineVisible(prev => !prev);
             }}
             title={outlineVisible ? 'Hide outline' : 'Show outline'}
@@ -5435,7 +5554,11 @@ export function App() {
             data-testid="task-toggle"
             onClick={() => {
               setOutlineVisible(false);
-              setTaskTableVisible(prev => !prev);
+              const nextVisible = !taskTableVisible;
+              setTaskTableVisible(nextVisible);
+              if (!nextVisible) {
+                setTaskTableExpanded(false);
+              }
             }}
             title={taskTableVisible ? 'Hide tasks' : 'Show tasks'}
           >
@@ -5466,12 +5589,35 @@ export function App() {
         <div className={workspaceClassName} style={workspaceStyle}>
           {sidePanelVisible ? (
             taskTableVisible ? (
-              <aside className="outline-panel task-panel" data-testid="task-panel">
+              <aside
+                className={taskTableExpanded ? 'outline-panel task-panel task-panel-expanded' : 'outline-panel task-panel'}
+                data-testid="task-panel"
+              >
                 <div className="outline-panel-header">
                   <span>Task</span>
-                  <button type="button" data-testid="task-hide" onClick={() => setTaskTableVisible(false)} title="Hide tasks">
-                    x
-                  </button>
+                  <div className="outline-panel-actions">
+                    <button
+                      type="button"
+                      className="outline-panel-action"
+                      data-testid="task-expand-toggle"
+                      onClick={() => setTaskTableExpanded(prev => !prev)}
+                      title={taskTableExpanded ? 'Collapse task table' : 'Expand task table'}
+                      aria-label={taskTableExpanded ? 'Collapse task table' : 'Expand task table'}
+                    >
+                      {taskTableExpanded ? 'Collapse' : 'Expand'}
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="task-hide"
+                      onClick={() => {
+                        setTaskTableExpanded(false);
+                        setTaskTableVisible(false);
+                      }}
+                      title="Hide tasks"
+                    >
+                      x
+                    </button>
+                  </div>
                 </div>
                 {renderTaskTable()}
               </aside>
