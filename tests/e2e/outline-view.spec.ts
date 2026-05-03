@@ -135,3 +135,25 @@ test('outline can be hidden and restored', async () => {
 
   await app.close();
 });
+
+test('side panel resizer supports keyboard and pointer resizing', async () => {
+  const { app, window } = await launchApp();
+  const resizer = window.getByTestId('side-panel-resizer');
+
+  await expect(resizer).toHaveAttribute('aria-valuenow', '360');
+  await resizer.focus();
+  await window.keyboard.press('ArrowRight');
+  await expect(resizer).toHaveAttribute('aria-valuenow', '376');
+  await window.keyboard.press('ArrowLeft');
+  await expect(resizer).toHaveAttribute('aria-valuenow', '360');
+
+  const box = await resizer.boundingBox();
+  if (!box) throw new Error('side panel resizer not found');
+  await window.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2);
+  await window.mouse.up();
+  await expect(resizer).toHaveAttribute('aria-valuenow', '440');
+
+  await app.close();
+});

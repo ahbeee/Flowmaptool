@@ -203,7 +203,6 @@ import {
   ADVANCED_ROUTE_EDGE_LIMIT,
   ADVANCED_ROUTE_NODE_LIMIT,
   clamp,
-  clampSidePanelWidth,
   COLOR_SWATCHES,
   EDGE_LINE_TYPES,
   EDGE_WIDTHS,
@@ -219,6 +218,13 @@ import {
   SPACING_MIN,
   THEMES
 } from './ui-config';
+import {
+  beginSidePanelResize,
+  getSidePanelDragWidth,
+  getSidePanelKeyboardWidth,
+  shouldFinishSidePanelResize,
+  type SidePanelResizeState
+} from './side-panel-resize';
 import {
   getConnectHandleHitFromViewportPoint,
   getNodeIdFromEventTarget,
@@ -246,7 +252,6 @@ type MarqueeState = {
 };
 type EdgeBendDragState = { edgeId: string; pointIndex: number };
 type EdgeRouteControlSelection = { edgeId: string; pointIndex: number };
-type SidePanelResizeState = { pointerId: number; startX: number; startWidth: number };
 type DragPointerLikeEvent = {
   clientX: number;
   clientY: number;
@@ -302,12 +307,14 @@ export function App() {
 
   const onSidePanelResizePointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      sidePanelResizeRef.current = {
+      const resizeState = beginSidePanelResize({
+        button: event.button,
         pointerId: event.pointerId,
-        startX: event.clientX,
-        startWidth: sidePanelWidth
-      };
+        clientX: event.clientX,
+        currentWidth: sidePanelWidth
+      });
+      if (!resizeState) return;
+      sidePanelResizeRef.current = resizeState;
       setSidePanelResizing(true);
       event.currentTarget.setPointerCapture(event.pointerId);
       if (typeof document !== 'undefined') {
@@ -321,7 +328,7 @@ export function App() {
 
   const finishSidePanelResize = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const resizeState = sidePanelResizeRef.current;
-    if (!resizeState || resizeState.pointerId !== event.pointerId) return;
+    if (!shouldFinishSidePanelResize(resizeState, event.pointerId)) return;
 
     sidePanelResizeRef.current = null;
     setSidePanelResizing(false);
@@ -335,17 +342,17 @@ export function App() {
   }, []);
 
   const onSidePanelResizePointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const resizeState = sidePanelResizeRef.current;
-    if (!resizeState || resizeState.pointerId !== event.pointerId) return;
-    setSidePanelWidth(clampSidePanelWidth(resizeState.startWidth + event.clientX - resizeState.startX));
+    const nextWidth = getSidePanelDragWidth(sidePanelResizeRef.current, event.pointerId, event.clientX);
+    if (nextWidth === null) return;
+    setSidePanelWidth(nextWidth);
   }, []);
 
   const onSidePanelResizeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const nextWidth = getSidePanelKeyboardWidth(sidePanelWidth, event.key);
+    if (nextWidth === null) return;
     event.preventDefault();
-    const delta = event.key === 'ArrowLeft' ? -16 : 16;
-    setSidePanelWidth(width => clampSidePanelWidth(width + delta));
-  }, []);
+    setSidePanelWidth(nextWidth);
+  }, [sidePanelWidth]);
 
   React.useEffect(() => {
     return () => {
