@@ -75,22 +75,12 @@ describe('canvas viewport helpers', () => {
 
   it('centers a single node in the canvas viewport', () => {
     expect(
-      getNodeScrollTarget(
-        { id: 'n1', x: 200, y: 120 },
-        defaultNodeSize,
-        1.25,
-        { clientWidth: 300, clientHeight: 200 }
-      )
+      getNodeScrollTarget({ id: 'n1', x: 200, y: 120 }, defaultNodeSize, 1.25, { clientWidth: 300, clientHeight: 200 })
     ).toEqual({ left: 143.75, top: 67.5 });
   });
 
   it('keeps the pointer anchored while zooming with the wheel', () => {
-    const zoomIn = planCanvasWheelZoom(
-      1,
-      -1,
-      { x: 100, y: 80 },
-      { left: 300, top: 120 }
-    );
+    const zoomIn = planCanvasWheelZoom(1, -1, { x: 100, y: 80 }, { left: 300, top: 120 });
     expect(zoomIn?.zoom).toBe(1.1);
     expect(zoomIn?.scroll.left).toBeCloseTo(340);
     expect(zoomIn?.scroll.top).toBeCloseTo(140);

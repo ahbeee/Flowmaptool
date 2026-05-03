@@ -60,12 +60,7 @@ describe('node action helpers', () => {
   it('builds child insert results from the selected node and inherits its offset', () => {
     const doc = createDoc();
 
-    const result = buildInsertNodeFromSelectionResult(
-      doc,
-      ['n2'],
-      { n2: { dx: 12, dy: 18 } },
-      'child'
-    );
+    const result = buildInsertNodeFromSelectionResult(doc, ['n2'], { n2: { dx: 12, dy: 18 } }, 'child');
 
     expect(result).toMatchObject({
       newNodeId: 'n4',
@@ -90,12 +85,7 @@ describe('node action helpers', () => {
     });
     expect(sibling?.doc.edges).toContainEqual(expect.objectContaining({ from: 'n1', to: 'n4' }));
 
-    const rootFallback = buildInsertNodeFromSelectionResult(
-      doc,
-      ['n1'],
-      { n1: { dx: 3, dy: 4 } },
-      'sibling'
-    );
+    const rootFallback = buildInsertNodeFromSelectionResult(doc, ['n1'], { n1: { dx: 3, dy: 4 } }, 'sibling');
     expect(rootFallback).toMatchObject({
       newNodeId: 'n4',
       offset: { dx: 3, dy: 4 }

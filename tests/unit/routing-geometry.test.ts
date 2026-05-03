@@ -12,7 +12,9 @@ describe('routing geometry helpers', () => {
   it('detects segment intersections and box crossings', () => {
     expect(segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 10, y: 0 })).toBe(true);
     expect(segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 5 }, { x: 10, y: 5 })).toBe(false);
-    expect(segmentIntersectsBox({ x: 0, y: 5 }, { x: 20, y: 5 }, { left: 8, right: 12, top: 2, bottom: 8 }, 0)).toBe(true);
+    expect(segmentIntersectsBox({ x: 0, y: 5 }, { x: 20, y: 5 }, { left: 8, right: 12, top: 2, bottom: 8 }, 0)).toBe(
+      true
+    );
   });
 
   it('scores route obstacles and clearance', () => {
@@ -33,11 +35,19 @@ describe('routing geometry helpers', () => {
 
     expect(routeObstacleCount(through, 'source', 'target', boxes)).toBe(1);
     expect(routeObstacleCount(around, 'source', 'target', boxes)).toBe(0);
-    expect(routeClearancePenalty(through, 'source', 'target', boxes)).toBeGreaterThan(routeClearancePenalty(around, 'source', 'target', boxes));
+    expect(routeClearancePenalty(through, 'source', 'target', boxes)).toBeGreaterThan(
+      routeClearancePenalty(around, 'source', 'target', boxes)
+    );
   });
 
   it('measures path distance and turns', () => {
     expect(distanceToSegmentSquared({ x: 5, y: 5 }, { x: 0, y: 0 }, { x: 10, y: 0 })).toBe(25);
-    expect(routeTurnCount([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }])).toBe(1);
+    expect(
+      routeTurnCount([
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 10 }
+      ])
+    ).toBe(1);
   });
 });

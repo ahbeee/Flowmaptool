@@ -44,10 +44,7 @@ test('vertical layout keeps complex branches from overlapping', async () => {
       const a = boxes[i];
       const b = boxes[j];
       const overlaps =
-        a.x < b.x + b.width - 2 &&
-        a.x + a.width > b.x + 2 &&
-        a.y < b.y + b.height - 2 &&
-        a.y + a.height > b.y + 2;
+        a.x < b.x + b.width - 2 && a.x + a.width > b.x + 2 && a.y < b.y + b.height - 2 && a.y + a.height > b.y + 2;
       expect(overlaps, `${a.id} overlaps ${b.id}`).toBe(false);
     }
   }

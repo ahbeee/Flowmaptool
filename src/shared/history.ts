@@ -20,19 +20,13 @@ export function canRedo<T>(history: HistoryState<T>): boolean {
   return history.future.length > 0;
 }
 
-export function commitHistory<T>(
-  history: HistoryState<T>,
-  nextPresent: T,
-  maxPast = 100
-): HistoryState<T> {
+export function commitHistory<T>(history: HistoryState<T>, nextPresent: T, maxPast = 100): HistoryState<T> {
   if (Object.is(nextPresent, history.present)) {
     return history;
   }
 
   const nextPast =
-    history.past.length >= maxPast
-      ? [...history.past.slice(1), history.present]
-      : [...history.past, history.present];
+    history.past.length >= maxPast ? [...history.past.slice(1), history.present] : [...history.past, history.present];
 
   return {
     past: nextPast,

@@ -83,8 +83,7 @@ export function getNodeVisualStyle(options: {
     borderStyle: 'solid',
     borderWidth: shape === 'underline' ? '0 0 2px 0' : shape === 'plain' ? 0 : 1,
     textAlign: style?.textAlign || 'left',
-    justifyContent:
-      style?.textAlign === 'center' ? 'center' : style?.textAlign === 'right' ? 'flex-end' : 'flex-start'
+    justifyContent: style?.textAlign === 'center' ? 'center' : style?.textAlign === 'right' ? 'flex-end' : 'flex-start'
   };
 }
 
@@ -99,7 +98,9 @@ export function summarizeSelectedNodeStyles(
   const textColors = selectedNodes.map(node => getNodeTextColor(node, rootNodeIds, theme));
   const backgroundColors = selectedNodes.map(node => getNodeBackgroundColor(node, rootNodeIds, theme));
   const textAligns = selectedNodes.map(node => node.style?.textAlign || 'left');
-  const shapes = selectedNodes.map(node => node.style?.shape || (rootNodeIds.has(node.id) ? 'rounded' : defaults.defaultShape));
+  const shapes = selectedNodes.map(
+    node => node.style?.shape || (rootNodeIds.has(node.id) ? 'rounded' : defaults.defaultShape)
+  );
   const isAnyBold = selectedNodes.some(node => node.style?.bold === true);
   const isAllBold = selectedNodes.length > 0 && selectedNodes.every(node => node.style?.bold === true);
   const isAnyItalic = selectedNodes.some(node => node.style?.italic === true);

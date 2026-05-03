@@ -28,14 +28,9 @@ contextBridge.exposeInMainWorld('flowmaptool', {
     defaultPath: string;
     filters?: Array<{ name: string; extensions: string[] }>;
   }) => ipcRenderer.invoke('flowmaptool:saveBinary', payload) as Promise<SaveBinaryResult>,
-  exportPdfFromSvg: (payload: {
-    svg: string;
-    defaultPath: string;
-    width: number;
-    height: number;
-  }) => ipcRenderer.invoke('flowmaptool:exportPdfFromSvg', payload) as Promise<SaveBinaryResult>,
-  printSvg: (payload: { svg: string }) =>
-    ipcRenderer.invoke('flowmaptool:printSvg', payload) as Promise<PrintResult>,
+  exportPdfFromSvg: (payload: { svg: string; defaultPath: string; width: number; height: number }) =>
+    ipcRenderer.invoke('flowmaptool:exportPdfFromSvg', payload) as Promise<SaveBinaryResult>,
+  printSvg: (payload: { svg: string }) => ipcRenderer.invoke('flowmaptool:printSvg', payload) as Promise<PrintResult>,
   onMenuAction: (handler: (action: MenuAction) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, action: MenuAction) => handler(action);
     ipcRenderer.on('flowmaptool:menuAction', listener);

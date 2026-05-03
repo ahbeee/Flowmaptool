@@ -9,7 +9,9 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   critical: 'Critical'
 };
 
-const TASK_PRIORITY_SORT_ORDER = new Map<TaskPriority, number>(TASK_PRIORITIES.map((priority, index) => [priority, index]));
+const TASK_PRIORITY_SORT_ORDER = new Map<TaskPriority, number>(
+  TASK_PRIORITIES.map((priority, index) => [priority, index])
+);
 
 export const TASK_TABLE_COLUMNS = [
   { key: 'task', label: 'Task' },

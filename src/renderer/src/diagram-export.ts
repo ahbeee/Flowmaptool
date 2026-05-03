@@ -48,9 +48,7 @@ export type PngExportDependencies = {
   createCanvas?: () => CanvasLike;
 };
 
-export type ExportResult =
-  | { ok: true; filePath?: string; message?: string }
-  | { ok: false; message: string };
+export type ExportResult = { ok: true; filePath?: string; message?: string } | { ok: false; message: string };
 
 export function getExportDefaultPath(title: string, extension: 'png' | 'pdf'): string {
   return `${title.replace('.qflow', '')}.${extension}`;
@@ -153,10 +151,7 @@ export async function exportPdfFromSvg(options: {
   }
 }
 
-export async function printSvgDiagram(options: {
-  svg: string;
-  printSvg: PrintSvg;
-}): Promise<ExportResult> {
+export async function printSvgDiagram(options: { svg: string; printSvg: PrintSvg }): Promise<ExportResult> {
   try {
     const result = await options.printSvg({ svg: options.svg });
     return { ok: true, message: result.success ? 'Print completed' : 'Print canceled' };

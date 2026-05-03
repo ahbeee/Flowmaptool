@@ -1,10 +1,6 @@
 import type { EdgeAnchor, EdgeAnchors, EdgeId, FlowEdge, NodeId } from '@shared/graph';
 import type { LayoutDirection, NodeSize } from '@shared/layout';
-import {
-  compactRoutePoints,
-  edgeMidpoint,
-  routeFromBend
-} from './edge-path';
+import { compactRoutePoints, edgeMidpoint, routeFromBend } from './edge-path';
 import type { EdgeBend, EdgeRoute } from './persistence';
 import {
   routeClearancePenalty,
@@ -55,13 +51,9 @@ export function getDirectionalAnchorPoint(
 ): Point {
   const center = getNodeCenter(pos.x, pos.y, size);
   if (direction === 'vertical') {
-    return anchor === 'front'
-      ? { x: center.x, y: pos.y }
-      : { x: center.x, y: pos.y + size.height };
+    return anchor === 'front' ? { x: center.x, y: pos.y } : { x: center.x, y: pos.y + size.height };
   }
-  return anchor === 'front'
-    ? { x: pos.x, y: center.y }
-    : { x: pos.x + size.width, y: center.y };
+  return anchor === 'front' ? { x: pos.x, y: center.y } : { x: pos.x + size.width, y: center.y };
 }
 
 function getBodyAnchorPoint(pos: LayoutPoint, size: NodeSize, other: Point): Point {
@@ -69,13 +61,9 @@ function getBodyAnchorPoint(pos: LayoutPoint, size: NodeSize, other: Point): Poi
   const dx = other.x - center.x;
   const dy = other.y - center.y;
   if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx < 0
-      ? { x: pos.x, y: center.y }
-      : { x: pos.x + size.width, y: center.y };
+    return dx < 0 ? { x: pos.x, y: center.y } : { x: pos.x + size.width, y: center.y };
   }
-  return dy < 0
-    ? { x: center.x, y: pos.y }
-    : { x: center.x, y: pos.y + size.height };
+  return dy < 0 ? { x: center.x, y: pos.y } : { x: center.x, y: pos.y + size.height };
 }
 
 function getAnchoredPoint(
@@ -105,23 +93,8 @@ export function getEdgeRenderEndpoints(
 ): { from: Point; to: Point } {
   const endpoints = getEdgeEndpoints(from, to, direction, fromSize, toSize);
   if (edge.anchors) {
-    const fromPoint = getAnchoredPoint(
-      from,
-      fromSize,
-      direction,
-      edge.anchors.from,
-      endpoints.from,
-      endpoints.to
-    );
-    const toPoint = getAnchoredPoint(
-      to,
-      toSize,
-      direction,
-      edge.anchors.to,
-      endpoints.to,
-      fromPoint,
-      true
-    );
+    const fromPoint = getAnchoredPoint(from, fromSize, direction, edge.anchors.from, endpoints.from, endpoints.to);
+    const toPoint = getAnchoredPoint(to, toSize, direction, edge.anchors.to, endpoints.to, fromPoint, true);
     return { from: fromPoint, to: toPoint };
   }
   if (isLayoutEdge || targetIsRoot) return endpoints;
@@ -218,35 +191,33 @@ function computeAutoEdgeBend(
   const clearance = 48;
 
   if (direction === 'horizontal') {
-    const top = obstacles.length > 0
-      ? Math.min(...obstacles.map(box => box.top), from.y, to.y)
-      : Math.min(from.y, to.y);
-    const bottom = obstacles.length > 0
-      ? Math.max(...obstacles.map(box => box.bottom), from.y, to.y)
-      : Math.max(from.y, to.y);
+    const top =
+      obstacles.length > 0 ? Math.min(...obstacles.map(box => box.top), from.y, to.y) : Math.min(from.y, to.y);
+    const bottom =
+      obstacles.length > 0 ? Math.max(...obstacles.map(box => box.bottom), from.y, to.y) : Math.max(from.y, to.y);
     const upperY = top - clearance;
     const lowerY = bottom + clearance;
-    const y = isBackEdge && obstacles.length === 0
-      ? upperY
-      : Math.abs(midpoint.y - upperY) <= Math.abs(midpoint.y - lowerY)
+    const y =
+      isBackEdge && obstacles.length === 0
         ? upperY
-        : lowerY;
+        : Math.abs(midpoint.y - upperY) <= Math.abs(midpoint.y - lowerY)
+          ? upperY
+          : lowerY;
     return { x: midpoint.x, y };
   }
 
-  const left = obstacles.length > 0
-    ? Math.min(...obstacles.map(box => box.left), from.x, to.x)
-    : Math.min(from.x, to.x);
-  const right = obstacles.length > 0
-    ? Math.max(...obstacles.map(box => box.right), from.x, to.x)
-    : Math.max(from.x, to.x);
+  const left =
+    obstacles.length > 0 ? Math.min(...obstacles.map(box => box.left), from.x, to.x) : Math.min(from.x, to.x);
+  const right =
+    obstacles.length > 0 ? Math.max(...obstacles.map(box => box.right), from.x, to.x) : Math.max(from.x, to.x);
   const leftX = left - clearance;
   const rightX = right + clearance;
-  const x = isBackEdge && obstacles.length === 0
-    ? leftX
-    : Math.abs(midpoint.x - leftX) <= Math.abs(midpoint.x - rightX)
+  const x =
+    isBackEdge && obstacles.length === 0
       ? leftX
-      : rightX;
+      : Math.abs(midpoint.x - leftX) <= Math.abs(midpoint.x - rightX)
+        ? leftX
+        : rightX;
   return { x, y: midpoint.y };
 }
 
@@ -299,12 +270,13 @@ function chooseBestRoute(
       length: routeLength(points),
       turns: routeTurnCount(points)
     }))
-    .sort((left, right) => (
-      left.obstacleCount - right.obstacleCount ||
-      left.clearancePenalty - right.clearancePenalty ||
-      left.turns - right.turns ||
-      left.length - right.length
-    ));
+    .sort(
+      (left, right) =>
+        left.obstacleCount - right.obstacleCount ||
+        left.clearancePenalty - right.clearancePenalty ||
+        left.turns - right.turns ||
+        left.length - right.length
+    );
   return best ? routeFromPoints(best.points.slice(1, -1)) : undefined;
 }
 
@@ -411,8 +383,22 @@ export function computeAutoEdgeRoute(
     const exitX = to.x - Math.min(primaryClearance, dx / 3);
     return chooseBestRoute(
       [
-        [from, { x: entryX, y: from.y }, { x: entryX, y: topLane }, { x: exitX, y: topLane }, { x: exitX, y: to.y }, to],
-        [from, { x: entryX, y: from.y }, { x: entryX, y: bottomLane }, { x: exitX, y: bottomLane }, { x: exitX, y: to.y }, to]
+        [
+          from,
+          { x: entryX, y: from.y },
+          { x: entryX, y: topLane },
+          { x: exitX, y: topLane },
+          { x: exitX, y: to.y },
+          to
+        ],
+        [
+          from,
+          { x: entryX, y: from.y },
+          { x: entryX, y: bottomLane },
+          { x: exitX, y: bottomLane },
+          { x: exitX, y: to.y },
+          to
+        ]
       ],
       fromId,
       toId,
@@ -464,8 +450,22 @@ export function computeAutoEdgeRoute(
   const exitY = to.y - Math.min(primaryClearance, dy / 3);
   return chooseBestRoute(
     [
-      [from, { x: from.x, y: entryY }, { x: leftLane, y: entryY }, { x: leftLane, y: exitY }, { x: to.x, y: exitY }, to],
-      [from, { x: from.x, y: entryY }, { x: rightLane, y: entryY }, { x: rightLane, y: exitY }, { x: to.x, y: exitY }, to]
+      [
+        from,
+        { x: from.x, y: entryY },
+        { x: leftLane, y: entryY },
+        { x: leftLane, y: exitY },
+        { x: to.x, y: exitY },
+        to
+      ],
+      [
+        from,
+        { x: from.x, y: entryY },
+        { x: rightLane, y: entryY },
+        { x: rightLane, y: exitY },
+        { x: to.x, y: exitY },
+        to
+      ]
     ],
     fromId,
     toId,
@@ -498,9 +498,7 @@ function getDraggedRouteOffset(distance: number, neighborOffset?: number): numbe
   );
 }
 
-export function getEndpointSpacingOffset(
-  spacing: number
-): number | undefined {
+export function getEndpointSpacingOffset(spacing: number): number | undefined {
   if (!Number.isFinite(spacing)) return undefined;
   const routeGap = Math.max(MIN_DRAGGED_ROUTE_ENDPOINT_OFFSET * 2, spacing);
   return routeGap / 2;
@@ -631,9 +629,7 @@ export function routeFromSnappedDraggedControl(
   const candidates = getDraggedRouteLaneCandidates(from, to, direction, pointer, nodeBoxes, spacing, false);
   const pointerLane = direction === 'horizontal' ? pointer.y : pointer.x;
   const snappedCandidates = candidates.map(lane => {
-    const snappedPointer = direction === 'horizontal'
-      ? { x: pointer.x, y: lane }
-      : { x: lane, y: pointer.y };
+    const snappedPointer = direction === 'horizontal' ? { x: pointer.x, y: lane } : { x: lane, y: pointer.y };
     const route = routeFromDraggedControl(from, to, direction, snappedPointer, anchors, endpointOffsets);
     const points = [from, ...route.points, to];
     return {
@@ -645,13 +641,14 @@ export function routeFromSnappedDraggedControl(
       length: routeLength(points)
     };
   });
-  const scoredRoutes = snappedCandidates.sort((left, right) => (
-    left.obstacleCount - right.obstacleCount ||
-    left.laneDistance - right.laneDistance ||
-    left.clearancePenalty - right.clearancePenalty ||
-    left.turns - right.turns ||
-    left.length - right.length
-  ));
+  const scoredRoutes = snappedCandidates.sort(
+    (left, right) =>
+      left.obstacleCount - right.obstacleCount ||
+      left.laneDistance - right.laneDistance ||
+      left.clearancePenalty - right.clearancePenalty ||
+      left.turns - right.turns ||
+      left.length - right.length
+  );
 
   return scoredRoutes[0]?.route || routeFromDraggedControl(from, to, direction, pointer, anchors, endpointOffsets);
 }
@@ -665,9 +662,7 @@ export function isForwardIncomingManualEdge(
 ): boolean {
   if (edge.role !== 'manual' || layoutEdgeIds.has(edge.id)) return false;
   if (edge.anchors?.from === 'front' || edge.anchors?.to === 'back') return false;
-  return direction === 'horizontal'
-    ? to.x > from.x + 12
-    : to.y > from.y + 12;
+  return direction === 'horizontal' ? to.x > from.x + 12 : to.y > from.y + 12;
 }
 
 export function routeForwardIncomingConverge(
@@ -687,10 +682,12 @@ export function routeForwardIncomingConverge(
       trunkX = from.x + directDistance / 2;
     }
     if (trunkX <= from.x + minSegment || trunkX >= to.x - minSegment) return undefined;
-    return routeFromPoints(compactRoutePoints([
-      { x: trunkX, y: from.y },
-      { x: trunkX, y: to.y }
-    ]));
+    return routeFromPoints(
+      compactRoutePoints([
+        { x: trunkX, y: from.y },
+        { x: trunkX, y: to.y }
+      ])
+    );
   }
 
   const directDistance = to.y - from.y;
@@ -700,8 +697,10 @@ export function routeForwardIncomingConverge(
     trunkY = from.y + directDistance / 2;
   }
   if (trunkY <= from.y + minSegment || trunkY >= to.y - minSegment) return undefined;
-  return routeFromPoints(compactRoutePoints([
-    { x: from.x, y: trunkY },
-    { x: to.x, y: trunkY }
-  ]));
+  return routeFromPoints(
+    compactRoutePoints([
+      { x: from.x, y: trunkY },
+      { x: to.x, y: trunkY }
+    ])
+  );
 }

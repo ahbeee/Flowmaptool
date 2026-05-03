@@ -25,7 +25,9 @@ describe('edge routing helpers', () => {
       anchors: { from: 'front', to: 'body' }
     };
 
-    expect(getEdgeRenderEndpoints(edge, { x: 100, y: 40 }, { x: 0, y: 40 }, 'horizontal', nodeSize, nodeSize, false, false)).toEqual({
+    expect(
+      getEdgeRenderEndpoints(edge, { x: 100, y: 40 }, { x: 0, y: 40 }, 'horizontal', nodeSize, nodeSize, false, false)
+    ).toEqual({
       from: { x: 100, y: 54 },
       to: { x: 0, y: 54 }
     });
@@ -83,7 +85,15 @@ describe('edge routing helpers', () => {
   it('identifies forward incoming manual edges and creates converge routes', () => {
     const edge: FlowEdge = { id: 'e3', from: 'n1', to: 'n2', role: 'manual' };
     expect(isForwardIncomingManualEdge(edge, { x: 0, y: 0 }, { x: 80, y: 30 }, 'horizontal', new Set())).toBe(true);
-    expect(isForwardIncomingManualEdge({ ...edge, anchors: { from: 'front' } }, { x: 0, y: 0 }, { x: 80, y: 30 }, 'horizontal', new Set())).toBe(false);
+    expect(
+      isForwardIncomingManualEdge(
+        { ...edge, anchors: { from: 'front' } },
+        { x: 0, y: 0 },
+        { x: 80, y: 30 },
+        'horizontal',
+        new Set()
+      )
+    ).toBe(false);
 
     expect(routeForwardIncomingConverge({ x: 0, y: 10 }, { x: 100, y: 50 }, 'horizontal', 48)).toEqual({
       points: [

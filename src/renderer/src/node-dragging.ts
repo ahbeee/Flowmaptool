@@ -312,10 +312,7 @@ export function applyNodeDragToHost<T extends NodeDragHost>(
   };
 }
 
-export function restoreDetachedNodeDragToHost<T extends NodeDragHost>(
-  host: T,
-  dragState: NodeDragStateSnapshot
-): T {
+export function restoreDetachedNodeDragToHost<T extends NodeDragHost>(host: T, dragState: NodeDragStateSnapshot): T {
   const direction = host.layoutDirection;
   const nextOffsets = { ...host.nodeOffsetsByDirection[direction] };
   for (const nodeId of dragState.nodeIds) {

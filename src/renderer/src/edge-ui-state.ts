@@ -1,20 +1,13 @@
 import type { FlowDoc, NodeId } from '@shared/graph';
 import { redoHistory, undoHistory, type HistoryState } from '../../shared/history';
-import type {
-  EdgeBendMap,
-  EdgeBendsByDirection,
-  EdgeRouteMap,
-  EdgeRoutesByDirection
-} from './persistence';
+import type { EdgeBendMap, EdgeBendsByDirection, EdgeRouteMap, EdgeRoutesByDirection } from './persistence';
 
 export type EdgeUiSnapshot = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
 };
 
-export type InteractionHistoryEntry =
-  | { kind: 'doc' }
-  | { kind: 'edge-ui'; snapshot: EdgeUiSnapshot };
+export type InteractionHistoryEntry = { kind: 'doc' } | { kind: 'edge-ui'; snapshot: EdgeUiSnapshot };
 
 export type InteractionHistory = {
   past: InteractionHistoryEntry[];

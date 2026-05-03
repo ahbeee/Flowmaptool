@@ -58,11 +58,7 @@ function getNodeSize(nodeSizes: NodeSizeMap | undefined, nodeId: NodeId): NodeSi
   return nodeSizes?.[nodeId] || { width: 140, height: 56 };
 }
 
-function getMaxSecondaryNodeSize(
-  doc: FlowDoc,
-  direction: LayoutDirection,
-  nodeSizes: NodeSizeMap | undefined
-): number {
+function getMaxSecondaryNodeSize(doc: FlowDoc, direction: LayoutDirection, nodeSizes: NodeSizeMap | undefined): number {
   if (doc.nodes.length === 0) return 0;
   return Math.max(
     ...doc.nodes.map(node => {
@@ -133,11 +129,7 @@ function isLayoutCandidateEdge(edge: FlowEdge): boolean {
   return edge.role !== 'manual';
 }
 
-function wouldCreateParentCycle(
-  parentMap: Map<NodeId, NodeId | null>,
-  childId: NodeId,
-  parentId: NodeId
-): boolean {
+function wouldCreateParentCycle(parentMap: Map<NodeId, NodeId | null>, childId: NodeId, parentId: NodeId): boolean {
   let current: NodeId | null | undefined = parentId;
   const seen = new Set<NodeId>();
   while (current) {
@@ -196,10 +188,7 @@ function buildPrimaryChildrenMap(doc: FlowDoc, parentMap: Map<NodeId, NodeId | n
   return childrenMap;
 }
 
-function assignSecondarySlots(
-  roots: NodeId[],
-  childrenMap: Map<NodeId, NodeId[]>
-): Map<NodeId, number> {
+function assignSecondarySlots(roots: NodeId[], childrenMap: Map<NodeId, NodeId[]>): Map<NodeId, number> {
   const secondaryByNode = new Map<NodeId, number>();
   let nextSlot = 0;
   const visiting = new Set<NodeId>();
@@ -240,11 +229,7 @@ function assignSecondarySlots(
   return secondaryByNode;
 }
 
-function enforceDepthSpacingGlobal(
-  doc: FlowDoc,
-  depthMap: Map<NodeId, number>,
-  secondaryByNode: Map<NodeId, number>
-) {
+function enforceDepthSpacingGlobal(doc: FlowDoc, depthMap: Map<NodeId, number>, secondaryByNode: Map<NodeId, number>) {
   const buckets = depthBuckets(doc, depthMap);
   for (const ids of buckets.values()) {
     const sorted = [...ids].sort(
@@ -361,8 +346,7 @@ export function layoutFlow(
     .map(node => node.id)
     .filter(nodeId => !parentMap.get(nodeId))
     .sort(compareNodeId);
-  const fallbackRoots =
-    roots.length > 0 ? roots : doc.nodes.map(node => node.id).sort(compareNodeId);
+  const fallbackRoots = roots.length > 0 ? roots : doc.nodes.map(node => node.id).sort(compareNodeId);
   const secondaryByNode = assignSecondarySlots(fallbackRoots, childrenMap);
   applyMultiParentCentering(doc, childrenMap, depths, secondaryByNode);
 

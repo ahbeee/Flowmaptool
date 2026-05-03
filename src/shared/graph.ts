@@ -271,8 +271,16 @@ function sanitizeEdges(input: LegacyFlowDoc['edges'], validNodeIds: Set<string>)
 }
 
 function normalizeMeta(nodes: FlowNode[], edges: FlowEdge[], rawMeta?: Partial<FlowDocMeta>): FlowDocMeta {
-  const minNextNode = getMaxSeq(nodes.map(node => node.id), 'n') + 1;
-  const minNextEdge = getMaxSeq(edges.map(edge => edge.id), 'e') + 1;
+  const minNextNode =
+    getMaxSeq(
+      nodes.map(node => node.id),
+      'n'
+    ) + 1;
+  const minNextEdge =
+    getMaxSeq(
+      edges.map(edge => edge.id),
+      'e'
+    ) + 1;
   const rawNodeSeq = typeof rawMeta?.nextNodeSeq === 'number' ? rawMeta.nextNodeSeq : 0;
   const rawEdgeSeq = typeof rawMeta?.nextEdgeSeq === 'number' ? rawMeta.nextEdgeSeq : 0;
 
@@ -291,13 +299,15 @@ function sanitizeNodeStyle(input: unknown, validTagIds?: Set<string>): NodeStyle
   const raw = input as NodeStyle;
   const next: NodeStyle = {};
   if (typeof raw.fontFamily === 'string' && raw.fontFamily.trim()) next.fontFamily = raw.fontFamily;
-  if (typeof raw.fontSize === 'number' && Number.isFinite(raw.fontSize)) next.fontSize = Math.max(10, Math.min(72, raw.fontSize));
+  if (typeof raw.fontSize === 'number' && Number.isFinite(raw.fontSize))
+    next.fontSize = Math.max(10, Math.min(72, raw.fontSize));
   if (typeof raw.bold === 'boolean') next.bold = raw.bold;
   if (typeof raw.italic === 'boolean') next.italic = raw.italic;
   if (typeof raw.underline === 'boolean') next.underline = raw.underline;
   if (typeof raw.textColor === 'string') next.textColor = sanitizeHexColor(raw.textColor, '#0f172a');
   if (typeof raw.backgroundColor === 'string') next.backgroundColor = sanitizeHexColor(raw.backgroundColor, '#ffffff');
-  if (raw.textAlign === 'left' || raw.textAlign === 'center' || raw.textAlign === 'right') next.textAlign = raw.textAlign;
+  if (raw.textAlign === 'left' || raw.textAlign === 'center' || raw.textAlign === 'right')
+    next.textAlign = raw.textAlign;
   if (
     raw.shape === 'plain' ||
     raw.shape === 'rounded' ||
@@ -672,10 +682,7 @@ export function validateEdge(
   if (from === to) {
     return { ok: false, reason: 'self-edge' };
   }
-  if (
-    (anchors?.from === 'front' && anchors.to === 'front') ||
-    (anchors?.from === 'back' && anchors.to === 'back')
-  ) {
+  if ((anchors?.from === 'front' && anchors.to === 'front') || (anchors?.from === 'back' && anchors.to === 'back')) {
     return { ok: false, reason: 'same-side-anchors' };
   }
   const exists = doc.edges.some(

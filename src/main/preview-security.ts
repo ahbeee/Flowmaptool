@@ -6,7 +6,7 @@ export const SVG_PREVIEW_CSP = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  "img-src data:",
+  'img-src data:',
   "style-src 'unsafe-inline'"
 ].join('; ');
 

@@ -19,9 +19,7 @@ const PDF_FILTER = [{ name: 'PDF Document', extensions: ['pdf'] }];
 
 async function showSaveDialogWithFocusedWindow(options: SaveDialogOptions) {
   const win = BrowserWindow.getFocusedWindow();
-  return win
-    ? dialog.showSaveDialog(win, options)
-    : dialog.showSaveDialog(options);
+  return win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options);
 }
 
 type MenuAction =
@@ -150,9 +148,7 @@ function registerIpcHandlers() {
       properties: ['openFile'],
       filters: QFLOW_FILTER
     };
-    const result = win
-      ? await dialog.showOpenDialog(win, options)
-      : await dialog.showOpenDialog(options);
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     if (result.canceled || result.filePaths.length === 0) return null;
     const filePath = result.filePaths[0];
     const content = await readFile(filePath, 'utf-8');
@@ -169,9 +165,7 @@ function registerIpcHandlers() {
           filters: QFLOW_FILTER,
           defaultPath: targetPath || 'untitled.qflow'
         };
-        const result = win
-          ? await dialog.showSaveDialog(win, options)
-          : await dialog.showSaveDialog(options);
+        const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
         if (result.canceled || !result.filePath) return null;
         targetPath = result.filePath.endsWith('.qflow') ? result.filePath : `${result.filePath}.qflow`;
       }
@@ -193,10 +187,7 @@ function registerIpcHandlers() {
     ) => {
       const testSavePath = process.env.FLOWMAPTOOL_TEST_SAVE_BINARY_PATH;
       if (testSavePath) {
-        const normalizedPath = normalizeFilePath(
-          testSavePath,
-          inferExtension(payload.defaultPath, payload.filters)
-        );
+        const normalizedPath = normalizeFilePath(testSavePath, inferExtension(payload.defaultPath, payload.filters));
         const buffer = Buffer.from(payload.dataBase64, 'base64');
         await writeFile(normalizedPath, buffer);
         return { filePath: normalizedPath };
@@ -206,10 +197,7 @@ function registerIpcHandlers() {
         filters: payload.filters || PNG_FILTER
       });
       if (result.canceled || !result.filePath) return null;
-      const normalizedPath = normalizeFilePath(
-        result.filePath,
-        inferExtension(payload.defaultPath, payload.filters)
-      );
+      const normalizedPath = normalizeFilePath(result.filePath, inferExtension(payload.defaultPath, payload.filters));
       const buffer = Buffer.from(payload.dataBase64, 'base64');
       await writeFile(normalizedPath, buffer);
       return { filePath: normalizedPath };
@@ -250,25 +238,19 @@ function registerIpcHandlers() {
     }
   );
 
-  ipcMain.handle(
-    'flowmaptool:printSvg',
-    async (_event, payload: { svg: string }) => {
-      const printWindow = await createPrintWindowWithSvg(payload.svg);
-      try {
-        const success = await new Promise<boolean>(resolve => {
-          printWindow.webContents.print(
-            { silent: false, printBackground: true },
-            done => resolve(done)
-          );
-        });
-        return { success };
-      } finally {
-        if (!printWindow.isDestroyed()) {
-          printWindow.destroy();
-        }
+  ipcMain.handle('flowmaptool:printSvg', async (_event, payload: { svg: string }) => {
+    const printWindow = await createPrintWindowWithSvg(payload.svg);
+    try {
+      const success = await new Promise<boolean>(resolve => {
+        printWindow.webContents.print({ silent: false, printBackground: true }, done => resolve(done));
+      });
+      return { success };
+    } finally {
+      if (!printWindow.isDestroyed()) {
+        printWindow.destroy();
       }
     }
-  );
+  });
 }
 
 function createWindow() {

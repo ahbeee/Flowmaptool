@@ -81,9 +81,7 @@ export function buildOutlineTree(doc: FlowDoc): OutlineTreeNode[] {
     return { node, children };
   };
 
-  const roots = doc.nodes
-    .filter(node => !primaryIncoming.has(node.id))
-    .sort((a, b) => compareNodeIdOrder(a.id, b.id));
+  const roots = doc.nodes.filter(node => !primaryIncoming.has(node.id)).sort((a, b) => compareNodeIdOrder(a.id, b.id));
   const tree = roots.map(root => buildNode(root, new Set<NodeId>()));
   const leftovers = doc.nodes
     .filter(node => !visited.has(node.id))

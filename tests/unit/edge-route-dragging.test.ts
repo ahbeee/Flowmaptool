@@ -127,7 +127,12 @@ describe('edge route dragging helpers', () => {
       }
     };
 
-    const route = { points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] };
+    const route = {
+      points: [
+        { x: 10, y: 20 },
+        { x: 30, y: 40 }
+      ]
+    };
     const result = applyDraggedEdgeRouteToHost(initial, 'e1', route);
 
     expect(result.edgeBendsByDirection.horizontal).toEqual({ e1: { x: 1, y: 2 } });

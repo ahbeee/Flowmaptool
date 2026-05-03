@@ -55,7 +55,10 @@ test('manual back edge routes around nodes without reflowing layout', async () =
     const matrix = path.getScreenCTM();
     if (!matrix) throw new Error('edge path screen matrix not found');
     const boxes = Array.from(document.querySelectorAll('[data-testid^="node-"]'))
-      .filter(element => element.getAttribute('data-testid') !== 'node-n7' && element.getAttribute('data-testid') !== 'node-n2')
+      .filter(
+        element =>
+          element.getAttribute('data-testid') !== 'node-n7' && element.getAttribute('data-testid') !== 'node-n2'
+      )
       .map(element => {
         const rect = element.getBoundingClientRect();
         return {
@@ -68,7 +71,9 @@ test('manual back edge routes around nodes without reflowing layout', async () =
     const totalLength = path.getTotalLength();
     for (let distance = totalLength * 0.08; distance <= totalLength * 0.92; distance += 12) {
       const point = path.getPointAtLength(distance).matrixTransform(matrix);
-      if (boxes.some(box => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom)) {
+      if (
+        boxes.some(box => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom)
+      ) {
         return true;
       }
     }
@@ -348,7 +353,9 @@ test('cross branch manual edge keeps existing layout stable', async () => {
     if (!source || !target) throw new Error('connect points not found');
     await window.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
     await expect(handle).toHaveCSS('opacity', '1');
-    await handle.dragTo(window.getByTestId(`node-${toId}`), { targetPosition: { x: target.width / 2, y: target.height / 2 } });
+    await handle.dragTo(window.getByTestId(`node-${toId}`), {
+      targetPosition: { x: target.width / 2, y: target.height / 2 }
+    });
   };
 
   await createChild('n1');
@@ -446,7 +453,10 @@ test('cross branch manual edge avoids nodes and preserves nearby tree edge selec
     const matrix = path.getScreenCTM();
     if (!matrix) throw new Error('edge path screen matrix not found');
     const boxes = Array.from(document.querySelectorAll('[data-testid^="node-"]'))
-      .filter(element => element.getAttribute('data-testid') !== 'node-n12' && element.getAttribute('data-testid') !== 'node-n4')
+      .filter(
+        element =>
+          element.getAttribute('data-testid') !== 'node-n12' && element.getAttribute('data-testid') !== 'node-n4'
+      )
       .map(element => {
         const rect = element.getBoundingClientRect();
         return {
@@ -459,7 +469,9 @@ test('cross branch manual edge avoids nodes and preserves nearby tree edge selec
     const totalLength = path.getTotalLength();
     for (let distance = totalLength * 0.08; distance <= totalLength * 0.92; distance += 10) {
       const point = path.getPointAtLength(distance).matrixTransform(matrix);
-      if (boxes.some(box => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom)) {
+      if (
+        boxes.some(box => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom)
+      ) {
         return true;
       }
     }
@@ -538,11 +550,7 @@ test('long labels reflow descendants without breaking cross branch manual routes
     for (let j = i + 1; j < geometry.length; j++) {
       const a = geometry[i];
       const b = geometry[j];
-      const overlaps =
-        a.left < b.right - 2 &&
-        a.right > b.left + 2 &&
-        a.top < b.bottom - 2 &&
-        a.bottom > b.top + 2;
+      const overlaps = a.left < b.right - 2 && a.right > b.left + 2 && a.top < b.bottom - 2 && a.bottom > b.top + 2;
       expect(overlaps, `${a.id} should not overlap ${b.id}`).toBe(false);
     }
   }
@@ -558,7 +566,10 @@ test('long labels reflow descendants without breaking cross branch manual routes
     const matrix = path.getScreenCTM();
     if (!matrix) throw new Error('edge path screen matrix not found');
     const boxes = Array.from(document.querySelectorAll('[data-testid^="node-"]'))
-      .filter(element => element.getAttribute('data-testid') !== 'node-n5' && element.getAttribute('data-testid') !== 'node-n6')
+      .filter(
+        element =>
+          element.getAttribute('data-testid') !== 'node-n5' && element.getAttribute('data-testid') !== 'node-n6'
+      )
       .map(element => {
         const rect = element.getBoundingClientRect();
         return {
@@ -571,7 +582,9 @@ test('long labels reflow descendants without breaking cross branch manual routes
     const totalLength = path.getTotalLength();
     for (let distance = totalLength * 0.08; distance <= totalLength * 0.92; distance += 12) {
       const point = path.getPointAtLength(distance).matrixTransform(matrix);
-      if (boxes.some(box => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom)) {
+      if (
+        boxes.some(box => point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom)
+      ) {
         return true;
       }
     }
@@ -687,14 +700,16 @@ test('front and back handles create directionally distinct manual routes', async
   await node4FrontHandle.dragTo(rootNodeForFrontCase);
   await expect(frontCase.window.locator('[data-testid^="edge-path-"]')).toHaveCount(5);
   const frontPath = await frontCase.window.getByTestId('edge-path-e5').getAttribute('d');
-  const frontStartsAtNode4Front = await frontCase.window.getByTestId('edge-path-e5').evaluate((path: SVGPathElement) => {
-    const matrix = path.getScreenCTM();
-    const node = document.querySelector('[data-testid="node-n4"]');
-    if (!matrix || !(node instanceof HTMLElement)) return false;
-    const start = path.getPointAtLength(0).matrixTransform(matrix);
-    const rect = node.getBoundingClientRect();
-    return Math.abs(start.x - rect.left) <= 4;
-  });
+  const frontStartsAtNode4Front = await frontCase.window
+    .getByTestId('edge-path-e5')
+    .evaluate((path: SVGPathElement) => {
+      const matrix = path.getScreenCTM();
+      const node = document.querySelector('[data-testid="node-n4"]');
+      if (!matrix || !(node instanceof HTMLElement)) return false;
+      const start = path.getPointAtLength(0).matrixTransform(matrix);
+      const rect = node.getBoundingClientRect();
+      return Math.abs(start.x - rect.left) <= 4;
+    });
   expect(frontStartsAtNode4Front).toBe(true);
   expect(frontPath).toBeTruthy();
   expect(backPath).toBeTruthy();

@@ -57,15 +57,8 @@ import {
   planCanvasFitToView,
   planCanvasWheelZoom
 } from './canvas-viewport';
-import {
-  FRONT_HANDLE_CONNECT_ANCHORS,
-  HANDLE_CONNECT_ANCHORS
-} from './connect-anchors';
-import {
-  planConnectDragFinish,
-  updateConnectDragForPoint,
-  type ConnectDragState
-} from './connect-dragging';
+import { FRONT_HANDLE_CONNECT_ANCHORS, HANDLE_CONNECT_ANCHORS } from './connect-anchors';
+import { planConnectDragFinish, updateConnectDragForPoint, type ConnectDragState } from './connect-dragging';
 import { planEdgeConnection } from './edge-connection';
 import {
   cloneEdgeBendsByDirection,
@@ -78,11 +71,7 @@ import {
   undoInteractionInHost,
   type EdgeUiSnapshot
 } from './edge-ui-state';
-import {
-  exportPdfFromSvg as exportPdfDiagramFromSvg,
-  exportPngFromSvg,
-  printSvgDiagram
-} from './diagram-export';
+import { exportPdfFromSvg as exportPdfDiagramFromSvg, exportPngFromSvg, printSvgDiagram } from './diagram-export';
 import {
   buildCloseTabUpdate,
   buildNewTabUpdate,
@@ -94,18 +83,9 @@ import {
   ROOT_LABEL,
   type TabDocument
 } from './document-state';
-import {
-  edgeMidpoint,
-  edgePath,
-  routeControlPoint,
-  routeFromBend
-} from './edge-path';
+import { edgeMidpoint, edgePath, routeControlPoint, routeFromBend } from './edge-path';
 import { findEdgeHitAtPoint as findEdgeHitAtPointFromState } from './edge-hit-testing';
-import {
-  buildAutoEdgeRouteMap,
-  buildEdgeForceBendMap,
-  buildEdgeLaneMap
-} from './edge-render-state';
+import { buildAutoEdgeRouteMap, buildEdgeForceBendMap, buildEdgeLaneMap } from './edge-render-state';
 import {
   getDirectionalAnchorPoint,
   getEdgeRenderEndpoints,
@@ -121,10 +101,7 @@ import {
   planEdgeSegmentDragMove
 } from './edge-route-dragging';
 import { basename } from './export-utils';
-import {
-  analyzeLayoutEdges,
-  type LayoutEdgeAnalysis
-} from './graph-analysis';
+import { analyzeLayoutEdges, type LayoutEdgeAnalysis } from './graph-analysis';
 import {
   getKeyboardShortcutAction,
   getNodeSelectionByDirection,
@@ -169,12 +146,7 @@ import {
   type EdgeRoute,
   type EdgeRouteMap
 } from './persistence';
-import {
-  pointInsideBox,
-  segmentIntersectsBox,
-  segmentsIntersect,
-  type Point
-} from './routing-geometry';
+import { pointInsideBox, segmentIntersectsBox, segmentsIntersect, type Point } from './routing-geometry';
 import {
   buildTaskTableRows,
   getNextTaskTableSort,
@@ -191,7 +163,7 @@ import {
   effectiveEdgeStyle,
   getSelectedStyleEdges,
   nextCustomTagId,
-  pruneSelectionForDoc,
+  pruneSelectionForDoc
 } from './ui-helpers';
 import {
   getNodeVisualStyle as buildNodeVisualStyle,
@@ -338,12 +310,15 @@ export function App() {
     setSidePanelWidth(nextWidth);
   }, []);
 
-  const onSidePanelResizeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    const nextWidth = getSidePanelKeyboardWidth(sidePanelWidth, event.key);
-    if (nextWidth === null) return;
-    event.preventDefault();
-    setSidePanelWidth(nextWidth);
-  }, [sidePanelWidth]);
+  const onSidePanelResizeKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const nextWidth = getSidePanelKeyboardWidth(sidePanelWidth, event.key);
+      if (nextWidth === null) return;
+      event.preventDefault();
+      setSidePanelWidth(nextWidth);
+    },
+    [sidePanelWidth]
+  );
 
   React.useEffect(() => {
     return () => {
@@ -380,10 +355,7 @@ export function App() {
   );
   const nodeById = React.useMemo(() => new Map(doc.nodes.map(node => [node.id, node])), [doc.nodes]);
   const selectedNodeIdSet = React.useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
-  const checkedNodeIdSet = React.useMemo(
-    () => new Set(doc.checklist.checkedNodeIds),
-    [doc.checklist.checkedNodeIds]
-  );
+  const checkedNodeIdSet = React.useMemo(() => new Set(doc.checklist.checkedNodeIds), [doc.checklist.checkedNodeIds]);
   const tagById = React.useMemo(() => new Map(doc.settings.tags.map(tag => [tag.id, tag])), [doc.settings.tags]);
   const outlineChecklistTargetsByNodeId = React.useMemo(
     () => buildOutlineChecklistTargetsByNodeId(outlineTree, new Set(tagById.keys())),
@@ -402,9 +374,12 @@ export function App() {
     [doc.edges, selectedEdgeId, selectedNodeIds]
   );
 
-  const updateActiveTab = React.useCallback((recipe: (tab: TabDocument) => TabDocument) => {
-    setTabs(prev => prev.map(tab => (tab.id === activeTabId ? recipe(tab) : tab)));
-  }, [activeTabId]);
+  const updateActiveTab = React.useCallback(
+    (recipe: (tab: TabDocument) => TabDocument) => {
+      setTabs(prev => prev.map(tab => (tab.id === activeTabId ? recipe(tab) : tab)));
+    },
+    [activeTabId]
+  );
 
   const stopConnectDragListeners = React.useCallback(() => {
     const handlers = connectDragListenersRef.current;
@@ -424,58 +399,73 @@ export function App() {
     edgeSegmentDragListenersRef.current = null;
   }, []);
 
-  const resetTransientUiState = React.useCallback((defaultNodeId?: NodeId) => {
-    stopConnectDragListeners();
-    stopEdgeSegmentDragListeners();
-    setSelectedEdgeId('');
-    setSelectedRouteControl(null);
-    setSelectedNodeIds(defaultNodeId ? [defaultNodeId] : []);
-    setCopiedSelection(null);
-    setEditingNodeId(null);
-    setEditingLabel('');
-    editingNodeIdRef.current = null;
-    editingLabelRef.current = '';
-    setMarquee(null);
-    setDragState(null);
-    setEdgeBendDrag(null);
-    connectDragRef.current = null;
-    setConnectDrag(null);
-    setDropParentTargetId(null);
-  }, [stopConnectDragListeners, stopEdgeSegmentDragListeners]);
+  const resetTransientUiState = React.useCallback(
+    (defaultNodeId?: NodeId) => {
+      stopConnectDragListeners();
+      stopEdgeSegmentDragListeners();
+      setSelectedEdgeId('');
+      setSelectedRouteControl(null);
+      setSelectedNodeIds(defaultNodeId ? [defaultNodeId] : []);
+      setCopiedSelection(null);
+      setEditingNodeId(null);
+      setEditingLabel('');
+      editingNodeIdRef.current = null;
+      editingLabelRef.current = '';
+      setMarquee(null);
+      setDragState(null);
+      setEdgeBendDrag(null);
+      connectDragRef.current = null;
+      setConnectDrag(null);
+      setDropParentTargetId(null);
+    },
+    [stopConnectDragListeners, stopEdgeSegmentDragListeners]
+  );
 
-  const setCurrentNodeOffsets = React.useCallback((updater: (prev: NodeOffsetMap) => NodeOffsetMap) => {
-    updateActiveTab(tab => ({
-      ...tab,
-      nodeOffsetsByDirection: {
-        ...tab.nodeOffsetsByDirection,
-        [tab.layoutDirection]: updater(tab.nodeOffsetsByDirection[tab.layoutDirection])
-      }
-    }));
-  }, [updateActiveTab]);
+  const setCurrentNodeOffsets = React.useCallback(
+    (updater: (prev: NodeOffsetMap) => NodeOffsetMap) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        nodeOffsetsByDirection: {
+          ...tab.nodeOffsetsByDirection,
+          [tab.layoutDirection]: updater(tab.nodeOffsetsByDirection[tab.layoutDirection])
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
 
-  const restoreCurrentNodeOffsets = React.useCallback((offsets: Record<NodeId, NodeOffset>) => {
-    setCurrentNodeOffsets(prev => mergeNodeOffsets(prev, offsets));
-  }, [setCurrentNodeOffsets]);
+  const restoreCurrentNodeOffsets = React.useCallback(
+    (offsets: Record<NodeId, NodeOffset>) => {
+      setCurrentNodeOffsets(prev => mergeNodeOffsets(prev, offsets));
+    },
+    [setCurrentNodeOffsets]
+  );
 
-  const setCurrentEdgeBends = React.useCallback((updater: (prev: EdgeBendMap) => EdgeBendMap) => {
-    updateActiveTab(tab => ({
-      ...tab,
-      edgeBendsByDirection: {
-        ...tab.edgeBendsByDirection,
-        [tab.layoutDirection]: updater(tab.edgeBendsByDirection[tab.layoutDirection])
-      }
-    }));
-  }, [updateActiveTab]);
+  const setCurrentEdgeBends = React.useCallback(
+    (updater: (prev: EdgeBendMap) => EdgeBendMap) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        edgeBendsByDirection: {
+          ...tab.edgeBendsByDirection,
+          [tab.layoutDirection]: updater(tab.edgeBendsByDirection[tab.layoutDirection])
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
 
-  const setCurrentEdgeRoutes = React.useCallback((updater: (prev: EdgeRouteMap) => EdgeRouteMap) => {
-    updateActiveTab(tab => ({
-      ...tab,
-      edgeRoutesByDirection: {
-        ...tab.edgeRoutesByDirection,
-        [tab.layoutDirection]: updater(tab.edgeRoutesByDirection[tab.layoutDirection])
-      }
-    }));
-  }, [updateActiveTab]);
+  const setCurrentEdgeRoutes = React.useCallback(
+    (updater: (prev: EdgeRouteMap) => EdgeRouteMap) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        edgeRoutesByDirection: {
+          ...tab.edgeRoutesByDirection,
+          [tab.layoutDirection]: updater(tab.edgeRoutesByDirection[tab.layoutDirection])
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
 
   const commitEdgeUiChange = React.useCallback(
     (recipe: (snapshot: EdgeUiSnapshot, layoutDirection: LayoutDirection) => EdgeUiSnapshot) => {
@@ -543,25 +533,31 @@ export function App() {
     [canvasZoom]
   );
 
-  const getSvgContentPoint = React.useCallback((svg: SVGSVGElement | null, clientX: number, clientY: number): Point | null => {
-    if (!svg) return null;
-    const matrix = svg.getScreenCTM();
-    if (!matrix) return null;
-    const point = svg.createSVGPoint();
-    point.x = clientX;
-    point.y = clientY;
-    const transformed = point.matrixTransform(matrix.inverse());
-    return { x: transformed.x, y: transformed.y };
-  }, []);
+  const getSvgContentPoint = React.useCallback(
+    (svg: SVGSVGElement | null, clientX: number, clientY: number): Point | null => {
+      if (!svg) return null;
+      const matrix = svg.getScreenCTM();
+      if (!matrix) return null;
+      const point = svg.createSVGPoint();
+      point.x = clientX;
+      point.y = clientY;
+      const transformed = point.matrixTransform(matrix.inverse());
+      return { x: transformed.x, y: transformed.y };
+    },
+    []
+  );
 
-  const commitDoc = React.useCallback((recipe: (current: FlowDoc) => FlowDoc) => {
-    updateActiveTab(tab => {
-      const nextDoc = ensureDocHasNode(recipe(tab.history.present));
-      const nextHistory = commitHistory(tab.history, nextDoc);
-      return commitDocHistoryToHost(tab, nextHistory);
-    });
-    setFileMessage('Edited');
-  }, [updateActiveTab]);
+  const commitDoc = React.useCallback(
+    (recipe: (current: FlowDoc) => FlowDoc) => {
+      updateActiveTab(tab => {
+        const nextDoc = ensureDocHasNode(recipe(tab.history.present));
+        const nextHistory = commitHistory(tab.history, nextDoc);
+        return commitDocHistoryToHost(tab, nextHistory);
+      });
+      setFileMessage('Edited');
+    },
+    [updateActiveTab]
+  );
 
   const toggleChecklistNodes = React.useCallback(
     (nodeIds: NodeId[], checked: boolean) => {
@@ -580,20 +576,26 @@ export function App() {
     resetTransientUiState(update.resetNodeId);
   }, [resetTransientUiState, tabCounter, tabs]);
 
-  const closeTab = React.useCallback((tabId: string) => {
-    const update = buildCloseTabUpdate(tabs, activeTabId, tabId);
-    if (!update) return;
-    setTabs(update.tabs);
-    setActiveTabId(update.activeTabId);
-    setFileMessage('Tab closed');
-    resetTransientUiState();
-  }, [activeTabId, resetTransientUiState, tabs]);
+  const closeTab = React.useCallback(
+    (tabId: string) => {
+      const update = buildCloseTabUpdate(tabs, activeTabId, tabId);
+      if (!update) return;
+      setTabs(update.tabs);
+      setActiveTabId(update.activeTabId);
+      setFileMessage('Tab closed');
+      resetTransientUiState();
+    },
+    [activeTabId, resetTransientUiState, tabs]
+  );
 
-  const switchTab = React.useCallback((tabId: string) => {
-    setActiveTabId(tabId);
-    const tab = tabs.find(item => item.id === tabId);
-    resetTransientUiState(getTabResetNodeId(tab));
-  }, [resetTransientUiState, tabs]);
+  const switchTab = React.useCallback(
+    (tabId: string) => {
+      setActiveTabId(tabId);
+      const tab = tabs.find(item => item.id === tabId);
+      resetTransientUiState(getTabResetNodeId(tab));
+    },
+    [resetTransientUiState, tabs]
+  );
 
   const createNewDocument = React.useCallback(() => {
     let resetNodeId: string | undefined;
@@ -825,28 +827,23 @@ export function App() {
     ]
   );
 
-  const buildDraggedEdgeRoute = React.useCallback((edgeId: string, pointer: Point): EdgeRoute | undefined => {
-    return buildDraggedEdgeRouteFromState({
-      doc,
-      edgeId,
-      pointer,
-      renderedPositionMap,
-      nodeSizeMap,
-      defaultNodeSize: DEFAULT_NODE_SIZE,
-      layoutDirection,
-      layoutSpacing,
-      getRouteNodeBoxes,
-      getRenderedEdgeEndpoints
-    });
-  }, [
-    doc,
-    getRenderedEdgeEndpoints,
-    getRouteNodeBoxes,
-    layoutSpacing,
-    layoutDirection,
-    nodeSizeMap,
-    renderedPositionMap
-  ]);
+  const buildDraggedEdgeRoute = React.useCallback(
+    (edgeId: string, pointer: Point): EdgeRoute | undefined => {
+      return buildDraggedEdgeRouteFromState({
+        doc,
+        edgeId,
+        pointer,
+        renderedPositionMap,
+        nodeSizeMap,
+        defaultNodeSize: DEFAULT_NODE_SIZE,
+        layoutDirection,
+        layoutSpacing,
+        getRouteNodeBoxes,
+        getRenderedEdgeEndpoints
+      });
+    },
+    [doc, getRenderedEdgeEndpoints, getRouteNodeBoxes, layoutSpacing, layoutDirection, nodeSizeMap, renderedPositionMap]
+  );
 
   const tryCreateEdge = React.useCallback(
     (from: NodeId, to: NodeId, anchors?: EdgeAnchors) => {
@@ -896,13 +893,10 @@ export function App() {
   const fitCanvasToView = React.useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const fitPlan = planCanvasFitToView(
-      doc.nodes,
-      renderedPositionMap,
-      nodeSizeMap,
-      DEFAULT_NODE_SIZE,
-      { clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight }
-    );
+    const fitPlan = planCanvasFitToView(doc.nodes, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE, {
+      clientWidth: canvas.clientWidth,
+      clientHeight: canvas.clientHeight
+    });
     if (!fitPlan) return;
     setCanvasZoom(fitPlan.zoom);
     requestAnimationFrame(() => {
@@ -946,22 +940,29 @@ export function App() {
     ]
   );
 
-  const buildCanvasSvg = React.useCallback((fitToContent = false) => {
-    return buildCanvasSvgMarkup(buildCurrentSvgSnapshot(), {
-      canvasSize,
-      theme: activeTheme,
-      defaultShape: doc.settings.defaultShape,
-      layoutDirection,
-      fitToContent
-    });
-  }, [activeTheme, buildCurrentSvgSnapshot, canvasSize, doc.settings.defaultShape, layoutDirection]);
+  const buildCanvasSvg = React.useCallback(
+    (fitToContent = false) => {
+      return buildCanvasSvgMarkup(buildCurrentSvgSnapshot(), {
+        canvasSize,
+        theme: activeTheme,
+        defaultShape: doc.settings.defaultShape,
+        layoutDirection,
+        fitToContent
+      });
+    },
+    [activeTheme, buildCurrentSvgSnapshot, canvasSize, doc.settings.defaultShape, layoutDirection]
+  );
 
   React.useEffect(() => {
     setSelectedNodeIds(prev => {
       return pruneSelectionForDoc(doc.nodes, doc.edges, prev, selectedEdgeId).selectedNodeIds;
     });
-    const nextSelectedEdgeId = pruneSelectionForDoc(doc.nodes, doc.edges, selectedNodeIdsRef.current, selectedEdgeId)
-      .selectedEdgeId;
+    const nextSelectedEdgeId = pruneSelectionForDoc(
+      doc.nodes,
+      doc.edges,
+      selectedNodeIdsRef.current,
+      selectedEdgeId
+    ).selectedEdgeId;
     if (nextSelectedEdgeId !== selectedEdgeId) {
       setSelectedEdgeId(nextSelectedEdgeId);
     }
@@ -1025,14 +1026,17 @@ export function App() {
     });
   }, [commitDoc, copiedSelection, doc, setCurrentNodeOffsets]);
 
-  const startEditingNode = React.useCallback((nodeId: NodeId) => {
-    const draft = getNodeEditingDraft(doc, nodeId);
-    if (!draft) return;
-    editingNodeIdRef.current = draft.nodeId;
-    editingLabelRef.current = draft.label;
-    setEditingNodeId(draft.nodeId);
-    setEditingLabel(draft.label);
-  }, [doc]);
+  const startEditingNode = React.useCallback(
+    (nodeId: NodeId) => {
+      const draft = getNodeEditingDraft(doc, nodeId);
+      if (!draft) return;
+      editingNodeIdRef.current = draft.nodeId;
+      editingLabelRef.current = draft.label;
+      setEditingNodeId(draft.nodeId);
+      setEditingLabel(draft.label);
+    },
+    [doc]
+  );
 
   const updateEditingLabel = React.useCallback((value: string) => {
     const label = clampNodeLabel(value);
@@ -1104,24 +1108,27 @@ export function App() {
     setEditingLabel(result.newLabel);
   }, [commitDoc, doc, nodeOffsets, setCurrentNodeOffsets]);
 
-  const selectNodeByDirection = React.useCallback((directionKey: string) => {
-    const currentSelection = selectedNodeIdsRef.current;
-    if (currentSelection.length !== 1) return false;
-    const next = getNodeSelectionByDirection(
-      doc.nodes,
-      currentSelection[0],
-      directionKey,
-      renderedPositionMap,
-      nodeSizeMap,
-      DEFAULT_NODE_SIZE
-    );
-    if (!next) return false;
-    setSelectedNodeIds([next]);
-    selectedNodeIdsRef.current = [next];
-    setSelectedEdgeId('');
-    setSelectedRouteControl(null);
-    return true;
-  }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
+  const selectNodeByDirection = React.useCallback(
+    (directionKey: string) => {
+      const currentSelection = selectedNodeIdsRef.current;
+      if (currentSelection.length !== 1) return false;
+      const next = getNodeSelectionByDirection(
+        doc.nodes,
+        currentSelection[0],
+        directionKey,
+        renderedPositionMap,
+        nodeSizeMap,
+        DEFAULT_NODE_SIZE
+      );
+      if (!next) return false;
+      setSelectedNodeIds([next]);
+      selectedNodeIdsRef.current = [next];
+      setSelectedEdgeId('');
+      setSelectedRouteControl(null);
+      return true;
+    },
+    [doc.nodes, nodeSizeMap, renderedPositionMap]
+  );
 
   const reorderSelectedNodeSibling = React.useCallback(
     (direction: -1 | 1) => {
@@ -1192,7 +1199,13 @@ export function App() {
   const applySelectedEdgeStyle = React.useCallback(
     (patch: EdgeStyle) => {
       if (selectedStyleEdges.length === 0) return;
-      commitDoc(prev => updateEdgeStyle(prev, selectedStyleEdges.map(edge => edge.id), patch));
+      commitDoc(prev =>
+        updateEdgeStyle(
+          prev,
+          selectedStyleEdges.map(edge => edge.id),
+          patch
+        )
+      );
     },
     [commitDoc, selectedStyleEdges]
   );
@@ -1469,55 +1482,81 @@ export function App() {
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('mouseup', onPointerUp);
     };
-  }, [autoPanCanvas, commitDoc, doc, dragState, dropParentTargetId, getCanvasContentPoint, layout.positions, layoutDirection, layoutSpacing, nodeSizeMap, primaryRootNodeId, renderedPositionMap, restoreCurrentNodeOffsets, rootNodeIds, setCurrentNodeOffsets, updateActiveTab]);
+  }, [
+    autoPanCanvas,
+    commitDoc,
+    doc,
+    dragState,
+    dropParentTargetId,
+    getCanvasContentPoint,
+    layout.positions,
+    layoutDirection,
+    layoutSpacing,
+    nodeSizeMap,
+    primaryRootNodeId,
+    renderedPositionMap,
+    restoreCurrentNodeOffsets,
+    rootNodeIds,
+    setCurrentNodeOffsets,
+    updateActiveTab
+  ]);
 
-  const findNodeAtCanvasPoint = React.useCallback((x: number, y: number): NodeId | null => {
-    return getNodeIdAtCanvasPoint({ x, y }, layout.positions, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE);
-  }, [layout.positions, nodeSizeMap, renderedPositionMap]);
+  const findNodeAtCanvasPoint = React.useCallback(
+    (x: number, y: number): NodeId | null => {
+      return getNodeIdAtCanvasPoint({ x, y }, layout.positions, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE);
+    },
+    [layout.positions, nodeSizeMap, renderedPositionMap]
+  );
 
-  const updateConnectDragFromPointer = React.useCallback((event: DragPointerLikeEvent) => {
-    autoPanCanvas(event);
-    const pointer = getCanvasContentPoint(event.clientX, event.clientY);
-    if (!pointer) return;
-    const { x, y } = pointer;
-    setConnectDrag(prev => {
-      if (!prev) return prev;
-      const hitId = findNodeAtCanvasPoint(x, y);
-      const next = updateConnectDragForPoint(prev, { x, y }, hitId);
-      connectDragRef.current = next;
-      return next;
-    });
-  }, [autoPanCanvas, findNodeAtCanvasPoint, getCanvasContentPoint]);
+  const updateConnectDragFromPointer = React.useCallback(
+    (event: DragPointerLikeEvent) => {
+      autoPanCanvas(event);
+      const pointer = getCanvasContentPoint(event.clientX, event.clientY);
+      if (!pointer) return;
+      const { x, y } = pointer;
+      setConnectDrag(prev => {
+        if (!prev) return prev;
+        const hitId = findNodeAtCanvasPoint(x, y);
+        const next = updateConnectDragForPoint(prev, { x, y }, hitId);
+        connectDragRef.current = next;
+        return next;
+      });
+    },
+    [autoPanCanvas, findNodeAtCanvasPoint, getCanvasContentPoint]
+  );
 
-  const finishConnectDragFromPointer = React.useCallback((event: DragPointerLikeEvent) => {
-    stopConnectDragListeners();
-    pendingRightConnectFromRef.current = null;
-    const pointer = getCanvasContentPoint(event.clientX, event.clientY);
-    const targetFromEvent = getNodeIdFromEventTarget(event.target);
-    const targetFromPoint = getNodeIdFromViewportPoint(event.clientX, event.clientY);
-    if (!pointer) {
+  const finishConnectDragFromPointer = React.useCallback(
+    (event: DragPointerLikeEvent) => {
+      stopConnectDragListeners();
+      pendingRightConnectFromRef.current = null;
+      const pointer = getCanvasContentPoint(event.clientX, event.clientY);
+      const targetFromEvent = getNodeIdFromEventTarget(event.target);
+      const targetFromPoint = getNodeIdFromViewportPoint(event.clientX, event.clientY);
+      if (!pointer) {
+        connectDragRef.current = null;
+        setConnectDrag(null);
+        return;
+      }
+      const { x, y } = pointer;
+      const drag = connectDragRef.current;
       connectDragRef.current = null;
       setConnectDrag(null);
-      return;
-    }
-    const { x, y } = pointer;
-    const drag = connectDragRef.current;
-    connectDragRef.current = null;
-    setConnectDrag(null);
-    if (!drag) return;
-    const targetHandleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
-    const plan = planConnectDragFinish(drag, {
-      handleTargetNodeId: targetHandleHit?.nodeId,
-      viewportTargetNodeId: targetFromPoint,
-      hoverTargetNodeId: drag.hoverTargetNodeId,
-      canvasTargetNodeId: findNodeAtCanvasPoint(x, y),
-      eventTargetNodeId: targetFromEvent,
-      handleAnchor: targetHandleHit?.anchor
-    });
-    if (plan && tryCreateEdge(plan.fromNodeId, plan.targetNodeId, plan.anchors)) {
-      setSelectedNodeIds([plan.targetNodeId]);
-    }
-  }, [findNodeAtCanvasPoint, getCanvasContentPoint, layoutDirection, stopConnectDragListeners, tryCreateEdge]);
+      if (!drag) return;
+      const targetHandleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
+      const plan = planConnectDragFinish(drag, {
+        handleTargetNodeId: targetHandleHit?.nodeId,
+        viewportTargetNodeId: targetFromPoint,
+        hoverTargetNodeId: drag.hoverTargetNodeId,
+        canvasTargetNodeId: findNodeAtCanvasPoint(x, y),
+        eventTargetNodeId: targetFromEvent,
+        handleAnchor: targetHandleHit?.anchor
+      });
+      if (plan && tryCreateEdge(plan.fromNodeId, plan.targetNodeId, plan.anchors)) {
+        setSelectedNodeIds([plan.targetNodeId]);
+      }
+    },
+    [findNodeAtCanvasPoint, getCanvasContentPoint, layoutDirection, stopConnectDragListeners, tryCreateEdge]
+  );
 
   React.useEffect(() => {
     if (!edgeBendDrag) return;
@@ -1781,9 +1820,7 @@ export function App() {
     const edgeHit = findEdgeHitAtPoint(start, event.currentTarget.dataset.edgeId);
     if (!edgeHit) return;
     const svg = event.currentTarget.ownerSVGElement;
-    startEdgeSegmentDragAtPoint(edgeHit.edgeId, start, (clientX, clientY) =>
-      getSvgContentPoint(svg, clientX, clientY)
-    );
+    startEdgeSegmentDragAtPoint(edgeHit.edgeId, start, (clientX, clientY) => getSvgContentPoint(svg, clientX, clientY));
   };
 
   const beginConnectDrag = (nodeId: NodeId, anchors: EdgeAnchors = HANDLE_CONNECT_ANCHORS) => {
@@ -1815,7 +1852,11 @@ export function App() {
     setSelectedEdgeId('');
   };
 
-  const startConnectDrag = (event: React.PointerEvent<HTMLSpanElement>, nodeId: NodeId, anchors = HANDLE_CONNECT_ANCHORS) => {
+  const startConnectDrag = (
+    event: React.PointerEvent<HTMLSpanElement>,
+    nodeId: NodeId,
+    anchors = HANDLE_CONNECT_ANCHORS
+  ) => {
     event.preventDefault();
     event.stopPropagation();
     if (event.button === 2 || event.buttons === 2) {
@@ -1833,7 +1874,10 @@ export function App() {
       const handleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
       const nodeId = getNodeIdFromEventTarget(target) || handleHit?.nodeId;
       if (!nodeId) return;
-      if (!target.closest('.node-connect-handle') && !isViewportPointOnConnectHandle(event.clientX, event.clientY, nodeId, layoutDirection)) {
+      if (
+        !target.closest('.node-connect-handle') &&
+        !isViewportPointOnConnectHandle(event.clientX, event.clientY, nodeId, layoutDirection)
+      ) {
         return;
       }
       event.preventDefault();
@@ -1854,7 +1898,10 @@ export function App() {
       getNodeIdFromEventTarget(target) ||
       getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection)?.nodeId;
     if (!nodeId) return;
-    if (!target.closest('.node-connect-handle') && !isViewportPointOnConnectHandle(event.clientX, event.clientY, nodeId, layoutDirection)) {
+    if (
+      !target.closest('.node-connect-handle') &&
+      !isViewportPointOnConnectHandle(event.clientX, event.clientY, nodeId, layoutDirection)
+    ) {
       return;
     }
     pendingRightConnectFromRef.current = nodeId;
@@ -2088,7 +2135,8 @@ export function App() {
   ) => (
     <div className="edge-style-controls">
       <div className="toolbar-section-title">
-        {title}{edgeCount > 0 ? ` (${edgeCount})` : ''}
+        {title}
+        {edgeCount > 0 ? ` (${edgeCount})` : ''}
       </div>
       <label className="toolbar-field">
         <span>Line Width</span>
@@ -2209,12 +2257,7 @@ export function App() {
         applyDefaultEdgeStyle
       )}
       <div className="toolbar-button-row">
-        <button
-          type="button"
-          onClick={fitCanvasToView}
-          aria-label="Fit"
-          title="Fit graph to visible canvas"
-        >
+        <button type="button" onClick={fitCanvasToView} aria-label="Fit" title="Fit graph to visible canvas">
           Fit
         </button>
         <button
@@ -2233,184 +2276,190 @@ export function App() {
   const renderNodeToolbar = () => {
     return (
       <>
-      <div className="toolbar-title">Node Style</div>
-      <div className="toolbar-subtitle">{selectedNodeIds.length} selected</div>
-      <label className="toolbar-field">
-        <span>Font</span>
-        <select
-          value={selectedFontFamilyMixed ? MIXED_OPTION : selectedFontFamily || DEFAULT_FONT_FAMILY}
-          onChange={event => {
-            if (event.target.value === MIXED_OPTION) return;
-            applySelectedNodeStyle({ fontFamily: event.target.value });
-          }}
-        >
-          {selectedFontFamilyMixed ? (
-            <option value={MIXED_OPTION} disabled>
-              Mixed
-            </option>
-          ) : null}
-          {FONT_FAMILIES.map(font => (
-            <option key={font} value={font}>
-              {font}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="toolbar-field">
-        <span>Size</span>
-        <select
-          value={selectedFontSizeMixed ? MIXED_OPTION : String(selectedFontSize || DEFAULT_FONT_SIZE)}
-          onChange={event => {
-            if (event.target.value === MIXED_OPTION) return;
-            applySelectedNodeStyle({ fontSize: Number(event.target.value) });
-          }}
-        >
-          {selectedFontSizeMixed ? (
-            <option value={MIXED_OPTION} disabled>
-              Mixed
-            </option>
-          ) : null}
-          {FONT_SIZES.map(size => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="toolbar-toggle-row">
-        <button
-          type="button"
-          aria-label="Bold"
-          title="Bold"
-          className={isAllBold ? 'mode-btn-active' : hasMixedBold ? 'mode-btn-mixed' : ''}
-          onClick={() => applySelectedNodeStyle({ bold: !isAllBold })}
-        >
-          B
-        </button>
-        <button
-          type="button"
-          aria-label="Italic"
-          title="Italic"
-          className={isAllItalic ? 'mode-btn-active' : hasMixedItalic ? 'mode-btn-mixed' : ''}
-          onClick={() => applySelectedNodeStyle({ italic: !isAllItalic })}
-        >
-          I
-        </button>
-        <button
-          type="button"
-          aria-label="Underline"
-          title="Underline"
-          className={isAllUnderline ? 'mode-btn-active' : hasMixedUnderline ? 'mode-btn-mixed' : ''}
-          onClick={() => applySelectedNodeStyle({ underline: !isAllUnderline })}
-        >
-          U
-        </button>
-      </div>
-      <div className="toolbar-toggle-row">
-        {(['left', 'center', 'right'] as TextAlign[]).map(align => (
-          <button
-            key={align}
-            type="button"
-            aria-label={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
-            title={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
-            className={selectedTextAlign === align ? 'mode-btn-active' : ''}
-            onClick={() => applySelectedNodeStyle({ textAlign: align })}
+        <div className="toolbar-title">Node Style</div>
+        <div className="toolbar-subtitle">{selectedNodeIds.length} selected</div>
+        <label className="toolbar-field">
+          <span>Font</span>
+          <select
+            value={selectedFontFamilyMixed ? MIXED_OPTION : selectedFontFamily || DEFAULT_FONT_FAMILY}
+            onChange={event => {
+              if (event.target.value === MIXED_OPTION) return;
+              applySelectedNodeStyle({ fontFamily: event.target.value });
+            }}
           >
-            {align[0].toUpperCase()}
+            {selectedFontFamilyMixed ? (
+              <option value={MIXED_OPTION} disabled>
+                Mixed
+              </option>
+            ) : null}
+            {FONT_FAMILIES.map(font => (
+              <option key={font} value={font}>
+                {font}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="toolbar-field">
+          <span>Size</span>
+          <select
+            value={selectedFontSizeMixed ? MIXED_OPTION : String(selectedFontSize || DEFAULT_FONT_SIZE)}
+            onChange={event => {
+              if (event.target.value === MIXED_OPTION) return;
+              applySelectedNodeStyle({ fontSize: Number(event.target.value) });
+            }}
+          >
+            {selectedFontSizeMixed ? (
+              <option value={MIXED_OPTION} disabled>
+                Mixed
+              </option>
+            ) : null}
+            {FONT_SIZES.map(size => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="toolbar-toggle-row">
+          <button
+            type="button"
+            aria-label="Bold"
+            title="Bold"
+            className={isAllBold ? 'mode-btn-active' : hasMixedBold ? 'mode-btn-mixed' : ''}
+            onClick={() => applySelectedNodeStyle({ bold: !isAllBold })}
+          >
+            B
           </button>
-        ))}
-      </div>
-      {renderColorDropdown('Text Color', selectedTextColor, '#0f172a', selectedTextColorMixed, color => applySelectedNodeStyle({ textColor: color }))}
-      {renderColorDropdown('Node Color', selectedBackgroundColor, '#ffffff', selectedBackgroundColorMixed, color => applySelectedNodeStyle({ backgroundColor: color }))}
-      <label className="toolbar-field">
-        <span>Shape</span>
-        <select
-          value={selectedShapeMixed ? MIXED_OPTION : selectedShape || doc.settings.defaultShape}
-          onChange={event => {
-            if (event.target.value === MIXED_OPTION) return;
-            applySelectedNodeStyle({ shape: event.target.value as NodeShape });
-          }}
-        >
-          {selectedShapeMixed ? (
-            <option value={MIXED_OPTION} disabled>
-              Mixed
-            </option>
-          ) : null}
-          {NODE_SHAPES.map(shape => (
-            <option key={shape.value} value={shape.value}>
-              {shape.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {selectedStyleEdges.length > 0
-        ? renderEdgeStyleControls(
-            'Related Lines',
-            selectedStyleEdges.length,
-            selectedEdgeWidth,
-            selectedEdgeWidthMixed,
-            selectedEdgeLineType,
-            selectedEdgeLineTypeMixed,
-            selectedEdgeColor,
-            selectedEdgeColorMixed,
-            {
-              width: doc.settings.defaultEdgeStyle.width || 2,
-              lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
-              color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
-            },
-            applySelectedEdgeStyle
-          )
-        : null}
-      <div className="tag-list">
-        <div className="tag-list-create">
-          <span>Tag Color</span>
-          <details className="color-dropdown tag-color-picker">
-            <summary aria-label="New tag color">
-              <span className="color-preview" style={{ backgroundColor: newTagColor }} />
-              <span className="color-dropdown-label">{newTagColor.toUpperCase()}</span>
-            </summary>
-            <div className="color-swatch-grid" role="group" aria-label="New tag color options">
-              {COLOR_SWATCHES.map(color => (
-                <button
-                  key={color}
-                  type="button"
-                  className={
-                    newTagColor.toLowerCase() === color.toLowerCase() ? 'color-swatch color-swatch-active' : 'color-swatch'
-                  }
-                  style={{ backgroundColor: color }}
-                  aria-label={`New tag color ${color}`}
-                  onClick={event => {
-                    setNewTagColor(color);
-                    event.currentTarget.closest('details')?.removeAttribute('open');
-                  }}
-                />
-              ))}
-            </div>
-          </details>
-          <button type="button" aria-label="Add tag" title="Add tag" onClick={addCustomTag}>
-            +
+          <button
+            type="button"
+            aria-label="Italic"
+            title="Italic"
+            className={isAllItalic ? 'mode-btn-active' : hasMixedItalic ? 'mode-btn-mixed' : ''}
+            onClick={() => applySelectedNodeStyle({ italic: !isAllItalic })}
+          >
+            I
+          </button>
+          <button
+            type="button"
+            aria-label="Underline"
+            title="Underline"
+            className={isAllUnderline ? 'mode-btn-active' : hasMixedUnderline ? 'mode-btn-mixed' : ''}
+            onClick={() => applySelectedNodeStyle({ underline: !isAllUnderline })}
+          >
+            U
           </button>
         </div>
-        {doc.settings.tags.map(tag => (
-          <div key={tag.id} className="tag-row">
+        <div className="toolbar-toggle-row">
+          {(['left', 'center', 'right'] as TextAlign[]).map(align => (
             <button
+              key={align}
               type="button"
-              className="tag-color-button"
-              aria-label={`Apply tag ${tag.name}`}
-              title={`Apply tag ${tag.name}`}
-              style={{ backgroundColor: tag.color }}
-              onClick={() => applySelectedNodeStyle({ tagId: tag.id })}
-            />
-            <input value={tag.name} onChange={event => renameTag(tag, event.target.value)} />
-            <button type="button" aria-label={`Delete tag ${tag.name}`} onClick={() => removeTagById(tag.id)}>
-              x
+              aria-label={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
+              title={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
+              className={selectedTextAlign === align ? 'mode-btn-active' : ''}
+              onClick={() => applySelectedNodeStyle({ textAlign: align })}
+            >
+              {align[0].toUpperCase()}
+            </button>
+          ))}
+        </div>
+        {renderColorDropdown('Text Color', selectedTextColor, '#0f172a', selectedTextColorMixed, color =>
+          applySelectedNodeStyle({ textColor: color })
+        )}
+        {renderColorDropdown('Node Color', selectedBackgroundColor, '#ffffff', selectedBackgroundColorMixed, color =>
+          applySelectedNodeStyle({ backgroundColor: color })
+        )}
+        <label className="toolbar-field">
+          <span>Shape</span>
+          <select
+            value={selectedShapeMixed ? MIXED_OPTION : selectedShape || doc.settings.defaultShape}
+            onChange={event => {
+              if (event.target.value === MIXED_OPTION) return;
+              applySelectedNodeStyle({ shape: event.target.value as NodeShape });
+            }}
+          >
+            {selectedShapeMixed ? (
+              <option value={MIXED_OPTION} disabled>
+                Mixed
+              </option>
+            ) : null}
+            {NODE_SHAPES.map(shape => (
+              <option key={shape.value} value={shape.value}>
+                {shape.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedStyleEdges.length > 0
+          ? renderEdgeStyleControls(
+              'Related Lines',
+              selectedStyleEdges.length,
+              selectedEdgeWidth,
+              selectedEdgeWidthMixed,
+              selectedEdgeLineType,
+              selectedEdgeLineTypeMixed,
+              selectedEdgeColor,
+              selectedEdgeColorMixed,
+              {
+                width: doc.settings.defaultEdgeStyle.width || 2,
+                lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
+                color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
+              },
+              applySelectedEdgeStyle
+            )
+          : null}
+        <div className="tag-list">
+          <div className="tag-list-create">
+            <span>Tag Color</span>
+            <details className="color-dropdown tag-color-picker">
+              <summary aria-label="New tag color">
+                <span className="color-preview" style={{ backgroundColor: newTagColor }} />
+                <span className="color-dropdown-label">{newTagColor.toUpperCase()}</span>
+              </summary>
+              <div className="color-swatch-grid" role="group" aria-label="New tag color options">
+                {COLOR_SWATCHES.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={
+                      newTagColor.toLowerCase() === color.toLowerCase()
+                        ? 'color-swatch color-swatch-active'
+                        : 'color-swatch'
+                    }
+                    style={{ backgroundColor: color }}
+                    aria-label={`New tag color ${color}`}
+                    onClick={event => {
+                      setNewTagColor(color);
+                      event.currentTarget.closest('details')?.removeAttribute('open');
+                    }}
+                  />
+                ))}
+              </div>
+            </details>
+            <button type="button" aria-label="Add tag" title="Add tag" onClick={addCustomTag}>
+              +
             </button>
           </div>
-        ))}
-      </div>
-      <button type="button" onClick={clearSelectedNodeStyle}>
-        Reset Node Style
-      </button>
+          {doc.settings.tags.map(tag => (
+            <div key={tag.id} className="tag-row">
+              <button
+                type="button"
+                className="tag-color-button"
+                aria-label={`Apply tag ${tag.name}`}
+                title={`Apply tag ${tag.name}`}
+                style={{ backgroundColor: tag.color }}
+                onClick={() => applySelectedNodeStyle({ tagId: tag.id })}
+              />
+              <input value={tag.name} onChange={event => renameTag(tag, event.target.value)} />
+              <button type="button" aria-label={`Delete tag ${tag.name}`} onClick={() => removeTagById(tag.id)}>
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={clearSelectedNodeStyle}>
+          Reset Node Style
+        </button>
       </>
     );
   };
@@ -2551,12 +2600,7 @@ export function App() {
                 const active = taskTableSort?.key === column.key;
                 const direction = active ? taskTableSort.direction : undefined;
                 return (
-                  <th
-                    key={column.key}
-                    aria-sort={
-                      active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'
-                    }
-                  >
+                  <th key={column.key} aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                     <button
                       type="button"
                       className="task-sort-button"
@@ -2564,7 +2608,9 @@ export function App() {
                       onClick={() => toggleTaskTableSort(column.key)}
                     >
                       <span>{column.label}</span>
-                      <span className={active ? 'task-sort-indicator task-sort-indicator-active' : 'task-sort-indicator'}>
+                      <span
+                        className={active ? 'task-sort-indicator task-sort-indicator-active' : 'task-sort-indicator'}
+                      >
                         {active ? (direction === 'asc' ? '^' : 'v') : ''}
                       </span>
                     </button>
@@ -2752,7 +2798,11 @@ export function App() {
 
       {fileMessage !== 'Ready' ? (
         <div
-          className={fileMessage.includes('failed') || fileMessage.includes('blocked') ? 'file-status file-status-error' : 'file-status'}
+          className={
+            fileMessage.includes('failed') || fileMessage.includes('blocked')
+              ? 'file-status file-status-error'
+              : 'file-status'
+          }
           data-testid="file-status"
           role="status"
         >
@@ -2765,7 +2815,9 @@ export function App() {
           {sidePanelVisible ? (
             taskTableVisible ? (
               <aside
-                className={taskTableExpanded ? 'outline-panel task-panel task-panel-expanded' : 'outline-panel task-panel'}
+                className={
+                  taskTableExpanded ? 'outline-panel task-panel task-panel-expanded' : 'outline-panel task-panel'
+                }
                 data-testid="task-panel"
               >
                 <div className="outline-panel-header">
@@ -2800,7 +2852,12 @@ export function App() {
               <aside className="outline-panel" data-testid="outline-panel">
                 <div className="outline-panel-header">
                   <span>Checklist</span>
-                  <button type="button" data-testid="outline-hide" onClick={() => setOutlineVisible(false)} title="Hide outline">
+                  <button
+                    type="button"
+                    data-testid="outline-hide"
+                    onClick={() => setOutlineVisible(false)}
+                    title="Hide outline"
+                  >
                     x
                   </button>
                 </div>
@@ -2829,9 +2886,7 @@ export function App() {
             />
           ) : null}
           <div className="canvas-main">
-            <h2>
-              Flow Canvas ({layoutDirection === 'horizontal' ? 'Horizontal' : 'Vertical'} Auto Layout)
-            </h2>
+            <h2>Flow Canvas ({layoutDirection === 'horizontal' ? 'Horizontal' : 'Vertical'} Auto Layout)</h2>
             <div
               ref={canvasRef}
               className="canvas"
@@ -2865,7 +2920,8 @@ export function App() {
                     const lane = edgeLaneMap.get(edge.id) || 0;
                     const forceBend = edgeForceBendMap.get(edge.id) || false;
                     const selected = edge.id === selectedEdgeId;
-                    const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
+                    const route =
+                      edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
                     const edgeStyle = effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle);
                     const strokeDasharray = edgeStrokeDasharray(edgeStyle.lineType, edgeStyle.width);
                     return (
@@ -2873,7 +2929,16 @@ export function App() {
                         key={edge.id}
                         data-testid={`edge-path-${edge.id}`}
                         data-edge-id={edge.id}
-                        d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
+                        d={edgePath(
+                          endpoints.from,
+                          endpoints.to,
+                          lane,
+                          layoutDirection,
+                          fromSize,
+                          toSize,
+                          forceBend,
+                          route
+                        )}
                         className={selected ? 'edge-path edge-path-selected' : 'edge-path'}
                         style={{
                           stroke: edgeStyle.color,
@@ -2890,7 +2955,11 @@ export function App() {
                             suppressNextEdgeClickRef.current = false;
                             return;
                           }
-                          const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
+                          const point = getSvgContentPoint(
+                            event.currentTarget.ownerSVGElement,
+                            event.clientX,
+                            event.clientY
+                          );
                           const edgeHit = point ? findEdgeHitAtPoint(point, event.currentTarget.dataset.edgeId) : null;
                           setSelectedEdgeId(edgeHit?.edgeId || edge.id);
                           setSelectedRouteControl(null);
@@ -2917,15 +2986,22 @@ export function App() {
                         const lane = edgeLaneMap.get(edge.id) || 0;
                         const forceBend = edgeForceBendMap.get(edge.id) || false;
                         const route =
-                          edgeRoutes[edge.id] ||
-                          routeFromBend(edgeBends[edge.id]) ||
-                          autoEdgeRouteMap.get(edge.id);
+                          edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
                         return (
                           <path
                             key={`route-preview-${edge.id}`}
                             data-testid="edge-route-drag-preview"
                             className="edge-route-drag-preview"
-                            d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
+                            d={edgePath(
+                              endpoints.from,
+                              endpoints.to,
+                              lane,
+                              layoutDirection,
+                              fromSize,
+                              toSize,
+                              forceBend,
+                              route
+                            )}
                           />
                         );
                       })
@@ -2949,17 +3025,23 @@ export function App() {
                           layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) || isForwardAlignedEdge
                             ? undefined
                             : autoEdgeRouteMap.get(edge.id);
-                        const route =
-                          edgeRoutes[edge.id] ||
-                          routeFromBend(edgeBends[edge.id]) ||
-                          automaticManualRoute;
+                        const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || automaticManualRoute;
                         if (!route || route.points.length === 0) return null;
                         return (
                           <path
                             key={`route-guide-${edge.id}`}
                             data-testid="edge-route-guide"
                             className="edge-route-guide"
-                            d={edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route)}
+                            d={edgePath(
+                              endpoints.from,
+                              endpoints.to,
+                              lane,
+                              layoutDirection,
+                              fromSize,
+                              toSize,
+                              forceBend,
+                              route
+                            )}
                           />
                         );
                       })
@@ -2985,9 +3067,10 @@ export function App() {
                       routeFromBend(edgeBends[edge.id]) ||
                       automaticManualRoute ||
                       routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
-                    const point = route.points.length === 1
-                      ? route.points[0]
-                      : routeControlPoint(endpoints.from, endpoints.to, route);
+                    const point =
+                      route.points.length === 1
+                        ? route.points[0]
+                        : routeControlPoint(endpoints.from, endpoints.to, route);
                     const pointIndex = 0;
                     return (
                       <g key={`bend-${edge.id}`}>

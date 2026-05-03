@@ -1,11 +1,6 @@
 import type { LayoutDirection, NodeSize } from '@shared/layout';
 import type { EdgeBend, EdgeRoute } from './persistence';
-import {
-  distanceSquared,
-  distanceToSegmentSquared,
-  routeLength,
-  type Point
-} from './routing-geometry';
+import { distanceSquared, distanceToSegmentSquared, routeLength, type Point } from './routing-geometry';
 
 export function shouldBendEdge(
   from: Point,

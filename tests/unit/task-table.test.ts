@@ -55,10 +55,9 @@ describe('task table helpers', () => {
       'n3',
       'n2'
     ]);
-    expect(buildTaskTableRows(tree(), tagById, { key: 'progress', direction: 'desc' }).map(row => row.node.id)).toEqual([
-      'n3',
-      'n2'
-    ]);
+    expect(buildTaskTableRows(tree(), tagById, { key: 'progress', direction: 'desc' }).map(row => row.node.id)).toEqual(
+      ['n3', 'n2']
+    );
     expect(buildTaskTableRows(tree(), tagById, { key: 'assignee', direction: 'asc' }).map(row => row.node.id)).toEqual([
       'n3',
       'n2'

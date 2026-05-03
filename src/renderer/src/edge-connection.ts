@@ -1,10 +1,4 @@
-import {
-  validateEdge,
-  type EdgeAnchors,
-  type EdgeRole,
-  type FlowDoc,
-  type NodeId
-} from '../../shared/graph';
+import { validateEdge, type EdgeAnchors, type EdgeRole, type FlowDoc, type NodeId } from '../../shared/graph';
 import { isNodeSideAnchor, reverseEdgeAnchors } from './connect-anchors';
 import { collectConnectedComponent } from './graph-analysis';
 
@@ -62,9 +56,11 @@ export function planEdgeConnection(
   const validation = validateEdge(doc, nextFrom, nextTo, role, nextAnchors);
 
   if (!validation.ok) {
-    if (validation.reason === 'self-edge') return { ok: false, message: 'Connect blocked: source and target are the same node' };
+    if (validation.reason === 'self-edge')
+      return { ok: false, message: 'Connect blocked: source and target are the same node' };
     if (validation.reason === 'duplicate-edge') return { ok: false, message: 'Connect blocked: edge already exists' };
-    if (validation.reason === 'same-side-anchors') return { ok: false, message: 'Connect blocked: use opposite node handles' };
+    if (validation.reason === 'same-side-anchors')
+      return { ok: false, message: 'Connect blocked: use opposite node handles' };
     return { ok: false, message: 'Connect blocked: target node is unavailable' };
   }
 

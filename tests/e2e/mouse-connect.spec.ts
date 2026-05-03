@@ -12,7 +12,9 @@ test('left dragging connect handle creates a manual edge', async () => {
     if (!source || !target) throw new Error('connect points not found');
     await window.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
     await expect(handle).toHaveCSS('opacity', '1');
-    await handle.dragTo(window.getByTestId(`node-${toId}`), { targetPosition: { x: target.width / 2, y: target.height / 2 } });
+    await handle.dragTo(window.getByTestId(`node-${toId}`), {
+      targetPosition: { x: target.width / 2, y: target.height / 2 }
+    });
   };
 
   await addChild(window, 'n1');

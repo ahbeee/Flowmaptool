@@ -56,7 +56,10 @@ export function createTabDocument(id: string, title: string, doc?: FlowDoc): Tab
   };
 }
 
-export function buildNewTabUpdate(tabs: TabDocument[], tabCounter: number): {
+export function buildNewTabUpdate(
+  tabs: TabDocument[],
+  tabCounter: number
+): {
   tabs: TabDocument[];
   activeTabId: string;
   tabCounter: number;
@@ -89,7 +92,10 @@ export function getTabResetNodeId(tab: TabDocument | undefined): string | undefi
   return tab?.history.present.nodes[0]?.id;
 }
 
-export function replaceTabWithNewDocument(tab: TabDocument, tabCounter: number): {
+export function replaceTabWithNewDocument(
+  tab: TabDocument,
+  tabCounter: number
+): {
   tab: TabDocument;
   resetNodeId: string | undefined;
 } {

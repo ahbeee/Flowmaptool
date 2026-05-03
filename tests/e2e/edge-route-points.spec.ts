@@ -2,10 +2,7 @@ import { _electron as electron, expect, test } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-async function triggerMenuAction(
-  app: Awaited<ReturnType<typeof electron.launch>>,
-  action: 'file:open' | 'file:save'
-) {
+async function triggerMenuAction(app: Awaited<ReturnType<typeof electron.launch>>, action: 'file:open' | 'file:save') {
   await app.evaluate(({ BrowserWindow }, menuAction) => {
     const targetWindow = BrowserWindow.getAllWindows()[0];
     targetWindow.webContents.send('flowmaptool:menuAction', menuAction);
@@ -266,9 +263,7 @@ function createDuplicatedBackEdgeFixture(includeManualEdges = true) {
     }
   ];
   const bottomOffsets = Object.fromEntries(
-    nodes
-      .filter(node => Number(node.id.slice(1)) >= 10)
-      .map(node => [node.id, { x: 0, y: 360 }])
+    nodes.filter(node => Number(node.id.slice(1)) >= 10).map(node => [node.id, { x: 0, y: 360 }])
   );
 
   return {
@@ -455,10 +450,7 @@ test('duplicated component back edges stay scoped after moving copied root', asy
   const bottomRootBox = await bottomRoot.boundingBox();
   if (!topRootBox || !bottomRootBox) throw new Error('expected both roots to be measurable');
 
-  await window.mouse.move(
-    bottomRootBox.x + bottomRootBox.width / 2,
-    bottomRootBox.y + bottomRootBox.height / 2
-  );
+  await window.mouse.move(bottomRootBox.x + bottomRootBox.width / 2, bottomRootBox.y + bottomRootBox.height / 2);
   await window.mouse.down();
   await window.mouse.move(
     bottomRootBox.x + bottomRootBox.width / 2 - 120,
@@ -520,10 +512,7 @@ test('duplicated component back edges created by handle drag stay scoped after m
   const bottomRootBox = await bottomRoot.boundingBox();
   if (!topRootBox || !bottomRootBox) throw new Error('expected both roots to be measurable');
 
-  await window.mouse.move(
-    bottomRootBox.x + bottomRootBox.width / 2,
-    bottomRootBox.y + bottomRootBox.height / 2
-  );
+  await window.mouse.move(bottomRootBox.x + bottomRootBox.width / 2, bottomRootBox.y + bottomRootBox.height / 2);
   await window.mouse.down();
   await window.mouse.move(
     bottomRootBox.x + bottomRootBox.width / 2 - 120,
@@ -608,10 +597,7 @@ test('adjusted copied component back edge moves with copied root', async ({}, te
     throw new Error('expected adjusted route and roots to be measurable');
   }
 
-  await window.mouse.move(
-    bottomRootBox.x + bottomRootBox.width / 2,
-    bottomRootBox.y + bottomRootBox.height / 2
-  );
+  await window.mouse.move(bottomRootBox.x + bottomRootBox.width / 2, bottomRootBox.y + bottomRootBox.height / 2);
   await window.mouse.down();
   await window.mouse.move(
     bottomRootBox.x + bottomRootBox.width / 2 - 118,
@@ -946,16 +932,24 @@ test('user adjusted manual route stays stable while selecting other objects', as
   const root = window.getByTestId('node-n1');
   const rootBoxBeforeMove = await root.boundingBox();
   if (!routeBoxBeforeMove || !rootBoxBeforeMove) throw new Error('expected root and manual route to be measurable');
-  await window.mouse.move(rootBoxBeforeMove.x + rootBoxBeforeMove.width / 2, rootBoxBeforeMove.y + rootBoxBeforeMove.height / 2);
+  await window.mouse.move(
+    rootBoxBeforeMove.x + rootBoxBeforeMove.width / 2,
+    rootBoxBeforeMove.y + rootBoxBeforeMove.height / 2
+  );
   await window.mouse.down();
-  await window.mouse.move(rootBoxBeforeMove.x + rootBoxBeforeMove.width / 2 + 96, rootBoxBeforeMove.y + rootBoxBeforeMove.height / 2 + 64, {
-    steps: 8
-  });
+  await window.mouse.move(
+    rootBoxBeforeMove.x + rootBoxBeforeMove.width / 2 + 96,
+    rootBoxBeforeMove.y + rootBoxBeforeMove.height / 2 + 64,
+    {
+      steps: 8
+    }
+  );
   await window.mouse.up();
 
   const rootBoxAfterMove = await root.boundingBox();
   const routeBoxAfterMove = await edgePath.boundingBox();
-  if (!routeBoxAfterMove || !rootBoxAfterMove) throw new Error('expected root and manual route to remain measurable after root move');
+  if (!routeBoxAfterMove || !rootBoxAfterMove)
+    throw new Error('expected root and manual route to remain measurable after root move');
   const rootDelta = {
     x: rootBoxAfterMove.x - rootBoxBeforeMove.x,
     y: rootBoxAfterMove.y - rootBoxBeforeMove.y
@@ -1062,17 +1056,18 @@ test('dragged manual route endpoint turns follow document spacing', async ({}, t
     await window.mouse.up();
   };
 
-  const firstTurnX = async (edgeId: string) => window.getByTestId(`edge-path-${edgeId}`).evaluate((path: SVGPathElement) => {
-    const matrix = path.getScreenCTM();
-    if (!matrix) throw new Error('edge path screen matrix not found');
-    const total = path.getTotalLength();
-    const start = path.getPointAtLength(0).matrixTransform(matrix);
-    for (let distance = 1; distance <= total; distance += 2) {
-      const point = path.getPointAtLength(distance).matrixTransform(matrix);
-      if (Math.abs(point.y - start.y) > 3) return point.x;
-    }
-    return start.x;
-  });
+  const firstTurnX = async (edgeId: string) =>
+    window.getByTestId(`edge-path-${edgeId}`).evaluate((path: SVGPathElement) => {
+      const matrix = path.getScreenCTM();
+      if (!matrix) throw new Error('edge path screen matrix not found');
+      const total = path.getTotalLength();
+      const start = path.getPointAtLength(0).matrixTransform(matrix);
+      for (let distance = 1; distance <= total; distance += 2) {
+        const point = path.getPointAtLength(distance).matrixTransform(matrix);
+        if (Math.abs(point.y - start.y) > 3) return point.x;
+      }
+      return start.x;
+    });
 
   await dragRouteControl('e5', -96);
   const n4Box = await window.getByTestId('node-n4').boundingBox();

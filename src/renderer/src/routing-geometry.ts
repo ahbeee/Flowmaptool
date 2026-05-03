@@ -17,10 +17,7 @@ function orientation(a: Point, b: Point, c: Point): number {
 
 function onSegment(a: Point, b: Point, c: Point): boolean {
   return (
-    b.x <= Math.max(a.x, c.x) &&
-    b.x >= Math.min(a.x, c.x) &&
-    b.y <= Math.max(a.y, c.y) &&
-    b.y >= Math.min(a.y, c.y)
+    b.x <= Math.max(a.x, c.x) && b.x >= Math.min(a.x, c.x) && b.y <= Math.max(a.y, c.y) && b.y >= Math.min(a.y, c.y)
   );
 }
 
@@ -29,7 +26,7 @@ export function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boole
   const o2 = orientation(a, b, d);
   const o3 = orientation(c, d, a);
   const o4 = orientation(c, d, b);
-  if ((o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0)) return true;
+  if (o1 > 0 !== o2 > 0 && o3 > 0 !== o4 > 0) return true;
   const epsilon = 0.0001;
   if (Math.abs(o1) <= epsilon && onSegment(a, c, b)) return true;
   if (Math.abs(o2) <= epsilon && onSegment(a, d, b)) return true;
@@ -103,7 +100,12 @@ export function segmentBoxDistance(from: Point, to: Point, box: NodeBox): number
   );
 }
 
-export function routeObstacleCount(points: Point[], fromId: NodeId, toId: NodeId, nodeBoxes: Map<NodeId, NodeBox>): number {
+export function routeObstacleCount(
+  points: Point[],
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>
+): number {
   let count = 0;
   const obstacles = [...nodeBoxes.entries()].filter(([id]) => id !== fromId && id !== toId);
   for (let i = 0; i < points.length - 1; i++) {
@@ -114,7 +116,12 @@ export function routeObstacleCount(points: Point[], fromId: NodeId, toId: NodeId
   return count;
 }
 
-export function routeClearancePenalty(points: Point[], fromId: NodeId, toId: NodeId, nodeBoxes: Map<NodeId, NodeBox>): number {
+export function routeClearancePenalty(
+  points: Point[],
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>
+): number {
   let penalty = 0;
   const desiredClearance = 96;
   const obstacles = [...nodeBoxes.entries()].filter(([id]) => id !== fromId && id !== toId);

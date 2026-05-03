@@ -103,13 +103,9 @@ export function pasteSubflowAfter(
     });
   }
 
-  const outgoingTargets = doc.edges
-    .filter(edge => edge.from === targetNodeId)
-    .map(edge => edge.to);
+  const outgoingTargets = doc.edges.filter(edge => edge.from === targetNodeId).map(edge => edge.to);
 
-  const keptEdges = options.spliceOutgoing
-    ? doc.edges.filter(edge => edge.from !== targetNodeId)
-    : [...doc.edges];
+  const keptEdges = options.spliceOutgoing ? doc.edges.filter(edge => edge.from !== targetNodeId) : [...doc.edges];
 
   const newEdges: FlowEdge[] = [...keptEdges];
 

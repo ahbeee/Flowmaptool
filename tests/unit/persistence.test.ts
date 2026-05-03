@@ -82,7 +82,9 @@ describe('qflow persistence helpers', () => {
 
   it('throws user-readable errors for invalid files', () => {
     expect(() => parsePersistedQflow('{ bad json', parseOptions)).toThrow('not valid JSON');
-    expect(() => parsePersistedQflow(JSON.stringify({ name: 'not a graph' }), parseOptions)).toThrow('not a Flowmaptool document');
+    expect(() => parsePersistedQflow(JSON.stringify({ name: 'not a graph' }), parseOptions)).toThrow(
+      'not a Flowmaptool document'
+    );
     expect(() =>
       parsePersistedQflow(JSON.stringify({ schemaVersion: 999, nodes: [], edges: [] }), parseOptions)
     ).toThrow('newer Flowmaptool version');

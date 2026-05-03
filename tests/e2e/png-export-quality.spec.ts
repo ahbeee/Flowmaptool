@@ -69,10 +69,7 @@ test('exports PNG with complete non-blank visual content', async () => {
     const bgB = data[2];
     let changedPixels = 0;
     for (let index = 0; index < data.length; index += 4) {
-      const diff =
-        Math.abs(data[index] - bgR) +
-        Math.abs(data[index + 1] - bgG) +
-        Math.abs(data[index + 2] - bgB);
+      const diff = Math.abs(data[index] - bgR) + Math.abs(data[index + 1] - bgG) + Math.abs(data[index + 2] - bgB);
       if (diff > 24) changedPixels++;
     }
 

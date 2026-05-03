@@ -32,18 +32,11 @@ export function getSidePanelDragWidth(
   return clampSidePanelWidth(resizeState.startWidth + clientX - resizeState.startX, viewportWidth);
 }
 
-export function shouldFinishSidePanelResize(
-  resizeState: SidePanelResizeState | null,
-  pointerId: number
-): boolean {
+export function shouldFinishSidePanelResize(resizeState: SidePanelResizeState | null, pointerId: number): boolean {
   return Boolean(resizeState && resizeState.pointerId === pointerId);
 }
 
-export function getSidePanelKeyboardWidth(
-  currentWidth: number,
-  key: string,
-  viewportWidth?: number
-): number | null {
+export function getSidePanelKeyboardWidth(currentWidth: number, key: string, viewportWidth?: number): number | null {
   if (key !== 'ArrowLeft' && key !== 'ArrowRight') return null;
   const delta = key === 'ArrowLeft' ? -SIDE_PANEL_KEYBOARD_STEP : SIDE_PANEL_KEYBOARD_STEP;
   return clampSidePanelWidth(currentWidth + delta, viewportWidth);

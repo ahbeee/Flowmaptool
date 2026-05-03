@@ -3,12 +3,7 @@ import type { LayoutDirection, NodePosition, NodeSize, NodeSizeMap } from '../..
 import type { CanvasSize } from './canvas-geometry';
 import { edgePath, routeFromBend } from './edge-path';
 import { escapeXml } from './export-utils';
-import {
-  DEFAULT_FONT_FAMILY,
-  DEFAULT_FONT_SIZE,
-  DEFAULT_NODE_SIZE,
-  NODE_PADDING_X
-} from './node-style';
+import { DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_NODE_SIZE, NODE_PADDING_X } from './node-style';
 import type { EdgeBendMap, EdgeRoute, EdgeRouteMap } from './persistence';
 import type { Point } from './routing-geometry';
 import { clampNodeLabel, edgeStrokeDasharray, effectiveEdgeStyle } from './ui-helpers';

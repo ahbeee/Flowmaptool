@@ -35,9 +35,7 @@ describe('subflow', () => {
     const newRoot = next.edges.find(e => e.from === 'n1' && e.to.startsWith('n5'));
     expect(Boolean(newRoot)).toBe(true);
 
-    const hasReconnect = next.edges.some(
-      e => e.from !== 'n1' && e.to === 'n2' && e.from.startsWith('n')
-    );
+    const hasReconnect = next.edges.some(e => e.from !== 'n1' && e.to === 'n2' && e.from.startsWith('n'));
     expect(hasReconnect).toBe(true);
   });
 

@@ -97,8 +97,7 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 export function clampSidePanelWidth(width: number, viewportWidth?: number): number {
-  const resolvedViewportWidth =
-    viewportWidth ?? (typeof window === 'undefined' ? undefined : window.innerWidth);
+  const resolvedViewportWidth = viewportWidth ?? (typeof window === 'undefined' ? undefined : window.innerWidth);
   const viewportMax =
     resolvedViewportWidth === undefined
       ? SIDE_PANEL_MAX_WIDTH

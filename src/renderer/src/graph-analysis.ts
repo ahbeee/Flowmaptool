@@ -42,9 +42,7 @@ export function analyzeLayoutEdges(doc: FlowDoc): LayoutEdgeAnalysis {
     edges.sort(compareEdgeOrder);
   }
 
-  const rootIds = doc.nodes
-    .map(node => node.id)
-    .filter(id => (incomingCount.get(id) || 0) === 0);
+  const rootIds = doc.nodes.map(node => node.id).filter(id => (incomingCount.get(id) || 0) === 0);
   const traversalRoots = [...rootIds];
   const firstNodeId = doc.nodes[0]?.id;
   if (firstNodeId && !traversalRoots.includes(firstNodeId)) traversalRoots.unshift(firstNodeId);

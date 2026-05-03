@@ -49,12 +49,7 @@ export function planConnectDragFinish(
   }: ConnectDragFinishTargetCandidates
 ): ConnectDragFinishPlan | null {
   const targetNodeId =
-    handleTargetNodeId ||
-    viewportTargetNodeId ||
-    hoverTargetNodeId ||
-    canvasTargetNodeId ||
-    eventTargetNodeId ||
-    null;
+    handleTargetNodeId || viewportTargetNodeId || hoverTargetNodeId || canvasTargetNodeId || eventTargetNodeId || null;
   if (!targetNodeId || targetNodeId === drag.fromNodeId) return null;
 
   const anchors = resolveDraggedEdgeAnchors(

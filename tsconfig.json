@@ -15,10 +15,5 @@
     },
     "types": ["node", "vitest/globals"]
   },
-  "include": [
-    "src/renderer/src/**/*.ts",
-    "src/renderer/src/**/*.tsx",
-    "src/shared/**/*.ts",
-    "tests/**/*.ts"
-  ]
+  "include": ["src/renderer/src/**/*.ts", "src/renderer/src/**/*.tsx", "src/shared/**/*.ts", "tests/**/*.ts"]
 }

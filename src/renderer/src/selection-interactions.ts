@@ -9,9 +9,7 @@ export type NodePointerDownPlan =
   | { type: 'select-and-drag'; nodeId: NodeId; nextSelection: NodeId[] };
 
 export function toggleNodeSelection(selectedNodeIds: NodeId[], nodeId: NodeId): NodeId[] {
-  return selectedNodeIds.includes(nodeId)
-    ? selectedNodeIds.filter(id => id !== nodeId)
-    : [...selectedNodeIds, nodeId];
+  return selectedNodeIds.includes(nodeId) ? selectedNodeIds.filter(id => id !== nodeId) : [...selectedNodeIds, nodeId];
 }
 
 export function planNodePointerDown(options: {

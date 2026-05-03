@@ -74,7 +74,20 @@ describe('edge hit testing helpers', () => {
     const edges: FlowEdge[] = [{ id: 'e1', from: 'n1', to: 'n2', role: 'manual' }];
 
     expect(
-      hit(edges, { x: 110, y: 74 }, { edgeRoutes: { e1: { points: [{ x: 110, y: 74 }, { x: 160, y: 74 }] } } })?.edgeId
+      hit(
+        edges,
+        { x: 110, y: 74 },
+        {
+          edgeRoutes: {
+            e1: {
+              points: [
+                { x: 110, y: 74 },
+                { x: 160, y: 74 }
+              ]
+            }
+          }
+        }
+      )?.edgeId
     ).toBe('e1');
   });
 });

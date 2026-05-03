@@ -4,12 +4,7 @@ import type { NodeBox } from './routing-geometry';
 export const NODE_TEXT_MAX_LEN = 80;
 
 export function boxesOverlap(a: NodeBox, b: NodeBox, gap = 0): boolean {
-  return !(
-    a.right + gap <= b.left ||
-    b.right + gap <= a.left ||
-    a.bottom + gap <= b.top ||
-    b.bottom + gap <= a.top
-  );
+  return !(a.right + gap <= b.left || b.right + gap <= a.left || a.bottom + gap <= b.top || b.bottom + gap <= a.top);
 }
 
 export function clampNodeLabel(label: string, maxLength = NODE_TEXT_MAX_LEN): string {

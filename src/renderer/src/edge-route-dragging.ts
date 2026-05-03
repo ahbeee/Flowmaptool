@@ -36,9 +36,7 @@ export type BuildDraggedEdgeRouteOptions = {
   ) => { from: Point; to: Point };
 };
 
-export type EdgeSegmentDragMovePlan =
-  | { type: 'ignore' }
-  | { type: 'drag'; didDrag: true; suppressNextEdgeClick: true };
+export type EdgeSegmentDragMovePlan = { type: 'ignore' } | { type: 'drag'; didDrag: true; suppressNextEdgeClick: true };
 
 export type EdgeSegmentDragFinishPlan = {
   shouldCommitSnapshot: boolean;
@@ -53,11 +51,7 @@ export function hasEdgeSegmentDragExceededThreshold(
   return distanceSquared(start, pointer) >= thresholdSquared;
 }
 
-export function planEdgeSegmentDragMove(
-  start: Point,
-  pointer: Point,
-  didDrag: boolean
-): EdgeSegmentDragMovePlan {
+export function planEdgeSegmentDragMove(start: Point, pointer: Point, didDrag: boolean): EdgeSegmentDragMovePlan {
   if (!didDrag && !hasEdgeSegmentDragExceededThreshold(start, pointer)) return { type: 'ignore' };
   return { type: 'drag', didDrag: true, suppressNextEdgeClick: true };
 }
@@ -107,11 +101,7 @@ export function buildDraggedEdgeRoute({
   );
 }
 
-export function applyDraggedEdgeRouteToHost<T extends EdgeRouteDragHost>(
-  host: T,
-  edgeId: string,
-  route: EdgeRoute
-): T {
+export function applyDraggedEdgeRouteToHost<T extends EdgeRouteDragHost>(host: T, edgeId: string, route: EdgeRoute): T {
   const direction = host.layoutDirection;
   const { [edgeId]: _removed, ...nextBends } = host.edgeBendsByDirection[direction];
   return {

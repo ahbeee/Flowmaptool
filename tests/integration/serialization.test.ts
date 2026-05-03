@@ -53,7 +53,10 @@ describe('serialization and migration', () => {
 
   it('drops invalid edge anchors during migration', () => {
     const legacy = {
-      nodes: [{ id: 'n1', label: 'A' }, { id: 'n2', label: 'B' }],
+      nodes: [
+        { id: 'n1', label: 'A' },
+        { id: 'n2', label: 'B' }
+      ],
       edges: [{ id: 'e1', from: 'n1', to: 'n2', anchors: { from: 'bad', to: 'front' } }]
     };
     const doc = migrateToLatest(legacy);
@@ -64,7 +67,10 @@ describe('serialization and migration', () => {
   it('migrates legacy file without schemaVersion', () => {
     const legacy = {
       nodes: [{ label: 'A' }, { id: 'n8', label: 'B' }],
-      edges: [{ from: 'n1', to: 'n8' }, { from: 'missing', to: 'n8' }]
+      edges: [
+        { from: 'n1', to: 'n8' },
+        { from: 'missing', to: 'n8' }
+      ]
     };
     const doc = migrateToLatest(legacy);
 

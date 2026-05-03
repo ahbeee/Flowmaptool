@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addEdge, addNode, createEmptyDoc, type FlowDoc } from '../../src/shared/graph';
 import type { NodeSizeMap } from '../../src/shared/layout';
-import {
-  getNodeSelectionByDirection,
-  reorderSelectedNodeSibling
-} from '../../src/renderer/src/keyboard-navigation';
+import { getNodeSelectionByDirection, reorderSelectedNodeSibling } from '../../src/renderer/src/keyboard-navigation';
 
 const defaultSize = { width: 70, height: 28 };
 const nodeSizeMap: NodeSizeMap = {

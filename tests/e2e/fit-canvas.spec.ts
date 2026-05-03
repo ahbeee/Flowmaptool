@@ -20,9 +20,7 @@ test('fit zooms and scrolls canvas to visible graph bounds', async () => {
 
   await expect
     .poll(async () =>
-      window
-        .getByTestId('canvas-surface')
-        .evaluate(element => Number((element as HTMLElement).style.zoom) || 1)
+      window.getByTestId('canvas-surface').evaluate(element => Number((element as HTMLElement).style.zoom) || 1)
     )
     .toBeGreaterThan(1);
 
@@ -30,9 +28,7 @@ test('fit zooms and scrolls canvas to visible graph bounds', async () => {
 
   await expect
     .poll(async () =>
-      window
-        .getByTestId('canvas-surface')
-        .evaluate(element => Number((element as HTMLElement).style.zoom) || 1)
+      window.getByTestId('canvas-surface').evaluate(element => Number((element as HTMLElement).style.zoom) || 1)
     )
     .toBeLessThanOrEqual(1.25);
 

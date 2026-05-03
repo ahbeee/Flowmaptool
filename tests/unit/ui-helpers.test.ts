@@ -24,11 +24,13 @@ describe('UI helpers', () => {
 
   it('clamps labels and allocates the next available custom tag id', () => {
     expect(clampNodeLabel('abcdef', 3)).toBe('abc');
-    expect(nextCustomTagId([
-      { id: 'tag-custom-1', name: 'A', color: '#000' },
-      { id: 'tag-custom-3', name: 'B', color: '#111' },
-      { id: 'tag-blue', name: 'Blue', color: '#222' }
-    ])).toBe('tag-custom-4');
+    expect(
+      nextCustomTagId([
+        { id: 'tag-custom-1', name: 'A', color: '#000' },
+        { id: 'tag-custom-3', name: 'B', color: '#111' },
+        { id: 'tag-blue', name: 'Blue', color: '#222' }
+      ])
+    ).toBe('tag-custom-4');
   });
 
   it('summarizes same and mixed values', () => {
@@ -39,7 +41,9 @@ describe('UI helpers', () => {
   });
 
   it('normalizes edge style and dash arrays', () => {
-    expect(effectiveEdgeStyle({ id: 'e1', from: 'n1', to: 'n2', style: { lineType: 'dotted' } }, { width: 3, color: '#333' })).toEqual({
+    expect(
+      effectiveEdgeStyle({ id: 'e1', from: 'n1', to: 'n2', style: { lineType: 'dotted' } }, { width: 3, color: '#333' })
+    ).toEqual({
       width: 3,
       lineType: 'dotted',
       color: '#333'
@@ -63,14 +67,7 @@ describe('UI helpers', () => {
   });
 
   it('prunes selection to nodes and edges still present in the document', () => {
-    expect(
-      pruneSelectionForDoc(
-        [{ id: 'n1' }, { id: 'n3' }],
-        [{ id: 'e2' }],
-        ['n1', 'n2', 'n3'],
-        'e1'
-      )
-    ).toEqual({
+    expect(pruneSelectionForDoc([{ id: 'n1' }, { id: 'n3' }], [{ id: 'e2' }], ['n1', 'n2', 'n3'], 'e1')).toEqual({
       selectedNodeIds: ['n1', 'n3'],
       selectedEdgeId: ''
     });

@@ -1,11 +1,4 @@
-import {
-  addNode,
-  deserialize,
-  SCHEMA_VERSION,
-  type FlowDoc,
-  type NodeId,
-  type NodeStyle
-} from '../../shared/graph';
+import { addNode, deserialize, SCHEMA_VERSION, type FlowDoc, type NodeId, type NodeStyle } from '../../shared/graph';
 import type { LayoutDirection } from '../../shared/layout';
 import type { NodeOffsetMap } from '../../shared/local-reflow';
 import type { Point } from './routing-geometry';
@@ -199,7 +192,10 @@ export function parsePersistedQflow(
     };
   }
   const toolbarVisible = rawUi?.toolbarVisible === false ? false : true;
-  return { doc, ui: { layoutDirection, nodeOffsetsByDirection, edgeBendsByDirection, edgeRoutesByDirection, toolbarVisible } };
+  return {
+    doc,
+    ui: { layoutDirection, nodeOffsetsByDirection, edgeBendsByDirection, edgeRoutesByDirection, toolbarVisible }
+  };
 }
 
 export function serializePersistedQflow(input: PersistedQflowSerializable): string {

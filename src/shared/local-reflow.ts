@@ -50,8 +50,7 @@ function computeLayerOrderAfterDrop(
 
   const sortedByCurrentSecondary = [...layerNodes].sort(
     (a, b) =>
-      getCurrentSecondary(baseById, offsets, a, direction) -
-      getCurrentSecondary(baseById, offsets, b, direction)
+      getCurrentSecondary(baseById, offsets, a, direction) - getCurrentSecondary(baseById, offsets, b, direction)
   );
 
   const draggedInOrder = sortedByCurrentSecondary.filter(id => draggedSet.has(id));
@@ -120,10 +119,7 @@ export function applyNodeOffset(pos: NodePosition, offset: NodeOffset): NodePosi
   };
 }
 
-export function buildRenderedPositionMap(
-  positions: NodePosition[],
-  offsets: NodeOffsetMap
-): Map<NodeId, NodePosition> {
+export function buildRenderedPositionMap(positions: NodePosition[], offsets: NodeOffsetMap): Map<NodeId, NodePosition> {
   const map = new Map<NodeId, NodePosition>();
   for (const pos of positions) {
     map.set(pos.id, applyNodeOffset(pos, getNodeOffset(offsets, pos.id)));
@@ -152,9 +148,7 @@ export function reorderLayerGroupOnDrop(
   const plan = computeLayerOrderAfterDrop(basePositions, offsets, draggedNodeIds, anchorNodeId, direction);
   if (!plan) return offsets;
 
-  const secondaryBaseMin = Math.min(
-    ...plan.merged.map(id => getSecondary(plan.baseById.get(id)!, direction))
-  );
+  const secondaryBaseMin = Math.min(...plan.merged.map(id => getSecondary(plan.baseById.get(id)!, direction)));
 
   const nextOffsets: NodeOffsetMap = { ...offsets };
   plan.merged.forEach((id, index) => {
@@ -182,9 +176,7 @@ export function getLayerReorderPreview(
   const plan = computeLayerOrderAfterDrop(basePositions, offsets, draggedNodeIds, anchorNodeId, direction);
   if (!plan) return null;
 
-  const secondaryBaseMin = Math.min(
-    ...plan.merged.map(id => getSecondary(plan.baseById.get(id)!, direction))
-  );
+  const secondaryBaseMin = Math.min(...plan.merged.map(id => getSecondary(plan.baseById.get(id)!, direction)));
   return {
     primary: plan.primary,
     secondary: secondaryBaseMin + plan.insertionIndex * secondaryGap,
@@ -211,24 +203,18 @@ export function compactLayersForNodes(
 
   let nextOffsets = { ...offsets };
   for (const primary of affectedPrimary) {
-    const layerNodes = basePositions
-      .filter(pos => getPrimary(pos, direction) === primary)
-      .map(pos => pos.id);
+    const layerNodes = basePositions.filter(pos => getPrimary(pos, direction) === primary).map(pos => pos.id);
 
     if (layerNodes.length <= 1) continue;
-    const anchorSecondary = Math.min(
-      ...layerNodes.map(id => getSecondary(baseById.get(id)!, direction))
-    );
+    const anchorSecondary = Math.min(...layerNodes.map(id => getSecondary(baseById.get(id)!, direction)));
 
     const sorted = [...layerNodes].sort((a, b) => {
       const aBase = baseById.get(a)!;
       const bBase = baseById.get(b)!;
       const aOffset = getNodeOffset(nextOffsets, a);
       const bOffset = getNodeOffset(nextOffsets, b);
-      const aSecondary =
-        getSecondary(aBase, direction) + (direction === 'horizontal' ? aOffset.dy : aOffset.dx);
-      const bSecondary =
-        getSecondary(bBase, direction) + (direction === 'horizontal' ? bOffset.dy : bOffset.dx);
+      const aSecondary = getSecondary(aBase, direction) + (direction === 'horizontal' ? aOffset.dy : aOffset.dx);
+      const bSecondary = getSecondary(bBase, direction) + (direction === 'horizontal' ? bOffset.dy : bOffset.dx);
       return aSecondary - bSecondary;
     });
 

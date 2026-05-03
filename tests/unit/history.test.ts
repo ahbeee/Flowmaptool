@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  canRedo,
-  canUndo,
-  commitHistory,
-  createHistory,
-  redoHistory,
-  undoHistory
-} from '../../src/shared/history';
+import { canRedo, canUndo, commitHistory, createHistory, redoHistory, undoHistory } from '../../src/shared/history';
 
 describe('history', () => {
   it('commits undo stack and clears redo stack', () => {
