@@ -164,6 +164,27 @@ import {
   sameValues
 } from './ui-helpers';
 import {
+  ADVANCED_ROUTE_EDGE_LIMIT,
+  ADVANCED_ROUTE_NODE_LIMIT,
+  clamp,
+  clampSidePanelWidth,
+  COLOR_SWATCHES,
+  EDGE_LINE_TYPES,
+  EDGE_WIDTHS,
+  FONT_FAMILIES,
+  FONT_SIZES,
+  getTheme,
+  MIXED_OPTION,
+  NODE_SHAPES,
+  PNG_FILTER,
+  SIDE_PANEL_DEFAULT_WIDTH,
+  SIDE_PANEL_MAX_WIDTH,
+  SIDE_PANEL_MIN_WIDTH,
+  SPACING_MAX,
+  SPACING_MIN,
+  THEMES
+} from './ui-config';
+import {
   getConnectHandleHitFromViewportPoint,
   getNodeIdFromEventTarget,
   getNodeIdFromViewportPoint,
@@ -171,91 +192,6 @@ import {
   isNodeLabelInputTarget,
   isViewportPointOnConnectHandle
 } from './viewport-hit-testing';
-
-const SPACING_MIN = 0;
-const SPACING_MAX = 320;
-const SIDE_PANEL_MIN_WIDTH = 220;
-const SIDE_PANEL_DEFAULT_WIDTH = 360;
-const SIDE_PANEL_MAX_WIDTH = 760;
-const ADVANCED_ROUTE_NODE_LIMIT = 300;
-const ADVANCED_ROUTE_EDGE_LIMIT = 800;
-const FONT_FAMILIES = ['Roboto', 'Segoe UI', 'Arial', 'Microsoft JhengHei', 'Noto Sans TC'];
-const FONT_SIZES = [12, 14, 16, 18, 20, 24, 32, 48, 64];
-const EDGE_WIDTHS = [1, 2, 3, 4, 5, 6, 7, 8];
-const EDGE_LINE_TYPES: Array<{ value: EdgeLineType; label: string }> = [
-  { value: 'solid', label: 'Solid' },
-  { value: 'dashed', label: 'Dashed' },
-  { value: 'dotted', label: 'Dotted' }
-];
-const MIXED_OPTION = '__mixed__';
-const COLOR_SWATCHES = [
-  '#111827',
-  '#6b7280',
-  '#b91c1c',
-  '#ef4444',
-  '#f97316',
-  '#facc15',
-  '#22c55e',
-  '#0ea5e9',
-  '#4f46e5',
-  '#a855f7',
-  '#ffffff',
-  '#e5e7eb',
-  '#c08457',
-  '#f9a8d4',
-  '#fbbf24',
-  '#f5e7a1',
-  '#a3e635',
-  '#67e8f9',
-  '#93c5fd',
-  '#c4b5fd'
-];
-const NODE_SHAPES: Array<{ value: NodeShape; label: string }> = [
-  { value: 'plain', label: 'No Frame' },
-  { value: 'rounded', label: 'Rounded' },
-  { value: 'pill', label: 'Pill' },
-  { value: 'underline', label: 'Underline' },
-  { value: 'square', label: 'Square' }
-];
-const THEMES = {
-  'blue-gray': {
-    label: 'Blue Gray',
-    canvas: '#f8fafc',
-    rootBg: '#1f2937',
-    rootText: '#ffffff',
-    nodeBg: '#ffffff',
-    nodeText: '#0f172a',
-    edge: '#64748b'
-  },
-  'gray-red': {
-    label: 'Gray Red',
-    canvas: '#eef2f3',
-    rootBg: '#102027',
-    rootText: '#ffffff',
-    nodeBg: '#d1d5db',
-    nodeText: '#111827',
-    edge: '#b91c1c'
-  },
-  clean: {
-    label: 'Light Clean',
-    canvas: '#ffffff',
-    rootBg: '#111827',
-    rootText: '#ffffff',
-    nodeBg: '#f8fafc',
-    nodeText: '#111827',
-    edge: '#38bdf8'
-  },
-  dark: {
-    label: 'Dark Contrast',
-    canvas: '#111827',
-    rootBg: '#f8fafc',
-    rootText: '#111827',
-    nodeBg: '#1f2937',
-    nodeText: '#f8fafc',
-    edge: '#93c5fd'
-  }
-} as const;
-type ThemeId = keyof typeof THEMES;
 
 type DragState = {
   nodeIds: NodeId[];
@@ -309,22 +245,6 @@ type SvgNodeSnapshot = {
   width: number;
   height: number;
 };
-const PNG_FILTER = [{ name: 'PNG Image', extensions: ['png'] }];
-
-function getTheme(themeId: string) {
-  return THEMES[(themeId as ThemeId) in THEMES ? (themeId as ThemeId) : 'blue-gray'];
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function clampSidePanelWidth(width: number): number {
-  const viewportMax =
-    typeof window === 'undefined' ? SIDE_PANEL_MAX_WIDTH : Math.max(SIDE_PANEL_MIN_WIDTH, window.innerWidth - 520);
-  return clamp(width, SIDE_PANEL_MIN_WIDTH, Math.min(SIDE_PANEL_MAX_WIDTH, viewportMax));
-}
-
 export function App() {
   const [tabs, setTabs] = React.useState<TabDocument[]>([createTabDocument('tab-1', 'Untitled 1')]);
   const [activeTabId, setActiveTabId] = React.useState('tab-1');
