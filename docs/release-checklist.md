@@ -40,7 +40,7 @@ Current builds are unsigned. Do not present them as signed production installers
 - Launch the portable build.
 - Create a new document.
 - Add a child node and edit its label.
-- Apply a tag and confirm it appears in the outline and task table.
+- Apply a tag and confirm the node appears in the Outline and Task Table.
 - Save a `.qflow` file.
 - Reopen the saved file.
 - Export PNG and confirm the image is non-blank.

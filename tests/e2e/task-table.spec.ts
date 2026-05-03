@@ -31,7 +31,7 @@ test('task table derives tagged nodes only and keeps tag read-only', async () =>
   await app.close();
 });
 
-test('task table headers sort imported checklist rows', async () => {
+test('task table headers sort tagged outline rows', async () => {
   const { app, window } = await launchApp();
 
   await renameNode(window, 'n1', 'Root Task');

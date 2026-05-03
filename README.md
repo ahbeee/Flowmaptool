@@ -50,7 +50,7 @@ pnpm dist:win
 - Auto layout for horizontal and vertical maps with configurable spacing, compact node sizing, multi-parent layout, root merge behavior, cycle edge handling, and fixed-spacing local reflow.
 - Node styling: theme presets, font family, font size, text style, text alignment, text color, background color, shape, tags, and default new-node style.
 - Edge styling and routing: width, line type, color, front/back/body anchors, manual route lanes, bend/control handle routing, selection stability, route persistence, and automatic route reset.
-- Panels and view controls: zoom, fit to graph, toolbar visibility, right-side style panel, outline hierarchy, checklist state, and task table.
-- Task workflows: tag-derived task rows, editable priority/progress/assignee/start/due/notes fields, readonly category/tag columns, sortable task headers, and expanded task table mode.
+- Panels and view controls: zoom, fit to graph, toolbar visibility, right-side style panel, outline hierarchy, checklist completion state, and task table.
+- Task Table workflows: rows derived from tagged outline nodes, editable priority/progress/assignee/start/due/notes fields, readonly category/tag columns, sortable headers, column visibility controls, and expanded table mode.
 - Export and output: PNG export, PDF export, print, Windows portable app, and Windows installer.
 - Validation coverage for bad file UX, old file migration, PNG export quality, 500-node / 1000-edge performance, task workflows, routing workflows, and core UI behavior.

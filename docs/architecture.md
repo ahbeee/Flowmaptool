@@ -43,8 +43,8 @@ Core graph behavior lives in `src/shared` and is covered by unit or integration 
 
 Renderer-only pure helpers live under `src/renderer/src`:
 
-- `outline.ts`: outline tree construction and checklist target derivation.
-- `task-table.ts`: task row derivation, labels, columns, and sorting.
+- `outline.ts`: outline tree construction and checklist completion target derivation.
+- `task-table.ts`: Task Table row derivation from tagged outline nodes, labels, columns, visibility, and sorting.
 
 New pure renderer logic should usually be extracted into small modules like these before adding more code to `App.tsx`.
 

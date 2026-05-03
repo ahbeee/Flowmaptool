@@ -2601,7 +2601,7 @@ export function App() {
   const renderTaskTable = () => (
     <div className="task-table-scroll">
       {taskTableRows.length === 0 ? (
-        <p className="outline-empty">Add tags to nodes to create task rows.</p>
+        <p className="outline-empty">Tag outline nodes to create task table rows.</p>
       ) : (
         <table className="task-table">
           <colgroup>
@@ -2814,9 +2814,9 @@ export function App() {
                 setTaskTableExpanded(false);
               }
             }}
-            title={taskTableVisible ? 'Hide tasks' : 'Show tasks'}
+            title={taskTableVisible ? 'Hide task table' : 'Show task table'}
           >
-            Task
+            Task Table
           </button>
           <button
             type="button"
@@ -2854,7 +2854,7 @@ export function App() {
                 data-testid="task-panel"
               >
                 <div className="outline-panel-header">
-                  <span>Task</span>
+                  <span>Task Table</span>
                   <div className="outline-panel-actions">
                     <details className="task-column-menu">
                       <summary className="outline-panel-action" data-testid="task-columns-toggle">
@@ -2894,7 +2894,7 @@ export function App() {
                         setTaskTableExpanded(false);
                         setTaskTableVisible(false);
                       }}
-                      title="Hide tasks"
+                      title="Hide task table"
                     >
                       x
                     </button>
@@ -2905,7 +2905,7 @@ export function App() {
             ) : (
               <aside className="outline-panel" data-testid="outline-panel">
                 <div className="outline-panel-header">
-                  <span>Checklist</span>
+                  <span>Outline</span>
                   <button
                     type="button"
                     data-testid="outline-hide"
@@ -2926,7 +2926,7 @@ export function App() {
               className={sidePanelResizing ? 'panel-resizer panel-resizer-active' : 'panel-resizer'}
               role="separator"
               aria-orientation="vertical"
-              aria-label={taskTableVisible ? 'Resize task panel' : 'Resize checklist panel'}
+              aria-label={taskTableVisible ? 'Resize task table panel' : 'Resize outline panel'}
               aria-valuemin={SIDE_PANEL_MIN_WIDTH}
               aria-valuemax={SIDE_PANEL_MAX_WIDTH}
               aria-valuenow={sidePanelWidth}
