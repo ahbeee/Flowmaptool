@@ -1,7 +1,8 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { launchApp, triggerMenuAction } from './helpers';
 
 type PngVisualStats = {
   width: number;
@@ -10,20 +11,12 @@ type PngVisualStats = {
 };
 
 test('exports PNG with complete non-blank visual content', async () => {
-  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   const outputDir = join(process.cwd(), 'test-results', 'png-export-quality');
   const outputPath = join(outputDir, 'graph-export.png');
   await mkdir(outputDir, { recursive: true });
   await rm(outputPath, { force: true });
 
-  const app = await electron.launch({
-    args: [mainEntry],
-    env: {
-      ...process.env,
-      FLOWMAPTOOL_TEST_SAVE_BINARY_PATH: outputPath
-    }
-  });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp({ FLOWMAPTOOL_TEST_SAVE_BINARY_PATH: outputPath });
   await expect(window).toHaveTitle(/Flowmaptool/i);
 
   await window.getByTestId('node-n1').click();
@@ -52,10 +45,7 @@ test('exports PNG with complete non-blank visual content', async () => {
   await window.keyboard.press('Tab');
   await expect(window.getByTestId('node-n4')).toBeVisible();
 
-  await app.evaluate(({ BrowserWindow }) => {
-    const targetWindow = BrowserWindow.getAllWindows()[0];
-    targetWindow.webContents.send('flowmaptool:menuAction', 'file:exportPng');
-  });
+  await triggerMenuAction(app, 'file:exportPng');
   await expect.poll(() => existsSync(outputPath), { timeout: 10_000 }).toBeTruthy();
 
   const pngBytes = await readFile(outputPath);

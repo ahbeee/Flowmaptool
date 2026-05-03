@@ -1,13 +1,6 @@
-import { expect, test, type ElectronApplication } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { launchApp, writeFixture } from './helpers';
-
-async function triggerMenuAction(app: ElectronApplication, action: 'file:open' | 'file:save') {
-  await app.evaluate(({ BrowserWindow }, menuAction) => {
-    const targetWindow = BrowserWindow.getAllWindows()[0];
-    targetWindow.webContents.send('flowmaptool:menuAction', menuAction);
-  }, action);
-}
+import { launchApp, triggerMenuAction, writeFixture } from './helpers';
 
 async function launchWithOpenPath(filePath: string) {
   const { app, window } = await launchApp({ FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: filePath });

@@ -3,7 +3,6 @@ import {
   addEdge,
   addNode,
   createEmptyDoc,
-  deserialize,
   deleteTag,
   reparentNode,
   removeEdge,
@@ -17,7 +16,6 @@ import {
   updateSettings,
   upsertTag,
   validateEdge,
-  SCHEMA_VERSION,
   type FlowEdge,
   type FlowTag,
   type FlowDoc,
@@ -56,7 +54,22 @@ import {
   type NodeOffsetMap
 } from '@shared/local-reflow';
 import { extractSelection, pasteDetached, type CopiedSelection } from '@shared/subflow';
+import { basename, bytesToBase64, escapeXml } from './export-utils';
 import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree, type OutlineTreeNode } from './outline';
+import {
+  emptyEdgeBendsByDirection,
+  emptyEdgeRoutesByDirection,
+  emptyOffsetsByDirection,
+  parsePersistedQflow,
+  serializePersistedQflow,
+  type EdgeBend,
+  type EdgeBendMap,
+  type EdgeBendsByDirection,
+  type EdgeRoute,
+  type EdgeRouteMap,
+  type EdgeRoutesByDirection,
+  type NodeOffsetsByDirection
+} from './persistence';
 import {
   distanceSquared,
   distanceToSegmentSquared,
@@ -190,7 +203,6 @@ type ThemeId = keyof typeof THEMES;
 type Point = { x: number; y: number };
 type LayoutPoint = { x: number; y: number };
 type NodeBox = { left: number; right: number; top: number; bottom: number };
-type NodeOffsetsByDirection = Record<LayoutDirection, NodeOffsetMap>;
 type DragState = {
   nodeIds: NodeId[];
   anchorNodeId: NodeId;
@@ -206,17 +218,11 @@ type MarqueeState = {
   currentX: number;
   currentY: number;
 };
-type EdgeBend = { x: number; y: number };
-type EdgeBendMap = Record<string, EdgeBend>;
-type EdgeBendsByDirection = Record<LayoutDirection, EdgeBendMap>;
-type EdgeRoute = { points: Point[] };
 type RouteSpacing = { primary: number; secondary: number };
 type DraggedRouteEndpointOffsets = {
   source?: number;
   target?: number;
 };
-type EdgeRouteMap = Record<string, EdgeRoute>;
-type EdgeRoutesByDirection = Record<LayoutDirection, EdgeRouteMap>;
 type EdgeUiSnapshot = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
@@ -270,18 +276,6 @@ type SvgNodeSnapshot = {
   width: number;
   height: number;
 };
-type PersistedUiState = {
-  layoutDirection: LayoutDirection;
-  nodeOffsetsByDirection: NodeOffsetsByDirection;
-  edgeBendsByDirection: EdgeBendsByDirection;
-  edgeRoutesByDirection: EdgeRoutesByDirection;
-  toolbarVisible: boolean;
-};
-type PersistedQflowFile = {
-  schemaVersion: 1;
-  doc: FlowDoc;
-  ui?: Partial<PersistedUiState>;
-};
 type TabDocument = {
   id: string;
   title: string;
@@ -319,18 +313,6 @@ function isNodeSideAnchor(anchor: EdgeAnchors['from'] | undefined): anchor is 'f
 
 function oppositeNodeSideAnchor(anchor: 'front' | 'back'): 'front' | 'back' {
   return anchor === 'front' ? 'back' : 'front';
-}
-
-function emptyOffsetsByDirection(): NodeOffsetsByDirection {
-  return { horizontal: {}, vertical: {} };
-}
-
-function emptyEdgeBendsByDirection(): EdgeBendsByDirection {
-  return { horizontal: {}, vertical: {} };
-}
-
-function emptyEdgeRoutesByDirection(): EdgeRoutesByDirection {
-  return { horizontal: {}, vertical: {} };
 }
 
 function emptyInteractionHistory(): InteractionHistory {
@@ -466,158 +448,6 @@ function createTabDocument(id: string, title: string, doc?: FlowDoc): TabDocumen
     toolbarVisible: true,
     interactionHistory: emptyInteractionHistory()
   };
-}
-
-function asFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function sanitizeNodeOffsetMap(value: unknown, validNodeIds: Set<NodeId>): NodeOffsetMap {
-  if (!value || typeof value !== 'object') return {};
-  const result: NodeOffsetMap = {};
-  for (const [id, rawOffset] of Object.entries(value as Record<string, unknown>)) {
-    if (!validNodeIds.has(id)) continue;
-    if (!rawOffset || typeof rawOffset !== 'object') continue;
-    const dx = asFiniteNumber((rawOffset as { dx?: unknown }).dx);
-    const dy = asFiniteNumber((rawOffset as { dy?: unknown }).dy);
-    if (dx === null || dy === null) continue;
-    if (dx === 0 && dy === 0) continue;
-    result[id] = { dx, dy };
-  }
-  return result;
-}
-
-function sanitizeEdgeBendMap(value: unknown, validEdgeIds: Set<string>): EdgeBendMap {
-  if (!value || typeof value !== 'object') return {};
-  const result: EdgeBendMap = {};
-  for (const [id, rawBend] of Object.entries(value as Record<string, unknown>)) {
-    if (!validEdgeIds.has(id)) continue;
-    if (!rawBend || typeof rawBend !== 'object') continue;
-    const x = asFiniteNumber((rawBend as { x?: unknown }).x);
-    const y = asFiniteNumber((rawBend as { y?: unknown }).y);
-    if (x === null || y === null) continue;
-    result[id] = { x, y };
-  }
-  return result;
-}
-
-function sanitizeEdgeRouteMap(value: unknown, validEdgeIds: Set<string>): EdgeRouteMap {
-  if (!value || typeof value !== 'object') return {};
-  const result: EdgeRouteMap = {};
-  for (const [id, rawRoute] of Object.entries(value as Record<string, unknown>)) {
-    if (!validEdgeIds.has(id)) continue;
-    if (!rawRoute || typeof rawRoute !== 'object') continue;
-    const rawPoints = Array.isArray((rawRoute as { points?: unknown }).points)
-      ? (rawRoute as { points: unknown[] }).points
-      : Array.isArray(rawRoute)
-        ? (rawRoute as unknown[])
-        : [];
-    const points = rawPoints
-      .map(rawPoint => {
-        if (!rawPoint || typeof rawPoint !== 'object') return null;
-        const x = asFiniteNumber((rawPoint as { x?: unknown }).x);
-        const y = asFiniteNumber((rawPoint as { y?: unknown }).y);
-        return x === null || y === null ? null : { x, y };
-      })
-      .filter((point): point is Point => point !== null)
-      .slice(0, 12);
-    if (points.length > 0) result[id] = { points };
-  }
-  return result;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseJsonFile(raw: string): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    throw new Error('The selected file is not valid JSON.');
-  }
-}
-
-function assertSupportedFileVersion(value: unknown) {
-  if (!isRecord(value)) return;
-  const version = value.schemaVersion;
-  if (typeof version === 'number' && version > SCHEMA_VERSION) {
-    throw new Error('This file was created by a newer Flowmaptool version.');
-  }
-}
-
-function assertFlowDocShape(value: unknown) {
-  if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
-    throw new Error('The selected file is not a Flowmaptool document.');
-  }
-}
-
-function getPersistedSourceDoc(parsed: unknown): { sourceDoc: unknown; rawUi?: PersistedUiState } {
-  if (!isRecord(parsed)) {
-    throw new Error('The selected file is not a Flowmaptool document.');
-  }
-
-  assertSupportedFileVersion(parsed);
-  if ('doc' in parsed) {
-    const sourceDoc = parsed.doc;
-    if (!isRecord(sourceDoc)) {
-      throw new Error('The selected file is not a Flowmaptool document.');
-    }
-    assertSupportedFileVersion(sourceDoc);
-    assertFlowDocShape(sourceDoc);
-    return { sourceDoc, rawUi: isRecord(parsed.ui) ? (parsed.ui as PersistedUiState) : undefined };
-  }
-
-  assertFlowDocShape(parsed);
-  return { sourceDoc: parsed };
-}
-
-function parsePersistedQflow(raw: string): { doc: FlowDoc; ui: PersistedUiState } {
-  const parsed = parseJsonFile(raw);
-  const { sourceDoc, rawUi } = getPersistedSourceDoc(parsed);
-  const doc = ensureDocHasNode(deserialize(JSON.stringify(sourceDoc)));
-  const validNodeIds = new Set(doc.nodes.map(node => node.id));
-  const validEdgeIds = new Set(doc.edges.map(edge => edge.id));
-  const layoutDirection = rawUi?.layoutDirection === 'vertical' ? 'vertical' : 'horizontal';
-  const nodeOffsetsByDirection: NodeOffsetsByDirection = {
-    horizontal: sanitizeNodeOffsetMap(rawUi?.nodeOffsetsByDirection?.horizontal, validNodeIds),
-    vertical: sanitizeNodeOffsetMap(rawUi?.nodeOffsetsByDirection?.vertical, validNodeIds)
-  };
-  const rawEdgeBendsByDirection = rawUi?.edgeBendsByDirection;
-  const edgeBendsByDirection: EdgeBendsByDirection = {
-    horizontal: sanitizeEdgeBendMap(rawEdgeBendsByDirection?.horizontal, validEdgeIds),
-    vertical: sanitizeEdgeBendMap(rawEdgeBendsByDirection?.vertical, validEdgeIds)
-  };
-  const rawEdgeRoutesByDirection = (rawUi as { edgeRoutesByDirection?: Partial<EdgeRoutesByDirection> } | undefined)
-    ?.edgeRoutesByDirection;
-  const edgeRoutesByDirection: EdgeRoutesByDirection = {
-    horizontal: sanitizeEdgeRouteMap(rawEdgeRoutesByDirection?.horizontal, validEdgeIds),
-    vertical: sanitizeEdgeRouteMap(rawEdgeRoutesByDirection?.vertical, validEdgeIds)
-  };
-  const legacyEdgeBends = sanitizeEdgeBendMap((rawUi as { edgeBends?: unknown } | undefined)?.edgeBends, validEdgeIds);
-  if (Object.keys(legacyEdgeBends).length > 0) {
-    edgeBendsByDirection[layoutDirection] = {
-      ...edgeBendsByDirection[layoutDirection],
-      ...legacyEdgeBends
-    };
-  }
-  const toolbarVisible = rawUi?.toolbarVisible === false ? false : true;
-  return { doc, ui: { layoutDirection, nodeOffsetsByDirection, edgeBendsByDirection, edgeRoutesByDirection, toolbarVisible } };
-}
-
-function serializePersistedQflow(tab: TabDocument): string {
-  const payload: PersistedQflowFile = {
-    schemaVersion: 1,
-    doc: tab.history.present,
-    ui: {
-      layoutDirection: tab.layoutDirection,
-      nodeOffsetsByDirection: tab.nodeOffsetsByDirection,
-      edgeBendsByDirection: tab.edgeBendsByDirection,
-      edgeRoutesByDirection: tab.edgeRoutesByDirection,
-      toolbarVisible: tab.toolbarVisible
-    }
-  };
-  return JSON.stringify(payload, null, 2);
 }
 
 function getTheme(themeId: string) {
@@ -1588,31 +1418,6 @@ function distanceToPathSquared(point: Point, path: string): number {
   return nearest;
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  const chunkSize = 0x8000;
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-}
-
-function basename(filePath: string): string {
-  const normalized = filePath.replaceAll('\\', '/');
-  const index = normalized.lastIndexOf('/');
-  return index >= 0 ? normalized.slice(index + 1) : normalized;
-}
-
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -2355,7 +2160,10 @@ export function App() {
     try {
       const result = await window.flowmaptool.openDocument();
       if (!result) return;
-      const loaded = parsePersistedQflow(result.content);
+      const loaded = parsePersistedQflow(result.content, {
+        emptyRootLabel: ROOT_LABEL,
+        emptyRootStyle: ROOT_NODE_STYLE
+      });
       const id = `tab-${tabCounter}`;
       setTabs(prev => [
         ...prev,
@@ -2384,7 +2192,14 @@ export function App() {
       try {
         const result = await window.flowmaptool.saveDocument({
           filePath: activeTab.currentFilePath,
-          content: serializePersistedQflow(activeTab),
+          content: serializePersistedQflow({
+            doc: activeTab.history.present,
+            layoutDirection: activeTab.layoutDirection,
+            nodeOffsetsByDirection: activeTab.nodeOffsetsByDirection,
+            edgeBendsByDirection: activeTab.edgeBendsByDirection,
+            edgeRoutesByDirection: activeTab.edgeRoutesByDirection,
+            toolbarVisible: activeTab.toolbarVisible
+          }),
           saveAs
         });
         if (!result) return;

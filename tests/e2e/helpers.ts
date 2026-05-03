@@ -56,3 +56,10 @@ export async function addChildNode(window: Page) {
   await window.keyboard.press('Tab');
   await window.keyboard.press('Escape');
 }
+
+export async function triggerMenuAction(app: ElectronApplication, action: string) {
+  await app.evaluate(({ BrowserWindow }, menuAction) => {
+    const targetWindow = BrowserWindow.getAllWindows()[0];
+    targetWindow.webContents.send('flowmaptool:menuAction', menuAction);
+  }, action);
+}
