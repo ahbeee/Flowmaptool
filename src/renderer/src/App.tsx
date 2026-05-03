@@ -1,4 +1,5 @@
 import React from 'react';
+import { AppHeader, FileStatus } from './app-header';
 import {
   addEdge,
   deleteTag,
@@ -2625,86 +2626,37 @@ export function App() {
   const workspaceStyle = {
     ['--side-panel-width' as string]: `${sidePanelWidth}px`
   } as React.CSSProperties;
+  const toggleOutlinePanel = React.useCallback(() => {
+    setTaskTableVisible(false);
+    setTaskTableExpanded(false);
+    setOutlineVisible(prev => !prev);
+  }, [setTaskTableExpanded]);
+  const toggleTaskTablePanel = React.useCallback(() => {
+    setOutlineVisible(false);
+    const nextVisible = !taskTableVisible;
+    setTaskTableVisible(nextVisible);
+    if (!nextVisible) {
+      setTaskTableExpanded(false);
+    }
+  }, [setTaskTableExpanded, taskTableVisible]);
 
   return (
     <main className="app">
-      <header className="tabs-header">
-        <div className="tabs-strip">
-          {tabs.map(tab => {
-            const active = tab.id === activeTab.id;
-            const label = tab.currentFilePath ? basename(tab.currentFilePath) : tab.title;
-            return (
-              <div key={tab.id} className={active ? 'tab-item tab-item-active' : 'tab-item'}>
-                <button type="button" className="tab-switch" onClick={() => switchTab(tab.id)}>
-                  {label}
-                  {tab.isDirty ? <span className="tab-dirty-dot" /> : null}
-                </button>
-                {tabs.length > 1 ? (
-                  <button type="button" className="tab-close" onClick={() => closeTab(tab.id)}>
-                    x
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-          <button type="button" className="tab-add" onClick={newTab}>
-            +
-          </button>
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="outline-toggle-btn"
-            data-testid="outline-toggle"
-            onClick={() => {
-              setTaskTableVisible(false);
-              setTaskTableExpanded(false);
-              setOutlineVisible(prev => !prev);
-            }}
-            title={outlineVisible ? 'Hide outline' : 'Show outline'}
-          >
-            {outlineVisible ? '☰' : '☷'}
-          </button>
-          <button
-            type="button"
-            className="task-toggle-btn"
-            data-testid="task-toggle"
-            onClick={() => {
-              setOutlineVisible(false);
-              const nextVisible = !taskTableVisible;
-              setTaskTableVisible(nextVisible);
-              if (!nextVisible) {
-                setTaskTableExpanded(false);
-              }
-            }}
-            title={taskTableVisible ? 'Hide task table' : 'Show task table'}
-          >
-            Task Table
-          </button>
-          <button
-            type="button"
-            className="toolbar-toggle-btn"
-            onClick={() => setToolbarVisible(!activeTab.toolbarVisible)}
-            title={activeTab.toolbarVisible ? 'Hide toolbar' : 'Show toolbar'}
-          >
-            {activeTab.toolbarVisible ? '▧' : '▨'}
-          </button>
-        </div>
-      </header>
+      <AppHeader
+        tabs={tabs}
+        activeTabId={activeTab.id}
+        outlineVisible={outlineVisible}
+        taskTableVisible={taskTableVisible}
+        toolbarVisible={activeTab.toolbarVisible}
+        onNewTab={newTab}
+        onCloseTab={closeTab}
+        onSwitchTab={switchTab}
+        onToggleOutline={toggleOutlinePanel}
+        onToggleTaskTable={toggleTaskTablePanel}
+        onToggleToolbar={() => setToolbarVisible(!activeTab.toolbarVisible)}
+      />
 
-      {fileMessage !== 'Ready' ? (
-        <div
-          className={
-            fileMessage.includes('failed') || fileMessage.includes('blocked')
-              ? 'file-status file-status-error'
-              : 'file-status'
-          }
-          data-testid="file-status"
-          role="status"
-        >
-          {fileMessage}
-        </div>
-      ) : null}
+      <FileStatus message={fileMessage} />
 
       <section className="panel canvas-panel">
         <div className={workspaceClassName} style={workspaceStyle}>
