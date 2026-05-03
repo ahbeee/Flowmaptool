@@ -44,7 +44,6 @@ import {
 } from '@shared/layout';
 import {
   buildRenderedPositionMap,
-  getLayerReorderPreview,
   getNodeOffset,
   hasAnyNodeOffset,
   mergeNodeOffsets,
@@ -54,9 +53,11 @@ import {
 } from '@shared/local-reflow';
 import { extractSelection, pasteDetached, type CopiedSelection } from '@shared/subflow';
 import {
+  buildDragInsertPreviewRect,
   buildNodeBoxMap,
   buildRouteScopeNodeIdsByNodeId,
   getCanvasSize,
+  getMarqueeSelectedNodeIds,
   getScopedRouteNodeBoxes
 } from './canvas-geometry';
 import {
@@ -1004,55 +1005,16 @@ export function App() {
   );
 
   const dragInsertPreview = React.useMemo(() => {
-    if (!dragState) return null;
-    const preview = getLayerReorderPreview(
+    return buildDragInsertPreviewRect(
+      dragState,
       layout.positions,
       nodeOffsets,
-      dragState.nodeIds,
-      dragState.anchorNodeId,
+      renderedPositionMap,
+      nodeSizeMap,
+      DEFAULT_NODE_SIZE,
       layoutDirection,
       getLayoutSecondaryGap(layoutDirection)
     );
-    if (!preview) return null;
-
-    const layerIds = layout.positions
-      .filter(pos => (layoutDirection === 'horizontal' ? pos.x === preview.primary : pos.y === preview.primary))
-      .map(pos => pos.id);
-    if (layerIds.length === 0) return null;
-
-    const extents = layerIds
-      .map(id => {
-        const rendered = renderedPositionMap.get(id);
-        const size = nodeSizeMap[id] || DEFAULT_NODE_SIZE;
-        if (!rendered) return null;
-        return {
-          minX: rendered.x,
-          maxX: rendered.x + size.width,
-          minY: rendered.y,
-          maxY: rendered.y + size.height
-        };
-      })
-      .filter((item): item is { minX: number; maxX: number; minY: number; maxY: number } => item !== null);
-    if (extents.length === 0) return null;
-
-    const minX = Math.min(...extents.map(item => item.minX));
-    const maxX = Math.max(...extents.map(item => item.maxX));
-    const minY = Math.min(...extents.map(item => item.minY));
-    const maxY = Math.max(...extents.map(item => item.maxY));
-
-    return layoutDirection === 'horizontal'
-      ? {
-          left: minX - 8,
-          top: preview.secondary - 1,
-          width: Math.max(16, maxX - minX + 16),
-          height: 2
-        }
-      : {
-          left: preview.secondary - 1,
-          top: minY - 8,
-          width: 2,
-          height: Math.max(16, maxY - minY + 16)
-        };
   }, [dragState, layout.positions, layoutDirection, nodeOffsets, nodeSizeMap, renderedPositionMap]);
 
   const canvasSize = React.useMemo(
@@ -2018,22 +1980,7 @@ export function App() {
     const onPointerUp = () => {
       setMarquee(prev => {
         if (!prev) return null;
-        const left = Math.min(prev.startX, prev.currentX);
-        const right = Math.max(prev.startX, prev.currentX);
-        const top = Math.min(prev.startY, prev.currentY);
-        const bottom = Math.max(prev.startY, prev.currentY);
-        const hits: NodeId[] = [];
-        for (const node of doc.nodes) {
-          const pos = renderedPositionMap.get(node.id);
-          const nodeSize = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
-          if (!pos) continue;
-          const intersects =
-            pos.x < right &&
-            pos.x + nodeSize.width > left &&
-            pos.y < bottom &&
-            pos.y + nodeSize.height > top;
-          if (intersects) hits.push(node.id);
-        }
+        const hits = getMarqueeSelectedNodeIds(prev, doc.nodes, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE);
         setSelectedNodeIds(hits);
         setSelectedEdgeId('');
         return null;

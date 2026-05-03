@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { addEdge, addNode, createEmptyDoc } from '../../src/shared/graph';
 import type { NodeSizeMap } from '../../src/shared/layout';
 import {
+  buildDragInsertPreviewRect,
   buildNodeBoxMap,
   buildRouteScopeNodeIdsByNodeId,
   getCanvasSize,
+  getMarqueeSelectedNodeIds,
   getScopedRouteNodeBoxes
 } from '../../src/renderer/src/canvas-geometry';
 
@@ -63,5 +65,61 @@ describe('canvas geometry helpers', () => {
       width: 600,
       height: 260
     });
+  });
+
+  it('builds horizontal and vertical layer insertion preview rectangles', () => {
+    const basePositions = [
+      { id: 'n1', x: 80, y: 80 },
+      { id: 'n2', x: 80, y: 180 },
+      { id: 'n3', x: 80, y: 280 },
+      { id: 'n4', x: 300, y: 80 }
+    ];
+    const rendered = new Map(basePositions.map(pos => [pos.id, pos]));
+
+    expect(
+      buildDragInsertPreviewRect(
+        { nodeIds: ['n3'], anchorNodeId: 'n3' },
+        basePositions,
+        { n3: { dx: 0, dy: -220 } },
+        rendered,
+        {},
+        defaultSize,
+        'horizontal',
+        100
+      )
+    ).toEqual({ left: 72, top: 79, width: 86, height: 2 });
+
+    expect(
+      buildDragInsertPreviewRect(
+        { nodeIds: ['n1'], anchorNodeId: 'n1' },
+        [
+          { id: 'n1', x: 80, y: 80 },
+          { id: 'n2', x: 180, y: 80 },
+          { id: 'n3', x: 280, y: 80 }
+        ],
+        { n1: { dx: 220, dy: 0 } },
+        new Map([
+          ['n1', { id: 'n1', x: 300, y: 80 }],
+          ['n2', { id: 'n2', x: 180, y: 80 }],
+          ['n3', { id: 'n3', x: 280, y: 80 }]
+        ]),
+        {},
+        defaultSize,
+        'vertical',
+        100
+      )
+    ).toEqual({ left: 279, top: 72, width: 2, height: 44 });
+  });
+
+  it('selects nodes intersecting a marquee regardless of drag direction', () => {
+    expect(
+      getMarqueeSelectedNodeIds(
+        { startX: 260, startY: 100, currentX: 50, currentY: 10 },
+        [{ id: 'n1' }, { id: 'n2' }, { id: 'n3' }, { id: 'missing' }],
+        positions,
+        nodeSizes,
+        defaultSize
+      )
+    ).toEqual(['n1', 'n2']);
   });
 });
