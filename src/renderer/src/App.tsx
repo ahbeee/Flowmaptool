@@ -20,7 +20,6 @@ import {
   type FlowDoc,
   type EdgeLineType,
   type EdgeAnchors,
-  type EdgeId,
   type EdgeStyle,
   type FlowNode,
   type NodeId,
@@ -94,19 +93,19 @@ import {
   edgeMidpoint,
   edgePath,
   routeControlPoint,
-  routeFromBend,
-  shouldBendEdge
+  routeFromBend
 } from './edge-path';
 import {
-  computeAutoEdgeRoute,
-  edgeIntersectsNodeCorridor,
+  buildAutoEdgeRouteMap,
+  buildEdgeForceBendMap,
+  buildEdgeLaneMap
+} from './edge-render-state';
+import {
   getDirectionalAnchorPoint,
   getEdgeRenderEndpoints,
   getEndpointSpacingOffset,
   getNodeCenter,
   getRouteSpacingOffsets,
-  isForwardIncomingManualEdge,
-  routeForwardIncomingConverge,
   routeFromSnappedDraggedControl,
   type DraggedRouteEndpointOffsets,
   type LayoutPoint,
@@ -830,142 +829,80 @@ export function App() {
   const useAdvancedAutoRouting =
     doc.nodes.length <= ADVANCED_ROUTE_NODE_LIMIT && doc.edges.length <= ADVANCED_ROUTE_EDGE_LIMIT;
 
-  const edgeForceBendMap = React.useMemo(() => {
-    const map = new Map<string, boolean>();
-    for (const edge of doc.edges) {
-      const fromPos = renderedPositionMap.get(edge.from);
-      const toPos = renderedPositionMap.get(edge.to);
-      if (!fromPos || !toPos) continue;
-      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      if (!useAdvancedAutoRouting && edge.role !== 'manual') {
-        map.set(edge.id, !layoutEdgeAnalysis.layoutEdgeIds.has(edge.id));
-        continue;
-      }
-      const routeNodeBoxes = getRouteNodeBoxes(edge);
-      map.set(
-        edge.id,
-        !layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) ||
-          edgeIntersectsNodeCorridor(endpoints.from, endpoints.to, layoutDirection, edge.from, edge.to, routeNodeBoxes)
-      );
-    }
-    return map;
-  }, [
-    doc.edges,
-    getRenderedEdgeEndpoints,
-    getRouteNodeBoxes,
-    layoutSpacing,
-    layoutDirection,
-    layoutEdgeAnalysis.layoutEdgeIds,
-    nodeSizeMap,
-    renderedPositionMap,
-    useAdvancedAutoRouting
-  ]);
-
-  const edgeLaneMap = React.useMemo(() => {
-    const laneByEdgeId = new Map<string, number>();
-    const byFrom = new Map<NodeId, { id: string; delta: number; needsBend: boolean }[]>();
-    for (const edge of doc.edges) {
-      const fromPos = renderedPositionMap.get(edge.from);
-      const toPos = renderedPositionMap.get(edge.to);
-      if (!fromPos || !toPos) continue;
-      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      const forceBend = edgeForceBendMap.get(edge.id) || false;
-      const needsBend = forceBend || shouldBendEdge(endpoints.from, endpoints.to, layoutDirection, fromSize, toSize);
-      if (!needsBend) {
-        laneByEdgeId.set(edge.id, 0);
-        continue;
-      }
-      const delta = layoutDirection === 'horizontal'
-        ? Math.abs(endpoints.to.y - endpoints.from.y)
-        : Math.abs(endpoints.to.x - endpoints.from.x);
-      const group = byFrom.get(edge.from) || [];
-      group.push({ id: edge.id, delta, needsBend });
-      byFrom.set(edge.from, group);
-    }
-    for (const group of byFrom.values()) {
-      group.sort((a, b) => a.delta - b.delta || a.id.localeCompare(b.id));
-      group.forEach((entry, index) => {
-        laneByEdgeId.set(entry.id, index);
-      });
-    }
-    return laneByEdgeId;
-  }, [doc.edges, edgeForceBendMap, getRenderedEdgeEndpoints, layoutDirection, nodeSizeMap, renderedPositionMap]);
-
-  const autoEdgeRouteMap = React.useMemo(() => {
-    const map = new Map<string, EdgeRoute>();
-    const forwardIncomingManualEdgesByTarget = new Map<NodeId, Set<EdgeId>>();
-
-    for (const edge of doc.edges) {
-      if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
-      if (!edgeForceBendMap.get(edge.id)) continue;
-      if (!useAdvancedAutoRouting && edge.role !== 'manual') continue;
-      const fromPos = renderedPositionMap.get(edge.from);
-      const toPos = renderedPositionMap.get(edge.to);
-      if (!fromPos || !toPos) continue;
-      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      if (!isForwardIncomingManualEdge(edge, endpoints.from, endpoints.to, layoutDirection, layoutEdgeAnalysis.layoutEdgeIds)) {
-        continue;
-      }
-      const group = forwardIncomingManualEdgesByTarget.get(edge.to) || new Set<EdgeId>();
-      group.add(edge.id);
-      forwardIncomingManualEdgesByTarget.set(edge.to, group);
-    }
-
-    for (const edge of doc.edges) {
-      if (edgeRoutes[edge.id] || edgeBends[edge.id]) continue;
-      if (!edgeForceBendMap.get(edge.id)) continue;
-      if (!useAdvancedAutoRouting && edge.role !== 'manual') continue;
-      const fromPos = renderedPositionMap.get(edge.from);
-      const toPos = renderedPositionMap.get(edge.to);
-      if (!fromPos || !toPos) continue;
-      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      const routeNodeBoxes = getRouteNodeBoxes(edge);
-      const forwardIncomingManualGroup = forwardIncomingManualEdgesByTarget.get(edge.to);
-      const route = forwardIncomingManualGroup && forwardIncomingManualGroup.size >= 2 && forwardIncomingManualGroup.has(edge.id)
-        ? routeForwardIncomingConverge(
-          endpoints.from,
-          endpoints.to,
-          layoutDirection,
-          layoutDirection === 'horizontal' ? doc.settings.spacing.horizontal : doc.settings.spacing.vertical
-        )
-        : computeAutoEdgeRoute(
-        endpoints.from,
-        endpoints.to,
+  const edgeForceBendMap = React.useMemo(
+    () =>
+      buildEdgeForceBendMap({
+        edges: doc.edges,
+        renderedPositionMap,
+        nodeSizeMap,
         layoutDirection,
-        edge.from,
-        edge.to,
-        routeNodeBoxes,
-        edgeLaneMap.get(edge.id) || 0,
+        layoutEdgeIds: layoutEdgeAnalysis.layoutEdgeIds,
+        useAdvancedAutoRouting,
+        getRenderedEdgeEndpoints,
+        getRouteNodeBoxes
+      }),
+    [
+      doc.edges,
+      getRenderedEdgeEndpoints,
+      getRouteNodeBoxes,
+      layoutDirection,
+      layoutEdgeAnalysis.layoutEdgeIds,
+      nodeSizeMap,
+      renderedPositionMap,
+      useAdvancedAutoRouting
+    ]
+  );
+
+  const edgeLaneMap = React.useMemo(
+    () =>
+      buildEdgeLaneMap({
+        edges: doc.edges,
+        renderedPositionMap,
+        nodeSizeMap,
+        edgeForceBendMap,
+        layoutDirection,
+        getRenderedEdgeEndpoints
+      }),
+    [doc.edges, edgeForceBendMap, getRenderedEdgeEndpoints, layoutDirection, nodeSizeMap, renderedPositionMap]
+  );
+
+  const autoEdgeRouteMap = React.useMemo(
+    () =>
+      buildAutoEdgeRouteMap({
+        edges: doc.edges,
+        renderedPositionMap,
+        nodeSizeMap,
+        edgeRoutes,
+        edgeBends,
+        edgeForceBendMap,
+        edgeLaneMap,
+        layoutDirection,
+        layoutEdgeIds: layoutEdgeAnalysis.layoutEdgeIds,
         layoutSpacing,
-        edge.anchors
-      );
-      if (route) map.set(edge.id, route);
-    }
-    return map;
-  }, [
-    doc.edges,
-    doc.settings.spacing.horizontal,
-    doc.settings.spacing.vertical,
-    edgeBends,
-    edgeForceBendMap,
-    edgeLaneMap,
-    edgeRoutes,
-    getRenderedEdgeEndpoints,
-    getRouteNodeBoxes,
-    layoutDirection,
-    layoutEdgeAnalysis.layoutEdgeIds,
-    nodeSizeMap,
-    renderedPositionMap,
-    useAdvancedAutoRouting
-  ]);
+        convergePrimarySpacing:
+          layoutDirection === 'horizontal' ? doc.settings.spacing.horizontal : doc.settings.spacing.vertical,
+        useAdvancedAutoRouting,
+        getRenderedEdgeEndpoints,
+        getRouteNodeBoxes
+      }),
+    [
+      doc.edges,
+      doc.settings.spacing.horizontal,
+      doc.settings.spacing.vertical,
+      edgeBends,
+      edgeForceBendMap,
+      edgeLaneMap,
+      edgeRoutes,
+      getRenderedEdgeEndpoints,
+      getRouteNodeBoxes,
+      layoutDirection,
+      layoutEdgeAnalysis.layoutEdgeIds,
+      layoutSpacing,
+      nodeSizeMap,
+      renderedPositionMap,
+      useAdvancedAutoRouting
+    ]
+  );
 
   const buildDraggedEdgeRoute = React.useCallback((edgeId: string, pointer: Point): EdgeRoute | undefined => {
     const edge = doc.edges.find(candidate => candidate.id === edgeId);
