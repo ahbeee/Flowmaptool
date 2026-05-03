@@ -56,6 +56,27 @@ import {
   type NodeOffsetMap
 } from '@shared/local-reflow';
 import { extractSelection, pasteDetached, type CopiedSelection } from '@shared/subflow';
+import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree, type OutlineTreeNode } from './outline';
+import {
+  distanceSquared,
+  distanceToSegmentSquared,
+  pointInsideBox,
+  routeClearancePenalty,
+  routeLength,
+  routeObstacleCount,
+  routeTurnCount,
+  segmentIntersectsBox,
+  segmentsIntersect
+} from './routing-geometry';
+import {
+  buildTaskTableRows,
+  getTaskNodeLabel,
+  TASK_PRIORITIES,
+  TASK_PRIORITY_LABELS,
+  TASK_TABLE_COLUMNS,
+  type TaskTableSort,
+  type TaskTableSortKey
+} from './task-table';
 
 const DEFAULT_NODE_SIZE: NodeSize = { width: 70, height: 28 };
 const NODE_MIN_WIDTH = 48;
@@ -90,37 +111,6 @@ const ADVANCED_ROUTE_NODE_LIMIT = 300;
 const ADVANCED_ROUTE_EDGE_LIMIT = 800;
 const FONT_FAMILIES = ['Roboto', 'Segoe UI', 'Arial', 'Microsoft JhengHei', 'Noto Sans TC'];
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 32, 48, 64];
-const TASK_PRIORITIES: TaskPriority[] = ['low', 'normal', 'high', 'critical'];
-const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
-  low: 'Low',
-  normal: 'Normal',
-  high: 'High',
-  critical: 'Critical'
-};
-const TASK_PRIORITY_SORT_ORDER = new Map<TaskPriority, number>(TASK_PRIORITIES.map((priority, index) => [priority, index]));
-const TASK_TABLE_COLUMNS = [
-  { key: 'task', label: 'Task' },
-  { key: 'category', label: 'Category' },
-  { key: 'priority', label: 'Priority' },
-  { key: 'progress', label: 'Progress' },
-  { key: 'assignee', label: 'Assignee' },
-  { key: 'start', label: 'Start' },
-  { key: 'due', label: 'Due' },
-  { key: 'tag', label: 'Tag' },
-  { key: 'notes', label: 'Notes' }
-] as const;
-type TaskTableSortKey = (typeof TASK_TABLE_COLUMNS)[number]['key'];
-type TaskTableSortDirection = 'asc' | 'desc';
-type TaskTableSort = {
-  key: TaskTableSortKey;
-  direction: TaskTableSortDirection;
-};
-type TaskTableRow = {
-  node: FlowNode;
-  category: string;
-  tagName: string;
-  originalIndex: number;
-};
 const EDGE_WIDTHS = [1, 2, 3, 4, 5, 6, 7, 8];
 const EDGE_LINE_TYPES: Array<{ value: EdgeLineType; label: string }> = [
   { value: 'solid', label: 'Solid' },
@@ -936,150 +926,6 @@ function routeFromPoints(points: Point[]): EdgeRoute | undefined {
   return points.length > 0 ? { points } : undefined;
 }
 
-function routeLength(points: Point[]): number {
-  return points.slice(1).reduce((total, point, index) => total + Math.sqrt(distanceSquared(points[index], point)), 0);
-}
-
-function pointInsideBox(point: Point, box: NodeBox): boolean {
-  return point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom;
-}
-
-function orientation(a: Point, b: Point, c: Point): number {
-  return (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
-}
-
-function onSegment(a: Point, b: Point, c: Point): boolean {
-  return (
-    b.x <= Math.max(a.x, c.x) &&
-    b.x >= Math.min(a.x, c.x) &&
-    b.y <= Math.max(a.y, c.y) &&
-    b.y >= Math.min(a.y, c.y)
-  );
-}
-
-function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
-  const o1 = orientation(a, b, c);
-  const o2 = orientation(a, b, d);
-  const o3 = orientation(c, d, a);
-  const o4 = orientation(c, d, b);
-  if ((o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0)) return true;
-  const epsilon = 0.0001;
-  if (Math.abs(o1) <= epsilon && onSegment(a, c, b)) return true;
-  if (Math.abs(o2) <= epsilon && onSegment(a, d, b)) return true;
-  if (Math.abs(o3) <= epsilon && onSegment(c, a, d)) return true;
-  if (Math.abs(o4) <= epsilon && onSegment(c, b, d)) return true;
-  return false;
-}
-
-function segmentIntersectsBox(from: Point, to: Point, box: NodeBox, padding = 8): boolean {
-  const paddedBox = {
-    left: box.left - padding,
-    right: box.right + padding,
-    top: box.top - padding,
-    bottom: box.bottom + padding
-  };
-  if (pointInsideBox(from, paddedBox) || pointInsideBox(to, paddedBox)) return true;
-  const topLeft = { x: paddedBox.left, y: paddedBox.top };
-  const topRight = { x: paddedBox.right, y: paddedBox.top };
-  const bottomRight = { x: paddedBox.right, y: paddedBox.bottom };
-  const bottomLeft = { x: paddedBox.left, y: paddedBox.bottom };
-  return (
-    segmentsIntersect(from, to, topLeft, topRight) ||
-    segmentsIntersect(from, to, topRight, bottomRight) ||
-    segmentsIntersect(from, to, bottomRight, bottomLeft) ||
-    segmentsIntersect(from, to, bottomLeft, topLeft)
-  );
-}
-
-function distancePointToSegment(point: Point, from: Point, to: Point): number {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const lengthSquared = dx * dx + dy * dy;
-  if (lengthSquared <= 0.0001) return Math.sqrt(distanceSquared(point, from));
-  const t = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared));
-  const projection = { x: from.x + t * dx, y: from.y + t * dy };
-  return Math.sqrt(distanceSquared(point, projection));
-}
-
-function distancePointToBox(point: Point, box: NodeBox): number {
-  const dx = point.x < box.left ? box.left - point.x : point.x > box.right ? point.x - box.right : 0;
-  const dy = point.y < box.top ? box.top - point.y : point.y > box.bottom ? point.y - box.bottom : 0;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-function segmentBoxDistance(from: Point, to: Point, box: NodeBox): number {
-  if (segmentIntersectsBox(from, to, box, 0)) return 0;
-  const epsilon = 0.001;
-  if (Math.abs(from.y - to.y) <= epsilon) {
-    const y = from.y;
-    const minX = Math.min(from.x, to.x);
-    const maxX = Math.max(from.x, to.x);
-    const dx = maxX < box.left ? box.left - maxX : minX > box.right ? minX - box.right : 0;
-    const dy = y < box.top ? box.top - y : y > box.bottom ? y - box.bottom : 0;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-  if (Math.abs(from.x - to.x) <= epsilon) {
-    const x = from.x;
-    const minY = Math.min(from.y, to.y);
-    const maxY = Math.max(from.y, to.y);
-    const dx = x < box.left ? box.left - x : x > box.right ? x - box.right : 0;
-    const dy = maxY < box.top ? box.top - maxY : minY > box.bottom ? minY - box.bottom : 0;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-  const corners = [
-    { x: box.left, y: box.top },
-    { x: box.right, y: box.top },
-    { x: box.right, y: box.bottom },
-    { x: box.left, y: box.bottom }
-  ];
-  return Math.min(
-    distancePointToBox(from, box),
-    distancePointToBox(to, box),
-    ...corners.map(corner => distancePointToSegment(corner, from, to))
-  );
-}
-
-function routeObstacleCount(points: Point[], fromId: NodeId, toId: NodeId, nodeBoxes: Map<NodeId, NodeBox>): number {
-  let count = 0;
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const from = points[index];
-    const to = points[index + 1];
-    for (const [nodeId, box] of nodeBoxes.entries()) {
-      if (nodeId === fromId || nodeId === toId) continue;
-      if (segmentIntersectsBox(from, to, box)) count += 1;
-    }
-  }
-  return count;
-}
-
-function routeClearancePenalty(points: Point[], fromId: NodeId, toId: NodeId, nodeBoxes: Map<NodeId, NodeBox>): number {
-  let penalty = 0;
-  const desiredClearance = 96;
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const from = points[index];
-    const to = points[index + 1];
-    for (const [nodeId, box] of nodeBoxes.entries()) {
-      if (nodeId === fromId || nodeId === toId) continue;
-      const missingClearance = Math.max(0, desiredClearance - segmentBoxDistance(from, to, box));
-      penalty += missingClearance * missingClearance;
-    }
-  }
-  return penalty;
-}
-
-function routeTurnCount(points: Point[]): number {
-  let count = 0;
-  for (let index = 1; index < points.length - 1; index += 1) {
-    const prev = points[index - 1];
-    const current = points[index];
-    const next = points[index + 1];
-    const prevHorizontal = Math.abs(prev.y - current.y) <= 0.001;
-    const nextHorizontal = Math.abs(current.y - next.y) <= 0.001;
-    if (prevHorizontal !== nextHorizontal) count += 1;
-  }
-  return count;
-}
-
 function dedupeRouteCandidates(candidates: Point[][]): Point[][] {
   const seen = new Set<string>();
   const unique: Point[][] = [];
@@ -1653,25 +1499,6 @@ function routeForwardIncomingConverge(
   ]));
 }
 
-function distanceSquared(a: Point, b: Point): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  return dx * dx + dy * dy;
-}
-
-function distanceToSegmentSquared(point: Point, start: Point, end: Point): number {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const lengthSquared = dx * dx + dy * dy;
-  if (lengthSquared === 0) return distanceSquared(point, start);
-  const ratio = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared));
-  const projected = {
-    x: start.x + ratio * dx,
-    y: start.y + ratio * dy
-  };
-  return distanceSquared(point, projected);
-}
-
 function cubicPoint(from: Point, controlA: Point, controlB: Point, to: Point, t: number): Point {
   const inverse = 1 - t;
   const inverseSquared = inverse * inverse;
@@ -2007,137 +1834,6 @@ function isNodeLabelInputTarget(target: EventTarget | null): boolean {
 
 type ConnectHandleHit = { nodeId: NodeId; anchor: EdgeAnchor };
 
-type OutlineTreeNode = {
-  node: FlowNode;
-  children: OutlineTreeNode[];
-};
-
-function nodeSeq(nodeId: NodeId): number {
-  const match = /^n(\d+)$/.exec(String(nodeId));
-  if (!match) return Number.MAX_SAFE_INTEGER;
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
-}
-
-function compareNodeIdOrder(a: NodeId, b: NodeId): number {
-  return nodeSeq(a) - nodeSeq(b) || String(a).localeCompare(String(b));
-}
-
-function compareOutlineEdges(a: FlowEdge, b: FlowEdge): number {
-  return compareEdgeOrder(a, b) || compareNodeIdOrder(a.to, b.to);
-}
-
-function getTaskNodeLabel(node: FlowNode): string {
-  return node.label.trim() || 'Untitled Node';
-}
-
-function normalizeTaskSortString(value: string | undefined): string {
-  return (value || '').trim().toLocaleLowerCase();
-}
-
-function compareOptionalTaskValues(
-  left: string | number | undefined,
-  right: string | number | undefined,
-  direction: TaskTableSortDirection
-): number {
-  const leftEmpty = left === undefined || left === '';
-  const rightEmpty = right === undefined || right === '';
-  if (leftEmpty || rightEmpty) {
-    if (leftEmpty && rightEmpty) return 0;
-    return leftEmpty ? 1 : -1;
-  }
-
-  const result =
-    typeof left === 'number' && typeof right === 'number'
-      ? left - right
-      : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
-  return direction === 'asc' ? result : -result;
-}
-
-function getTaskSortValue(row: TaskTableRow, key: TaskTableSortKey): string | number | undefined {
-  const task = row.node.task;
-  switch (key) {
-    case 'task':
-      return normalizeTaskSortString(getTaskNodeLabel(row.node));
-    case 'category':
-      return normalizeTaskSortString(row.category);
-    case 'priority':
-      return task?.priority ? TASK_PRIORITY_SORT_ORDER.get(task.priority) : undefined;
-    case 'progress':
-      return task ? task.progress : undefined;
-    case 'assignee':
-      return normalizeTaskSortString(task?.assignee);
-    case 'start':
-      return task?.startDate || undefined;
-    case 'due':
-      return task?.dueDate || undefined;
-    case 'tag':
-      return normalizeTaskSortString(row.tagName);
-    case 'notes':
-      return normalizeTaskSortString(task?.note);
-  }
-}
-
-function compareTaskTableRows(left: TaskTableRow, right: TaskTableRow, sort: TaskTableSort): number {
-  return (
-    compareOptionalTaskValues(getTaskSortValue(left, sort.key), getTaskSortValue(right, sort.key), sort.direction) ||
-    left.originalIndex - right.originalIndex
-  );
-}
-
-function buildOutlineTree(doc: FlowDoc): OutlineTreeNode[] {
-  const nodeById = new Map<NodeId, FlowNode>();
-  for (const node of doc.nodes) {
-    nodeById.set(node.id, node);
-  }
-
-  const primaryIncoming = new Map<NodeId, FlowEdge>();
-  for (const edge of doc.edges) {
-    if (!isLayoutEdge(edge) || edge.from === edge.to) continue;
-    if (!nodeById.has(edge.from) || !nodeById.has(edge.to)) continue;
-    const current = primaryIncoming.get(edge.to);
-    if (!current || compareOutlineEdges(edge, current) < 0) {
-      primaryIncoming.set(edge.to, edge);
-    }
-  }
-
-  const childEdgesByParent = new Map<NodeId, FlowEdge[]>();
-  for (const edge of doc.edges) {
-    if (!isLayoutEdge(edge)) continue;
-    if (primaryIncoming.get(edge.to)?.id !== edge.id) continue;
-    const list = childEdgesByParent.get(edge.from) || [];
-    list.push(edge);
-    childEdgesByParent.set(edge.from, list);
-  }
-  for (const list of childEdgesByParent.values()) {
-    list.sort(compareOutlineEdges);
-  }
-
-  const visited = new Set<NodeId>();
-  const buildNode = (node: FlowNode, stack: Set<NodeId>): OutlineTreeNode => {
-    visited.add(node.id);
-    if (stack.has(node.id)) return { node, children: [] };
-    const nextStack = new Set(stack);
-    nextStack.add(node.id);
-    const children = (childEdgesByParent.get(node.id) || [])
-      .map(edge => nodeById.get(edge.to))
-      .filter((child): child is FlowNode => Boolean(child))
-      .filter(child => !nextStack.has(child.id))
-      .map(child => buildNode(child, nextStack));
-    return { node, children };
-  };
-
-  const roots = doc.nodes
-    .filter(node => !primaryIncoming.has(node.id))
-    .sort((a, b) => compareNodeIdOrder(a.id, b.id));
-  const tree = roots.map(root => buildNode(root, new Set<NodeId>()));
-  const leftovers = doc.nodes
-    .filter(node => !visited.has(node.id))
-    .sort((a, b) => compareNodeIdOrder(a.id, b.id))
-    .map(node => buildNode(node, new Set<NodeId>()));
-  return [...tree, ...leftovers];
-}
-
 function resolveDraggedEdgeAnchors(sourceAnchors: EdgeAnchors, targetAnchor?: EdgeAnchor): EdgeAnchors | null {
   const sourceAnchor = sourceAnchors.from === 'front' ? 'front' : 'back';
   const resolvedTargetAnchor =
@@ -2323,45 +2019,18 @@ export function App() {
     [doc.checklist.checkedNodeIds]
   );
   const tagById = React.useMemo(() => new Map(doc.settings.tags.map(tag => [tag.id, tag])), [doc.settings.tags]);
-  const outlineChecklistTargetsByNodeId = React.useMemo(() => {
-    const targetsByNodeId = new Map<NodeId, NodeId[]>();
-    const hasChecklistTarget = (node: FlowNode) => Boolean(node.style?.tagId && tagById.has(node.style.tagId));
-
-    const visit = (item: OutlineTreeNode): NodeId[] => {
-      const targets: NodeId[] = item.children.flatMap(visit);
-      if (hasChecklistTarget(item.node)) {
-        targets.unshift(item.node.id);
-      }
-      targetsByNodeId.set(item.node.id, targets);
-      return targets;
-    };
-
-    outlineTree.forEach(visit);
-    return targetsByNodeId;
-  }, [outlineTree, tagById]);
+  const outlineChecklistTargetsByNodeId = React.useMemo(
+    () => buildOutlineChecklistTargetsByNodeId(outlineTree, new Set(tagById.keys())),
+    [outlineTree, tagById]
+  );
   const isChecklistNodeChecked = React.useCallback(
     (nodeId: NodeId) => checkedNodeIdSet.has(nodeId),
     [checkedNodeIdSet]
   );
-  const taskTableRows = React.useMemo(() => {
-    const rows: TaskTableRow[] = [];
-
-    const visit = (item: OutlineTreeNode, parents: FlowNode[]) => {
-      const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
-      if (tag) {
-        rows.push({
-          node: item.node,
-          category: parents.map(getTaskNodeLabel).join(' > '),
-          tagName: tag.name,
-          originalIndex: rows.length
-        });
-      }
-      item.children.forEach(child => visit(child, [...parents, item.node]));
-    };
-
-    outlineTree.forEach(item => visit(item, []));
-    return taskTableSort ? [...rows].sort((left, right) => compareTaskTableRows(left, right, taskTableSort)) : rows;
-  }, [outlineTree, tagById, taskTableSort]);
+  const taskTableRows = React.useMemo(
+    () => buildTaskTableRows(outlineTree, tagById, taskTableSort),
+    [outlineTree, tagById, taskTableSort]
+  );
   const selectedStyleEdges = React.useMemo(() => {
     if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
     if (selectedNodeIds.length === 0) return [];

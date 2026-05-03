@@ -1,8 +1,6 @@
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-
-const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
+import { expect, test, type ElectronApplication } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import { launchApp, writeFixture } from './helpers';
 
 async function triggerMenuAction(app: ElectronApplication, action: 'file:open' | 'file:save') {
   await app.evaluate(({ BrowserWindow }, menuAction) => {
@@ -11,22 +9,8 @@ async function triggerMenuAction(app: ElectronApplication, action: 'file:open' |
   }, action);
 }
 
-async function writeFixture(testInfo: { outputPath: (path: string) => string }, name: string, content: string) {
-  const filePath = testInfo.outputPath(name);
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, 'utf-8');
-  return filePath;
-}
-
 async function launchWithOpenPath(filePath: string) {
-  const app = await electron.launch({
-    args: [mainEntry],
-    env: {
-      ...process.env,
-      FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: filePath
-    }
-  });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp({ FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: filePath });
   await expect(window.getByTestId('node-n1')).toBeVisible();
   return { app, window };
 }
@@ -85,8 +69,7 @@ function createChecklistFixture() {
 }
 
 test('outline mirrors hierarchy and selection', async () => {
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
 
   await expect(window.getByTestId('outline-panel')).toBeVisible();
   await expect(window.getByTestId('outline-node-n1')).toBeVisible();
@@ -123,7 +106,7 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
   const first = await launchWithOpenPath(filePath);
 
   await triggerMenuAction(first.app, 'file:open');
-  await expect(first.window.getByTestId('outline-check-n1')).toHaveCount(0);
+  await expect(first.window.getByTestId('outline-check-n1')).toBeVisible();
   await expect(first.window.getByTestId('outline-check-n2')).toBeVisible();
   await expect(first.window.getByTestId('outline-node-n3')).toContainText('Second task [Pending]');
   await expect(first.window.getByTestId('outline-check-n3')).toBeVisible();
@@ -150,8 +133,7 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
 });
 
 test('outline can be hidden and restored', async () => {
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
 
   await window.getByTestId('outline-toggle').click();
   await expect(window.getByTestId('outline-panel')).toHaveCount(0);

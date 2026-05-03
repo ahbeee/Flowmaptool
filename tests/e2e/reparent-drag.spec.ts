@@ -1,4 +1,4 @@
-import { _electron as electron, expect, test, type Page } from '@playwright/test';
+import { _electron as electron, expect, test, type Locator, type Page } from '@playwright/test';
 import { join } from 'node:path';
 
 async function launchApp() {
@@ -14,6 +14,23 @@ async function createChild(window: Page, parentId: string) {
   await expect(parent).toHaveClass(/flow-node-selected/);
   await window.keyboard.press('Tab');
   await window.keyboard.press('Escape');
+}
+
+async function contentBox(window: Page, locator: Locator) {
+  const box = await locator.boundingBox();
+  if (!box) return null;
+  const position = await locator.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      left: parseFloat(style.left),
+      top: parseFloat(style.top)
+    };
+  });
+  return {
+    ...box,
+    x: position.left,
+    y: position.top
+  };
 }
 
 test('dragging a non-root node onto empty canvas restores auto layout', async () => {
@@ -50,9 +67,10 @@ test('dragging a non-root node after root move restores moved component position
   await window.mouse.down();
   await window.mouse.move(rootBefore.x + rootBefore.width / 2 + 180, rootBefore.y + rootBefore.height / 2 + 90);
   await window.mouse.up();
+  await window.waitForTimeout(50);
 
-  const rootAfterMove = await root.boundingBox();
-  const childAfterRootMove = await child.boundingBox();
+  const rootAfterMove = await contentBox(window, root);
+  const childAfterRootMove = await contentBox(window, child);
   if (!rootAfterMove || !childAfterRootMove) throw new Error('nodes missing after root drag');
 
   await window.mouse.move(
@@ -62,9 +80,10 @@ test('dragging a non-root node after root move restores moved component position
   await window.mouse.down();
   await window.mouse.move(childAfterRootMove.x + childAfterRootMove.width + 220, childAfterRootMove.y + 140);
   await window.mouse.up();
+  await window.waitForTimeout(50);
 
-  const rootAfterChildDrag = await root.boundingBox();
-  const childAfterChildDrag = await child.boundingBox();
+  const rootAfterChildDrag = await contentBox(window, root);
+  const childAfterChildDrag = await contentBox(window, child);
   if (!rootAfterChildDrag || !childAfterChildDrag) throw new Error('nodes missing after child drag');
   expect(Math.abs(rootAfterChildDrag.x - rootAfterMove.x)).toBeLessThanOrEqual(2);
   expect(Math.abs(rootAfterChildDrag.y - rootAfterMove.y)).toBeLessThanOrEqual(2);

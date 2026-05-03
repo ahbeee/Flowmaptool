@@ -25,6 +25,11 @@ pnpm test:e2e
 pnpm test:all
 ```
 
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Release checklist](docs/release-checklist.md)
+
 ## Windows Packaging
 
 ```powershell

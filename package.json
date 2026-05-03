@@ -8,16 +8,16 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "pack:win": "npm run build && electron-builder --win --x64 --dir",
-    "dist:win": "npm run build && electron-builder --win --x64",
+    "pack:win": "pnpm build && electron-builder --win --x64 --dir",
+    "dist:win": "pnpm build && electron-builder --win --x64",
     "build:win": "npm run dist:win",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:e2e": "npm run build && playwright test",
-    "test:all": "npm run lint && npm run test:unit && npm run test:integration && npm run test:e2e"
+    "test:e2e": "pnpm build && playwright test",
+    "test:all": "pnpm lint && pnpm test:unit && pnpm test:integration && pnpm test:e2e"
   },
   "dependencies": {
     "react": "18.3.1",

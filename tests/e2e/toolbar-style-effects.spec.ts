@@ -28,12 +28,12 @@ test('node style toolbar applies visual changes to selected nodes', async () => 
   await expect(window.getByText('Node Style', { exact: true })).toBeVisible();
 
   const before = await child.boundingBox();
-  await window.getByLabel('Size').selectOption('48');
+  await toolbarSelect(window, 'Size').selectOption('48');
   await expect(child).toHaveCSS('font-size', '48px');
   const after = await child.boundingBox();
   expect(after?.height || 0).toBeGreaterThan((before?.height || 0) + 20);
 
-  await window.getByLabel('Shape').selectOption('pill');
+  await toolbarSelect(window, 'Shape').selectOption('pill');
   const radius = await child.evaluate(element => parseFloat(getComputedStyle(element).borderTopLeftRadius));
   expect(radius).toBeGreaterThan(20);
 

@@ -1,27 +1,19 @@
-import { _electron as electron, expect, test } from '@playwright/test';
-import { join } from 'node:path';
+import { expect, test } from '@playwright/test';
+import { addChildNode, launchApp, renameSelectedNode } from './helpers';
 
 test('task table derives tagged nodes only and keeps tag read-only', async () => {
-  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
 
   const root = window.getByTestId('node-n1');
   await root.click();
-  await window.keyboard.press('Space');
-  const labelInput = window.locator('.node-label-input');
-  await labelInput.fill('Root Task');
-  await labelInput.press('Enter');
+  await renameSelectedNode(window, 'Root Task');
 
   await root.click();
-  await window.keyboard.press('Tab');
-  await window.keyboard.press('Escape');
+  await addChildNode(window);
 
   const child = window.getByTestId('node-n2');
   await child.click();
-  await window.keyboard.press('Space');
-  await labelInput.fill('Child Task');
-  await labelInput.press('Enter');
+  await renameSelectedNode(window, 'Child Task');
   await child.click();
   await window.getByLabel('Apply tag Pending').click();
 
@@ -46,36 +38,25 @@ test('task table derives tagged nodes only and keeps tag read-only', async () =>
 });
 
 test('task table headers sort imported checklist rows', async () => {
-  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
-  const labelInput = window.locator('.node-label-input');
+  const { app, window } = await launchApp();
 
   const root = window.getByTestId('node-n1');
   await root.click();
-  await window.keyboard.press('Space');
-  await labelInput.fill('Root Task');
-  await labelInput.press('Enter');
+  await renameSelectedNode(window, 'Root Task');
 
   await root.click();
-  await window.keyboard.press('Tab');
-  await window.keyboard.press('Escape');
+  await addChildNode(window);
   const secondTask = window.getByTestId('node-n2');
   await secondTask.click();
-  await window.keyboard.press('Space');
-  await labelInput.fill('Bravo Task');
-  await labelInput.press('Enter');
+  await renameSelectedNode(window, 'Bravo Task');
   await secondTask.click();
   await window.getByLabel('Apply tag Pending').click();
 
   await root.click();
-  await window.keyboard.press('Tab');
-  await window.keyboard.press('Escape');
+  await addChildNode(window);
   const firstTask = window.getByTestId('node-n3');
   await firstTask.click();
-  await window.keyboard.press('Space');
-  await labelInput.fill('Alpha Task');
-  await labelInput.press('Enter');
+  await renameSelectedNode(window, 'Alpha Task');
   await firstTask.click();
   await window.getByLabel('Apply tag Pending').click();
 
@@ -98,26 +79,18 @@ test('task table headers sort imported checklist rows', async () => {
 });
 
 test('task table can expand to the main workspace without horizontal table scrolling', async () => {
-  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
 
   const root = window.getByTestId('node-n1');
   await root.click();
-  await window.keyboard.press('Space');
-  const labelInput = window.locator('.node-label-input');
-  await labelInput.fill('Root Task');
-  await labelInput.press('Enter');
+  await renameSelectedNode(window, 'Root Task');
 
   await root.click();
-  await window.keyboard.press('Tab');
-  await window.keyboard.press('Escape');
+  await addChildNode(window);
 
   const child = window.getByTestId('node-n2');
   await child.click();
-  await window.keyboard.press('Space');
-  await labelInput.fill('Very long child task title that wraps in expanded table');
-  await labelInput.press('Enter');
+  await renameSelectedNode(window, 'Very long child task title that wraps in expanded table');
   await child.click();
   await window.getByLabel('Apply tag Pending').click();
 
