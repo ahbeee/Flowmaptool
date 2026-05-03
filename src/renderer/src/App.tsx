@@ -15,15 +15,12 @@ import {
   type FlowEdge,
   type FlowTag,
   type FlowDoc,
-  type EdgeLineType,
   type EdgeAnchors,
   type EdgeStyle,
   type FlowNode,
   type NodeId,
-  type NodeShape,
   type NodeStyle,
-  type NodeTask,
-  type TextAlign
+  type NodeTask
 } from '@shared/graph';
 import { commitHistory } from '@shared/history';
 import {
@@ -155,6 +152,7 @@ import {
   type TaskTableSortKey
 } from './task-table';
 import { TaskTablePanel } from './task-table-panel';
+import { ToolbarPanel } from './toolbar-panel';
 import {
   clampNodeLabel,
   edgeStrokeDasharray,
@@ -174,19 +172,12 @@ import {
   ADVANCED_ROUTE_NODE_LIMIT,
   clamp,
   COLOR_SWATCHES,
-  EDGE_LINE_TYPES,
-  EDGE_WIDTHS,
-  FONT_FAMILIES,
-  FONT_SIZES,
   getTheme,
-  MIXED_OPTION,
-  NODE_SHAPES,
   SIDE_PANEL_DEFAULT_WIDTH,
   SIDE_PANEL_MAX_WIDTH,
   SIDE_PANEL_MIN_WIDTH,
   SPACING_MAX,
-  SPACING_MIN,
-  THEMES
+  SPACING_MIN
 } from './ui-config';
 import {
   beginSidePanelResize,
@@ -2151,468 +2142,8 @@ export function App() {
     fontSize: DEFAULT_FONT_SIZE,
     defaultShape: doc.settings.defaultShape
   });
-  const {
-    selectedFontFamilyMixed,
-    selectedFontFamily,
-    selectedFontSizeMixed,
-    selectedFontSize,
-    selectedTextColorMixed,
-    selectedTextColor,
-    selectedBackgroundColorMixed,
-    selectedBackgroundColor,
-    selectedTextAlign,
-    selectedShapeMixed,
-    selectedShape,
-    isAllBold,
-    isAllItalic,
-    isAllUnderline,
-    hasMixedBold,
-    hasMixedItalic,
-    hasMixedUnderline
-  } = selectedNodeStyleSummary;
-  const {
-    selectedEdgeWidthMixed,
-    selectedEdgeWidth,
-    selectedEdgeLineTypeMixed,
-    selectedEdgeLineType,
-    selectedEdgeColorMixed,
-    selectedEdgeColor
-  } = summarizeSelectedEdgeStyles(selectedStyleEdges, doc.settings.defaultEdgeStyle);
+  const selectedEdgeStyleSummary = summarizeSelectedEdgeStyles(selectedStyleEdges, doc.settings.defaultEdgeStyle);
   const hasNodeSelection = selectedNodeIds.length > 0;
-  const tagNameById = React.useMemo(
-    () => new Map(doc.settings.tags.map(tag => [tag.id, tag.name])),
-    [doc.settings.tags]
-  );
-
-  const renderColorDropdown = (
-    label: string,
-    value: string | '',
-    fallback: string,
-    mixed: boolean,
-    onSelect: (color: string) => void
-  ) => {
-    const displayColor = value || fallback;
-    const isMixed = mixed;
-    return (
-      <div className="toolbar-field">
-        <span>{label}</span>
-        <details className="color-dropdown">
-          <summary aria-label={label}>
-            <span
-              className={isMixed ? 'color-preview color-preview-mixed' : 'color-preview'}
-              style={isMixed ? undefined : { backgroundColor: displayColor }}
-            />
-            <span className="color-dropdown-label">{isMixed ? 'Mixed' : displayColor.toUpperCase()}</span>
-          </summary>
-          <div className="color-swatch-grid" role="group" aria-label={`${label} options`}>
-            {COLOR_SWATCHES.map(color => {
-              const active = !isMixed && displayColor.toLowerCase() === color.toLowerCase();
-              return (
-                <button
-                  key={color}
-                  type="button"
-                  className={active ? 'color-swatch color-swatch-active' : 'color-swatch'}
-                  style={{ backgroundColor: color }}
-                  aria-label={`${label} ${color}`}
-                  onClick={event => {
-                    onSelect(color);
-                    event.currentTarget.closest('details')?.removeAttribute('open');
-                  }}
-                />
-              );
-            })}
-          </div>
-        </details>
-      </div>
-    );
-  };
-
-  const renderEdgeStyleControls = (
-    title: string,
-    edgeCount: number,
-    widthValue: number | '',
-    widthMixed: boolean,
-    lineTypeValue: EdgeLineType | '',
-    lineTypeMixed: boolean,
-    colorValue: string | '',
-    colorMixed: boolean,
-    fallback: Required<EdgeStyle>,
-    onPatch: (patch: EdgeStyle) => void
-  ) => (
-    <div className="edge-style-controls">
-      <div className="toolbar-section-title">
-        {title}
-        {edgeCount > 0 ? ` (${edgeCount})` : ''}
-      </div>
-      <label className="toolbar-field">
-        <span>Line Width</span>
-        <select
-          value={widthMixed ? MIXED_OPTION : String(widthValue || fallback.width)}
-          onChange={event => {
-            if (event.target.value === MIXED_OPTION) return;
-            onPatch({ width: Number(event.target.value) });
-          }}
-        >
-          {widthMixed ? (
-            <option value={MIXED_OPTION} disabled>
-              Mixed
-            </option>
-          ) : null}
-          {EDGE_WIDTHS.map(width => (
-            <option key={width} value={width}>
-              {width}px
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="toolbar-field">
-        <span>Line Type</span>
-        <select
-          value={lineTypeMixed ? MIXED_OPTION : lineTypeValue || fallback.lineType}
-          onChange={event => {
-            if (event.target.value === MIXED_OPTION) return;
-            onPatch({ lineType: event.target.value as EdgeLineType });
-          }}
-        >
-          {lineTypeMixed ? (
-            <option value={MIXED_OPTION} disabled>
-              Mixed
-            </option>
-          ) : null}
-          {EDGE_LINE_TYPES.map(lineType => (
-            <option key={lineType.value} value={lineType.value}>
-              {lineType.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {renderColorDropdown('Line Color', colorValue, fallback.color, colorMixed, color => onPatch({ color }))}
-    </div>
-  );
-
-  const renderMapToolbar = () => (
-    <>
-      <div className="toolbar-title">Mind Map Style</div>
-      <label className="toolbar-field">
-        <span>Theme</span>
-        <select value={doc.settings.themeId} onChange={event => applyTheme(event.target.value)}>
-          {Object.entries(THEMES).map(([id, theme]) => (
-            <option key={id} value={id}>
-              {theme.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="toolbar-field">
-        <span>Layout</span>
-        <select
-          value={layoutDirection}
-          onChange={event => switchLayoutDirection(event.target.value as LayoutDirection)}
-        >
-          <option value="horizontal">Horizontal</option>
-          <option value="vertical">Vertical</option>
-        </select>
-      </label>
-      <label className="toolbar-field">
-        <span>Horizontal Gap</span>
-        <input
-          type="number"
-          min={SPACING_MIN}
-          max={SPACING_MAX}
-          value={doc.settings.spacing.horizontal}
-          onChange={event => applySpacing('horizontal', Number(event.target.value))}
-        />
-      </label>
-      <label className="toolbar-field">
-        <span>Vertical Gap</span>
-        <input
-          type="number"
-          min={SPACING_MIN}
-          max={SPACING_MAX}
-          value={doc.settings.spacing.vertical}
-          onChange={event => applySpacing('vertical', Number(event.target.value))}
-        />
-      </label>
-      <label className="toolbar-field">
-        <span>Default Shape</span>
-        <select
-          value={doc.settings.defaultShape}
-          onChange={event => commitDoc(prev => updateSettings(prev, { defaultShape: event.target.value as NodeShape }))}
-        >
-          {NODE_SHAPES.map(shape => (
-            <option key={shape.value} value={shape.value}>
-              {shape.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {renderEdgeStyleControls(
-        'Default Line',
-        0,
-        doc.settings.defaultEdgeStyle.width || 2,
-        false,
-        doc.settings.defaultEdgeStyle.lineType || 'solid',
-        false,
-        doc.settings.defaultEdgeStyle.color || activeTheme.edge,
-        false,
-        {
-          width: doc.settings.defaultEdgeStyle.width || 2,
-          lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
-          color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
-        },
-        applyDefaultEdgeStyle
-      )}
-      <div className="toolbar-button-row">
-        <button type="button" onClick={fitCanvasToView} aria-label="Fit" title="Fit graph to visible canvas">
-          Fit
-        </button>
-        <button
-          type="button"
-          onClick={resetSelectedEdgeBend}
-          aria-label="Reset Bend"
-          title="Reset selected line route"
-          disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
-        >
-          Reset Bend
-        </button>
-      </div>
-    </>
-  );
-
-  const renderNodeToolbar = () => {
-    return (
-      <>
-        <div className="toolbar-title">Node Style</div>
-        <div className="toolbar-subtitle">{selectedNodeIds.length} selected</div>
-        <label className="toolbar-field">
-          <span>Font</span>
-          <select
-            value={selectedFontFamilyMixed ? MIXED_OPTION : selectedFontFamily || DEFAULT_FONT_FAMILY}
-            onChange={event => {
-              if (event.target.value === MIXED_OPTION) return;
-              applySelectedNodeStyle({ fontFamily: event.target.value });
-            }}
-          >
-            {selectedFontFamilyMixed ? (
-              <option value={MIXED_OPTION} disabled>
-                Mixed
-              </option>
-            ) : null}
-            {FONT_FAMILIES.map(font => (
-              <option key={font} value={font}>
-                {font}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="toolbar-field">
-          <span>Size</span>
-          <select
-            value={selectedFontSizeMixed ? MIXED_OPTION : String(selectedFontSize || DEFAULT_FONT_SIZE)}
-            onChange={event => {
-              if (event.target.value === MIXED_OPTION) return;
-              applySelectedNodeStyle({ fontSize: Number(event.target.value) });
-            }}
-          >
-            {selectedFontSizeMixed ? (
-              <option value={MIXED_OPTION} disabled>
-                Mixed
-              </option>
-            ) : null}
-            {FONT_SIZES.map(size => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="toolbar-toggle-row">
-          <button
-            type="button"
-            aria-label="Bold"
-            title="Bold"
-            className={isAllBold ? 'mode-btn-active' : hasMixedBold ? 'mode-btn-mixed' : ''}
-            onClick={() => applySelectedNodeStyle({ bold: !isAllBold })}
-          >
-            B
-          </button>
-          <button
-            type="button"
-            aria-label="Italic"
-            title="Italic"
-            className={isAllItalic ? 'mode-btn-active' : hasMixedItalic ? 'mode-btn-mixed' : ''}
-            onClick={() => applySelectedNodeStyle({ italic: !isAllItalic })}
-          >
-            I
-          </button>
-          <button
-            type="button"
-            aria-label="Underline"
-            title="Underline"
-            className={isAllUnderline ? 'mode-btn-active' : hasMixedUnderline ? 'mode-btn-mixed' : ''}
-            onClick={() => applySelectedNodeStyle({ underline: !isAllUnderline })}
-          >
-            U
-          </button>
-        </div>
-        <div className="toolbar-toggle-row">
-          {(['left', 'center', 'right'] as TextAlign[]).map(align => (
-            <button
-              key={align}
-              type="button"
-              aria-label={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
-              title={align === 'left' ? 'Align Left' : align === 'center' ? 'Align Center' : 'Align Right'}
-              className={selectedTextAlign === align ? 'mode-btn-active' : ''}
-              onClick={() => applySelectedNodeStyle({ textAlign: align })}
-            >
-              {align[0].toUpperCase()}
-            </button>
-          ))}
-        </div>
-        {renderColorDropdown('Text Color', selectedTextColor, '#0f172a', selectedTextColorMixed, color =>
-          applySelectedNodeStyle({ textColor: color })
-        )}
-        {renderColorDropdown('Node Color', selectedBackgroundColor, '#ffffff', selectedBackgroundColorMixed, color =>
-          applySelectedNodeStyle({ backgroundColor: color })
-        )}
-        <label className="toolbar-field">
-          <span>Shape</span>
-          <select
-            value={selectedShapeMixed ? MIXED_OPTION : selectedShape || doc.settings.defaultShape}
-            onChange={event => {
-              if (event.target.value === MIXED_OPTION) return;
-              applySelectedNodeStyle({ shape: event.target.value as NodeShape });
-            }}
-          >
-            {selectedShapeMixed ? (
-              <option value={MIXED_OPTION} disabled>
-                Mixed
-              </option>
-            ) : null}
-            {NODE_SHAPES.map(shape => (
-              <option key={shape.value} value={shape.value}>
-                {shape.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {selectedStyleEdges.length > 0
-          ? renderEdgeStyleControls(
-              'Related Lines',
-              selectedStyleEdges.length,
-              selectedEdgeWidth,
-              selectedEdgeWidthMixed,
-              selectedEdgeLineType,
-              selectedEdgeLineTypeMixed,
-              selectedEdgeColor,
-              selectedEdgeColorMixed,
-              {
-                width: doc.settings.defaultEdgeStyle.width || 2,
-                lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
-                color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
-              },
-              applySelectedEdgeStyle
-            )
-          : null}
-        <div className="tag-list">
-          <div className="tag-list-create">
-            <span>Tag Color</span>
-            <details className="color-dropdown tag-color-picker">
-              <summary aria-label="New tag color">
-                <span className="color-preview" style={{ backgroundColor: newTagColor }} />
-                <span className="color-dropdown-label">{newTagColor.toUpperCase()}</span>
-              </summary>
-              <div className="color-swatch-grid" role="group" aria-label="New tag color options">
-                {COLOR_SWATCHES.map(color => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={
-                      newTagColor.toLowerCase() === color.toLowerCase()
-                        ? 'color-swatch color-swatch-active'
-                        : 'color-swatch'
-                    }
-                    style={{ backgroundColor: color }}
-                    aria-label={`New tag color ${color}`}
-                    onClick={event => {
-                      setNewTagColor(color);
-                      event.currentTarget.closest('details')?.removeAttribute('open');
-                    }}
-                  />
-                ))}
-              </div>
-            </details>
-            <button type="button" aria-label="Add tag" title="Add tag" onClick={addCustomTag}>
-              +
-            </button>
-          </div>
-          {doc.settings.tags.map(tag => (
-            <div key={tag.id} className="tag-row">
-              <button
-                type="button"
-                className="tag-color-button"
-                aria-label={`Apply tag ${tag.name}`}
-                title={`Apply tag ${tag.name}`}
-                style={{ backgroundColor: tag.color }}
-                onClick={() => applySelectedNodeStyle({ tagId: tag.id })}
-              />
-              <input value={tag.name} onChange={event => renameTag(tag, event.target.value)} />
-              <button type="button" aria-label={`Delete tag ${tag.name}`} onClick={() => removeTagById(tag.id)}>
-                x
-              </button>
-            </div>
-          ))}
-        </div>
-        <button type="button" onClick={clearSelectedNodeStyle}>
-          Reset Node Style
-        </button>
-      </>
-    );
-  };
-
-  const renderEdgeToolbar = () => (
-    <>
-      <div className="toolbar-title">Line Style</div>
-      <label className="toolbar-field">
-        <span>Layout</span>
-        <select
-          aria-label="Layout"
-          value={layoutDirection}
-          onChange={event => switchLayoutDirection(event.target.value as LayoutDirection)}
-        >
-          <option value="horizontal">Horizontal</option>
-          <option value="vertical">Vertical</option>
-        </select>
-      </label>
-      {renderEdgeStyleControls(
-        'Selected Line',
-        selectedStyleEdges.length,
-        selectedEdgeWidth,
-        selectedEdgeWidthMixed,
-        selectedEdgeLineType,
-        selectedEdgeLineTypeMixed,
-        selectedEdgeColor,
-        selectedEdgeColorMixed,
-        {
-          width: doc.settings.defaultEdgeStyle.width || 2,
-          lineType: doc.settings.defaultEdgeStyle.lineType || 'solid',
-          color: doc.settings.defaultEdgeStyle.color || activeTheme.edge
-        },
-        applySelectedEdgeStyle
-      )}
-      <div className="toolbar-button-row">
-        <button
-          type="button"
-          onClick={resetSelectedEdgeBend}
-          aria-label="Reset Bend"
-          title="Reset selected line route"
-          disabled={!selectedEdgeId || (!edgeRoutes[selectedEdgeId] && !edgeBends[selectedEdgeId])}
-        >
-          Reset Bend
-        </button>
-      </div>
-    </>
-  );
 
   const sidePanelVisible = outlineVisible || taskTableVisible;
   const workspaceClassName = [
@@ -3066,11 +2597,35 @@ export function App() {
             </div>
           </div>
           {activeTab.toolbarVisible ? (
-            <aside className="right-toolbar-rail">
-              <div className="right-toolbar right-toolbar-vertical">
-                {hasNodeSelection ? renderNodeToolbar() : selectedEdgeId ? renderEdgeToolbar() : renderMapToolbar()}
-              </div>
-            </aside>
+            <ToolbarPanel
+              hasNodeSelection={hasNodeSelection}
+              hasEdgeSelection={Boolean(selectedEdgeId)}
+              selectedNodeCount={selectedNodeIds.length}
+              selectedStyleEdgeCount={selectedStyleEdges.length}
+              nodeStyleSummary={selectedNodeStyleSummary}
+              edgeStyleSummary={selectedEdgeStyleSummary}
+              settings={doc.settings}
+              layoutDirection={layoutDirection}
+              themeEdgeColor={activeTheme.edge}
+              canResetSelectedEdgeBend={Boolean(
+                selectedEdgeId && (edgeRoutes[selectedEdgeId] || edgeBends[selectedEdgeId])
+              )}
+              newTagColor={newTagColor}
+              onApplyTheme={applyTheme}
+              onSwitchLayoutDirection={switchLayoutDirection}
+              onApplySpacing={applySpacing}
+              onSetDefaultShape={shape => commitDoc(prev => updateSettings(prev, { defaultShape: shape }))}
+              onApplyDefaultEdgeStyle={applyDefaultEdgeStyle}
+              onFitCanvasToView={fitCanvasToView}
+              onResetSelectedEdgeBend={resetSelectedEdgeBend}
+              onApplySelectedNodeStyle={applySelectedNodeStyle}
+              onApplySelectedEdgeStyle={applySelectedEdgeStyle}
+              onSetNewTagColor={setNewTagColor}
+              onAddCustomTag={addCustomTag}
+              onRenameTag={renameTag}
+              onRemoveTag={removeTagById}
+              onClearSelectedNodeStyle={clearSelectedNodeStyle}
+            />
           ) : null}
         </div>
       </section>
