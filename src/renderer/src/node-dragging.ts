@@ -8,11 +8,18 @@ import {
   type NodeSizeMap
 } from '../../shared/layout';
 import { getNodeOffset, type NodeOffset, type NodeOffsetMap } from '../../shared/local-reflow';
-import { translateEdgeBendsForMovedNodes, translateEdgeRoutesForMovedNodes } from './edge-ui-state';
+import {
+  cloneEdgeBendMap,
+  cloneEdgeRouteMap,
+  translateEdgeBendsForMovedNodes,
+  translateEdgeRoutesForMovedNodes
+} from './edge-ui-state';
 import { getNodeCenter } from './edge-routing';
 import { analyzeLayoutEdges, collectEdgeComponent } from './graph-analysis';
 import type { EdgeBendMap, EdgeRouteMap } from './persistence';
 import { boxesOverlap } from './ui-helpers';
+
+export const NODE_DRAG_THRESHOLD = 3;
 
 export type NodeDragStateSnapshot = {
   nodeIds: NodeId[];
@@ -54,6 +61,17 @@ export type BuildNodeReparentDragResultOptions = {
   layoutSpacing: LayoutSpacing;
 };
 
+export type BuildNodeDragStartStateOptions = {
+  doc: FlowDoc;
+  nodeId: NodeId;
+  startPoint: { x: number; y: number };
+  nodeOffsets: NodeOffsetMap;
+  edgeBends: EdgeBendMap;
+  edgeRoutes: EdgeRouteMap;
+  rootNodeIds: Set<NodeId>;
+  layoutEdgeIds: Set<string>;
+};
+
 export type NodeReparentDragResult = {
   doc: FlowDoc;
   movingNodeId: NodeId;
@@ -62,6 +80,107 @@ export type NodeReparentDragResult = {
     offset: NodeOffset;
   } | null;
 };
+
+export type NodeDragFinishPlan =
+  | { type: 'root-drag' }
+  | { type: 'restore-detached' }
+  | { type: 'reparent'; result: NodeReparentDragResult };
+
+export type PlanNodeDragFinishOptions = {
+  doc: FlowDoc;
+  dragState: NodeDragStateSnapshot;
+  dropParentTargetId: NodeId | null;
+  rootNodeIds: Set<NodeId>;
+  primaryRootNodeId: NodeId;
+  renderedPositionMap: Map<NodeId, NodePosition>;
+  layoutDirection: LayoutDirection;
+  nodeSizeMap: NodeSizeMap;
+  layoutSpacing: LayoutSpacing;
+};
+
+export function hasNodeDragExceededThreshold(
+  dragState: NodeDragStateSnapshot,
+  pointer: { x: number; y: number },
+  threshold = NODE_DRAG_THRESHOLD
+): boolean {
+  return Math.hypot(pointer.x - dragState.startX, pointer.y - dragState.startY) >= threshold;
+}
+
+export function buildNodeDragStartState({
+  doc,
+  nodeId,
+  startPoint,
+  nodeOffsets,
+  edgeBends,
+  edgeRoutes,
+  rootNodeIds,
+  layoutEdgeIds
+}: BuildNodeDragStartStateOptions): NodeDragStateSnapshot {
+  const connectedNodeIds = rootNodeIds.has(nodeId) ? collectEdgeComponent(doc, nodeId, layoutEdgeIds) : [nodeId];
+  const startOffsets: Record<NodeId, NodeOffset> = {};
+  for (const id of connectedNodeIds) {
+    startOffsets[id] = getNodeOffset(nodeOffsets, id);
+  }
+
+  return {
+    nodeIds: connectedNodeIds,
+    anchorNodeId: nodeId,
+    startX: startPoint.x,
+    startY: startPoint.y,
+    startOffsets,
+    startEdgeBends: cloneEdgeBendMap(edgeBends),
+    startEdgeRoutes: cloneEdgeRouteMap(edgeRoutes)
+  };
+}
+
+export function applyPreservedComponentOffsetToNodeOffsets(
+  prev: NodeOffsetMap,
+  preservedComponentOffset: NonNullable<NodeReparentDragResult['preservedComponentOffset']>
+): NodeOffsetMap {
+  const next = { ...prev };
+  const { nodeIds, offset } = preservedComponentOffset;
+  for (const nodeId of nodeIds) {
+    if (offset.dx === 0 && offset.dy === 0) {
+      delete next[nodeId];
+    } else {
+      next[nodeId] = offset;
+    }
+  }
+  return next;
+}
+
+export function planNodeDragFinish({
+  doc,
+  dragState,
+  dropParentTargetId,
+  rootNodeIds,
+  primaryRootNodeId,
+  renderedPositionMap,
+  layoutDirection,
+  nodeSizeMap,
+  layoutSpacing
+}: PlanNodeDragFinishOptions): NodeDragFinishPlan {
+  const isRootDrag = rootNodeIds.has(dragState.anchorNodeId);
+  if (dragState.nodeIds.length === 1 && dropParentTargetId && !isRootDrag) {
+    const movingNodeId = dragState.anchorNodeId;
+    const anchorRootId = primaryRootNodeId || doc.nodes[0]?.id || movingNodeId;
+    return {
+      type: 'reparent',
+      result: buildNodeReparentDragResult({
+        doc,
+        movingNodeId,
+        dropParentTargetId,
+        anchorRootId,
+        renderedPositionMap,
+        layoutDirection,
+        nodeSizeMap,
+        layoutSpacing
+      })
+    };
+  }
+
+  return isRootDrag ? { type: 'root-drag' } : { type: 'restore-detached' };
+}
 
 export function applyNodeDragToHost<T extends NodeDragHost>(
   host: T,

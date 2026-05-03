@@ -38,7 +38,6 @@ import {
 } from '@shared/layout';
 import {
   buildRenderedPositionMap,
-  getNodeOffset,
   hasAnyNodeOffset,
   mergeNodeOffsets,
   removeNodeOffsets,
@@ -72,9 +71,7 @@ import {
 } from './connect-dragging';
 import { planEdgeConnection } from './edge-connection';
 import {
-  cloneEdgeBendMap,
   cloneEdgeBendsByDirection,
-  cloneEdgeRouteMap,
   cloneEdgeRoutesByDirection,
   commitDocHistoryToHost,
   commitCurrentEdgeUiSnapshotToHost,
@@ -125,7 +122,6 @@ import {
 import { basename } from './export-utils';
 import {
   analyzeLayoutEdges,
-  collectEdgeComponent,
   type LayoutEdgeAnalysis
 } from './graph-analysis';
 import {
@@ -150,9 +146,13 @@ import {
   getNodeEditingDraft
 } from './node-actions';
 import {
+  applyPreservedComponentOffsetToNodeOffsets,
   applyNodeDragToHost,
-  buildNodeReparentDragResult,
-  restoreDetachedNodeDragToHost
+  buildNodeDragStartState,
+  hasNodeDragExceededThreshold,
+  planNodeDragFinish,
+  restoreDetachedNodeDragToHost,
+  type NodeDragStateSnapshot
 } from './node-dragging';
 import {
   buildOutlineChecklistTargetsByNodeId,
@@ -237,15 +237,6 @@ import {
 } from './viewport-hit-testing';
 import { buildCanvasSvg as buildCanvasSvgMarkup, buildSvgSnapshot } from './svg-export';
 
-type DragState = {
-  nodeIds: NodeId[];
-  anchorNodeId: NodeId;
-  startX: number;
-  startY: number;
-  startOffsets: Record<NodeId, NodeOffset>;
-  startEdgeBends: EdgeBendMap;
-  startEdgeRoutes: EdgeRouteMap;
-};
 type MarqueeState = {
   startX: number;
   startY: number;
@@ -272,7 +263,7 @@ export function App() {
   const [editingLabel, setEditingLabel] = React.useState('');
   const editingNodeIdRef = React.useRef<NodeId | null>(null);
   const editingLabelRef = React.useRef('');
-  const [dragState, setDragState] = React.useState<DragState | null>(null);
+  const [dragState, setDragState] = React.useState<NodeDragStateSnapshot | null>(null);
   const [marquee, setMarquee] = React.useState<MarqueeState | null>(null);
   const [edgeBendDrag, setEdgeBendDrag] = React.useState<EdgeBendDragState | null>(null);
   const edgeBendDragStartSnapshotRef = React.useRef<EdgeUiSnapshot | null>(null);
@@ -1406,14 +1397,11 @@ export function App() {
 
   React.useEffect(() => {
     if (!dragState) return;
-    const dragThreshold = 3;
     const onPointerMove = (event: PointerEvent) => {
       autoPanCanvas(event);
       const pointer = getCanvasContentPoint(event.clientX, event.clientY);
       if (!pointer) return;
-      const deltaX = pointer.x - dragState.startX;
-      const deltaY = pointer.y - dragState.startY;
-      if (!dragDidMoveRef.current && Math.hypot(deltaX, deltaY) < dragThreshold) return;
+      if (!dragDidMoveRef.current && !hasNodeDragExceededThreshold(dragState, pointer)) return;
       dragDidMoveRef.current = true;
       updateActiveTab(tab => {
         return applyNodeDragToHost(tab, {
@@ -1446,7 +1434,6 @@ export function App() {
         setDropParentTargetId(null);
         return;
       }
-      const isRootDrag = rootNodeIds.has(dragState.anchorNodeId);
       let finalDropParentTargetId = dropParentTargetId;
       if (dragState.nodeIds.length === 1) {
         finalDropParentTargetId = null;
@@ -1462,38 +1449,29 @@ export function App() {
           );
         }
       }
-      if (dragState.nodeIds.length === 1 && finalDropParentTargetId && !isRootDrag) {
-        const movingNodeId = dragState.anchorNodeId;
-        const anchorRootId = primaryRootNodeId || doc.nodes[0]?.id || movingNodeId;
-        const reparentResult = buildNodeReparentDragResult({
-          doc,
-          movingNodeId,
-          dropParentTargetId: finalDropParentTargetId,
-          anchorRootId,
-          renderedPositionMap,
-          layoutDirection,
-          nodeSizeMap,
-          layoutSpacing
-        });
+      const finishPlan = planNodeDragFinish({
+        doc,
+        dragState,
+        dropParentTargetId: finalDropParentTargetId,
+        rootNodeIds,
+        primaryRootNodeId: primaryRootNodeId || '',
+        renderedPositionMap,
+        layoutDirection,
+        nodeSizeMap,
+        layoutSpacing
+      });
+      if (finishPlan.type === 'reparent') {
+        const { result: reparentResult } = finishPlan;
+        const movingNodeId = reparentResult.movingNodeId;
         commitDoc(() => reparentResult.doc);
-        if (reparentResult.preservedComponentOffset) {
-          const { nodeIds, offset } = reparentResult.preservedComponentOffset;
-          setCurrentNodeOffsets(prev => {
-            const next = { ...prev };
-            for (const nodeId of nodeIds) {
-              if (offset.dx === 0 && offset.dy === 0) {
-                delete next[nodeId];
-              } else {
-                next[nodeId] = offset;
-              }
-            }
-            return next;
-          });
+        const preservedComponentOffset = reparentResult.preservedComponentOffset;
+        if (preservedComponentOffset) {
+          setCurrentNodeOffsets(prev => applyPreservedComponentOffsetToNodeOffsets(prev, preservedComponentOffset));
         } else {
           restoreCurrentNodeOffsets(dragState.startOffsets);
         }
         setSelectedNodeIds([movingNodeId]);
-      } else if (!isRootDrag) {
+      } else if (finishPlan.type === 'restore-detached') {
         updateActiveTab(tab => restoreDetachedNodeDragToHost(tab, dragState));
       }
       setDragState(null);
@@ -1737,29 +1715,24 @@ export function App() {
       setSelectedNodeIds(nextSelection);
       return;
     }
-    const isRootNode = rootNodeIds.has(nodeId);
     const nextSelection: NodeId[] = [nodeId];
     setSelectedNodeIds(nextSelection);
     selectedNodeIdsRef.current = nextSelection;
-    const connectedNodeIds = isRootNode
-      ? collectEdgeComponent(doc, nodeId, layoutEdgeAnalysis.layoutEdgeIds)
-      : [nodeId];
-    const startOffsets: Record<NodeId, NodeOffset> = {};
-    for (const id of connectedNodeIds) {
-      startOffsets[id] = getNodeOffset(nodeOffsets, id);
-    }
     const startPoint = getCanvasContentPoint(event.clientX, event.clientY);
     if (!startPoint) return;
     dragDidMoveRef.current = false;
-    setDragState({
-      nodeIds: connectedNodeIds,
-      anchorNodeId: nodeId,
-      startX: startPoint.x,
-      startY: startPoint.y,
-      startOffsets,
-      startEdgeBends: cloneEdgeBendMap(edgeBends),
-      startEdgeRoutes: cloneEdgeRouteMap(edgeRoutes)
-    });
+    setDragState(
+      buildNodeDragStartState({
+        doc,
+        nodeId,
+        startPoint,
+        nodeOffsets,
+        edgeBends,
+        edgeRoutes,
+        rootNodeIds,
+        layoutEdgeIds: layoutEdgeAnalysis.layoutEdgeIds
+      })
+    );
   };
 
   const onNodeMouseUp = (event: React.MouseEvent<HTMLButtonElement>, nodeId: NodeId) => {

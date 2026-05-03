@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { addEdge, addNode, createEmptyDoc, type FlowDoc } from '../../src/shared/graph';
 import type { NodePosition, NodeSizeMap } from '../../src/shared/layout';
 import {
+  applyPreservedComponentOffsetToNodeOffsets,
   applyNodeDragToHost,
+  buildNodeDragStartState,
   buildNodeReparentDragResult,
+  hasNodeDragExceededThreshold,
+  planNodeDragFinish,
   restoreDetachedNodeDragToHost,
   type NodeDragHost,
   type NodeDragStateSnapshot
@@ -48,6 +52,52 @@ const basePositions: NodePosition[] = [
 ];
 
 describe('node dragging helpers', () => {
+  it('builds root drag start state for the connected layout component', () => {
+    const state = buildNodeDragStartState({
+      doc: createDoc(),
+      nodeId: 'n1',
+      startPoint: { x: 10, y: 20 },
+      nodeOffsets: { n1: { dx: 1, dy: 2 }, n2: { dx: 3, dy: 4 } },
+      edgeBends: { e1: { x: 100, y: 120 } },
+      edgeRoutes: { e1: { points: [{ x: 100, y: 120 }] } },
+      rootNodeIds: new Set(['n1', 'n3']),
+      layoutEdgeIds: new Set(['e1'])
+    });
+
+    expect(state).toEqual({
+      nodeIds: ['n1', 'n2'],
+      anchorNodeId: 'n1',
+      startX: 10,
+      startY: 20,
+      startOffsets: { n1: { dx: 1, dy: 2 }, n2: { dx: 3, dy: 4 } },
+      startEdgeBends: { e1: { x: 100, y: 120 } },
+      startEdgeRoutes: { e1: { points: [{ x: 100, y: 120 }] } }
+    });
+  });
+
+  it('builds non-root drag start state for only the dragged node', () => {
+    const state = buildNodeDragStartState({
+      doc: createDoc(),
+      nodeId: 'n2',
+      startPoint: { x: 10, y: 20 },
+      nodeOffsets: { n1: { dx: 1, dy: 2 }, n2: { dx: 3, dy: 4 } },
+      edgeBends: {},
+      edgeRoutes: {},
+      rootNodeIds: new Set(['n1', 'n3']),
+      layoutEdgeIds: new Set(['e1'])
+    });
+
+    expect(state.nodeIds).toEqual(['n2']);
+    expect(state.startOffsets).toEqual({ n2: { dx: 3, dy: 4 } });
+  });
+
+  it('detects whether pointer movement has exceeded the drag threshold', () => {
+    const state = dragState({ startX: 10, startY: 10 });
+
+    expect(hasNodeDragExceededThreshold(state, { x: 12, y: 12 })).toBe(false);
+    expect(hasNodeDragExceededThreshold(state, { x: 13, y: 10 })).toBe(true);
+  });
+
   it('applies drag deltas to selected node offsets', () => {
     const result = applyNodeDragToHost(host(), {
       doc: createDoc(),
@@ -193,5 +243,61 @@ describe('node dragging helpers', () => {
 
     expect(result.doc.edges).toContainEqual(expect.objectContaining({ from: 'n3', to: 'n2' }));
     expect(result.preservedComponentOffset).toBeNull();
+  });
+
+  it('plans drag finish as reparent, restore, or keep-root based on drop target and root status', () => {
+    const common = {
+      doc: createDoc(),
+      renderedPositionMap: new Map([['n1', { id: 'n1', x: 200, y: 210 }]]),
+      layoutDirection: 'horizontal' as const,
+      nodeSizeMap: {} as NodeSizeMap,
+      layoutSpacing: { primary: 56, secondary: 76 }
+    };
+
+    const reparent = planNodeDragFinish({
+      ...common,
+      dragState: dragState({ nodeIds: ['n2'], anchorNodeId: 'n2' }),
+      dropParentTargetId: 'n3',
+      rootNodeIds: new Set(['n1', 'n3']),
+      primaryRootNodeId: 'n1'
+    });
+    expect(reparent.type).toBe('reparent');
+    expect(reparent.type === 'reparent' ? reparent.result.movingNodeId : '').toBe('n2');
+
+    expect(
+      planNodeDragFinish({
+        ...common,
+        dragState: dragState({ nodeIds: ['n2'], anchorNodeId: 'n2' }),
+        dropParentTargetId: null,
+        rootNodeIds: new Set(['n1', 'n3']),
+        primaryRootNodeId: 'n1'
+      })
+    ).toEqual({ type: 'restore-detached' });
+
+    expect(
+      planNodeDragFinish({
+        ...common,
+        dragState: dragState({ nodeIds: ['n1', 'n2'], anchorNodeId: 'n1' }),
+        dropParentTargetId: 'n3',
+        rootNodeIds: new Set(['n1', 'n3']),
+        primaryRootNodeId: 'n1'
+      })
+    ).toEqual({ type: 'root-drag' });
+  });
+
+  it('applies preserved component offsets and removes zero offsets', () => {
+    expect(
+      applyPreservedComponentOffsetToNodeOffsets(
+        { n1: { dx: 8, dy: 9 }, n2: { dx: 1, dy: 2 } },
+        { nodeIds: ['n1', 'n3'], offset: { dx: 0, dy: 0 } }
+      )
+    ).toEqual({ n2: { dx: 1, dy: 2 } });
+
+    expect(
+      applyPreservedComponentOffsetToNodeOffsets(
+        { n1: { dx: 8, dy: 9 } },
+        { nodeIds: ['n1', 'n3'], offset: { dx: 12, dy: 14 } }
+      )
+    ).toEqual({ n1: { dx: 12, dy: 14 }, n3: { dx: 12, dy: 14 } });
   });
 });
