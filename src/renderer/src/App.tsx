@@ -103,6 +103,16 @@ import {
   getPrimaryParentId,
   type LayoutEdgeAnalysis
 } from './graph-analysis';
+import {
+  createChildNodeStyle,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
+  DEFAULT_NODE_SIZE,
+  estimateNodeSize,
+  NODE_PADDING_X,
+  NODE_TEXT_BASELINE_Y,
+  ROOT_NODE_STYLE
+} from './node-style';
 import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree, type OutlineTreeNode } from './outline';
 import {
   emptyEdgeBendsByDirection,
@@ -146,29 +156,10 @@ import {
   sameValues
 } from './ui-helpers';
 
-const DEFAULT_NODE_SIZE: NodeSize = { width: 70, height: 28 };
-const NODE_MIN_WIDTH = 48;
-const NODE_MAX_WIDTH = 360;
-const NODE_MIN_HEIGHT = 28;
-const NODE_PADDING_X = 10;
-const NODE_PADDING_Y = 6;
-const NODE_TEXT_BASELINE_Y = 26;
 const ROOT_LABEL = '';
 const NEW_NODE_LABEL = '';
-const DEFAULT_FONT_FAMILY = 'Roboto';
-const DEFAULT_FONT_SIZE = 12;
 const HANDLE_CONNECT_ANCHORS: EdgeAnchors = { from: 'back', to: 'body' };
 const FRONT_HANDLE_CONNECT_ANCHORS: EdgeAnchors = { from: 'front', to: 'body' };
-const ROOT_NODE_STYLE: NodeStyle = {
-  fontFamily: DEFAULT_FONT_FAMILY,
-  fontSize: DEFAULT_FONT_SIZE,
-  shape: 'rounded'
-};
-const CHILD_NODE_STYLE: NodeStyle = {
-  fontFamily: DEFAULT_FONT_FAMILY,
-  fontSize: DEFAULT_FONT_SIZE,
-  shape: 'plain'
-};
 const SPACING_MIN = 0;
 const SPACING_MAX = 320;
 const SIDE_PANEL_MIN_WIDTH = 220;
@@ -322,13 +313,6 @@ type TabDocument = {
 
 const PNG_FILTER = [{ name: 'PNG Image', extensions: ['png'] }];
 
-function createChildNodeStyle(defaultShape: NodeShape): NodeStyle {
-  return {
-    ...CHILD_NODE_STYLE,
-    shape: defaultShape
-  };
-}
-
 function reverseEdgeAnchors(anchors: EdgeAnchors | undefined): EdgeAnchors | undefined {
   if (!anchors) return undefined;
   return {
@@ -371,44 +355,6 @@ function createTabDocument(id: string, title: string, doc?: FlowDoc): TabDocumen
 
 function getTheme(themeId: string) {
   return THEMES[(themeId as ThemeId) in THEMES ? (themeId as ThemeId) : 'blue-gray'];
-}
-
-let nodeMeasureCanvas: HTMLCanvasElement | null = null;
-
-function getNodeMeasureContext(): CanvasRenderingContext2D | null {
-  if (typeof document === 'undefined') return null;
-  nodeMeasureCanvas = nodeMeasureCanvas || document.createElement('canvas');
-  return nodeMeasureCanvas.getContext('2d');
-}
-
-function quoteFontFamily(fontFamily: string): string {
-  return /^[a-zA-Z0-9-]+$/.test(fontFamily) ? fontFamily : `"${fontFamily.replace(/"/g, '\\"')}"`;
-}
-
-function fallbackTextWidth(text: string, fontSize: number): number {
-  let width = 0;
-  for (const char of text) {
-    width += /[\u2e80-\u9fff\uff00-\uffef]/.test(char) ? fontSize : fontSize * 0.52;
-  }
-  return width;
-}
-
-function measureNodeTextWidth(text: string, style?: NodeStyle): number {
-  const fontSize = style?.fontSize || DEFAULT_FONT_SIZE;
-  const fontFamily = style?.fontFamily || DEFAULT_FONT_FAMILY;
-  const context = getNodeMeasureContext();
-  if (!context) return fallbackTextWidth(text, fontSize);
-  context.font = `${fontSize}px ${quoteFontFamily(fontFamily)}, sans-serif`;
-  return context.measureText(text).width;
-}
-
-function estimateNodeSize(label: string, style?: NodeStyle): NodeSize {
-  const singleLine = clampNodeLabel(label).replace(/\r?\n/g, ' ');
-  const fontSize = style?.fontSize || DEFAULT_FONT_SIZE;
-  const unclampedWidth = measureNodeTextWidth(singleLine, style) + NODE_PADDING_X * 2 + 10;
-  const width = Math.max(NODE_MIN_WIDTH, Math.min(NODE_MAX_WIDTH, unclampedWidth || NODE_MIN_WIDTH));
-  const height = Math.max(NODE_MIN_HEIGHT, Math.ceil(fontSize * 1.3 + NODE_PADDING_Y * 2));
-  return { width, height };
 }
 
 function clamp(value: number, min: number, max: number): number {
