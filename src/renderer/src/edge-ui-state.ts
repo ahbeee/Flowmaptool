@@ -128,6 +128,43 @@ export function edgeUiSnapshotsEqual(a: EdgeUiSnapshot, b: EdgeUiSnapshot): bool
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function docLayoutSignature(doc: FlowDoc): string {
+  return JSON.stringify({
+    nodes: doc.nodes.map(node => ({
+      id: node.id,
+      label: node.label,
+      style: node.style
+    })),
+    edges: doc.edges.map(edge => ({
+      id: edge.id,
+      from: edge.from,
+      to: edge.to,
+      role: edge.role,
+      anchors: edge.anchors
+    })),
+    spacing: doc.settings.spacing
+  });
+}
+
+function hasAnyEdgeUiState(snapshot: EdgeUiSnapshot): boolean {
+  return (
+    Object.keys(snapshot.edgeBendsByDirection.horizontal).length > 0 ||
+    Object.keys(snapshot.edgeBendsByDirection.vertical).length > 0 ||
+    Object.keys(snapshot.edgeRoutesByDirection.horizontal).length > 0 ||
+    Object.keys(snapshot.edgeRoutesByDirection.vertical).length > 0
+  );
+}
+
+export function clearEdgeUiForLayoutMutation<T extends EdgeUiHost>(host: T, beforeDoc: FlowDoc, afterDoc: FlowDoc): T {
+  if (beforeDoc === afterDoc || docLayoutSignature(beforeDoc) === docLayoutSignature(afterDoc)) return host;
+  if (!hasAnyEdgeUiState(host)) return host;
+  return {
+    ...host,
+    edgeBendsByDirection: { horizontal: {}, vertical: {} },
+    edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+  };
+}
+
 export function pushInteractionPast(
   past: InteractionHistoryEntry[],
   entry: InteractionHistoryEntry,

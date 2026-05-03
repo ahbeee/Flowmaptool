@@ -61,6 +61,7 @@ import { FRONT_HANDLE_CONNECT_ANCHORS, HANDLE_CONNECT_ANCHORS } from './connect-
 import { planConnectDragFinish, updateConnectDragForPoint, type ConnectDragState } from './connect-dragging';
 import { planEdgeConnection } from './edge-connection';
 import {
+  clearEdgeUiForLayoutMutation,
   cloneEdgeBendsByDirection,
   cloneEdgeRoutesByDirection,
   commitDocHistoryToHost,
@@ -561,7 +562,7 @@ export function App() {
       updateActiveTab(tab => {
         const nextDoc = ensureDocHasNode(recipe(tab.history.present));
         const nextHistory = commitHistory(tab.history, nextDoc);
-        return commitDocHistoryToHost(tab, nextHistory);
+        return clearEdgeUiForLayoutMutation(commitDocHistoryToHost(tab, nextHistory), tab.history.present, nextDoc);
       });
       setFileMessage('Edited');
     },

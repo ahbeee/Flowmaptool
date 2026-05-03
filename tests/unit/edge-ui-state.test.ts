@@ -3,6 +3,7 @@ import { addEdge, addNode, createEmptyDoc } from '../../src/shared/graph';
 import { commitHistory, createHistory } from '../../src/shared/history';
 import {
   applyEdgeUiSnapshot,
+  clearEdgeUiForLayoutMutation,
   cloneEdgeBendMap,
   cloneEdgeRouteMap,
   commitDocHistoryToHost,
@@ -79,6 +80,36 @@ describe('edge UI state helpers', () => {
     expect(translateEdgeRoutesForMovedNodes(doc, routes, new Set(['n1', 'n2']), 5, 7)).toEqual({
       e1: { points: [{ x: 6, y: 9 }] }
     });
+  });
+
+  it('clears explicit edge UI when layout-affecting document state changes', () => {
+    const doc = createTwoEdgeDoc();
+    const host = {
+      edgeBendsByDirection: { horizontal: { e1: { x: 10, y: 20 } }, vertical: {} },
+      edgeRoutesByDirection: { horizontal: { e2: { points: [{ x: 30, y: 40 }] } }, vertical: {} }
+    };
+
+    expect(
+      clearEdgeUiForLayoutMutation(host, doc, {
+        ...doc,
+        settings: {
+          ...doc.settings,
+          spacing: { ...doc.settings.spacing, vertical: doc.settings.spacing.vertical + 12 }
+        }
+      })
+    ).toEqual({
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    });
+
+    expect(
+      clearEdgeUiForLayoutMutation(host, doc, {
+        ...doc,
+        nodes: doc.nodes.map(node =>
+          node.id === 'n2' ? { ...node, task: { enabled: true, done: false, priority: 'normal', progress: 50 } } : node
+        )
+      })
+    ).toBe(host);
   });
 
   it('keeps interaction history bounded', () => {
