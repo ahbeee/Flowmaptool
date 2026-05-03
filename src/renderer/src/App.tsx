@@ -202,6 +202,7 @@ import {
   summarizeSelectedEdgeStyles,
   summarizeSelectedNodeStyles
 } from './selection-style';
+import { planNodePointerDown } from './selection-interactions';
 import {
   ADVANCED_ROUTE_EDGE_LIMIT,
   ADVANCED_ROUTE_NODE_LIMIT,
@@ -1680,47 +1681,56 @@ export function App() {
     if (isNodeLabelInputTarget(event.target)) return;
     if (editingNodeIdRef.current) commitEditingNode();
     if (connectDrag) return;
+    const handleHit =
+      event.button === 2 ? getViewportConnectHandleHit(event.clientX, event.clientY, nodeId, layoutDirection) : null;
+    const handleAnchor = handleHit?.anchor === 'front' || handleHit?.anchor === 'back' ? handleHit.anchor : null;
+    const pointerPlan = planNodePointerDown({
+      button: event.button,
+      nodeId,
+      selectedNodeIds: selectedNodeIdsRef.current,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      handleAnchor
+    });
     if (event.button === 2) {
       event.preventDefault();
       event.stopPropagation();
-      const handleHit = getViewportConnectHandleHit(event.clientX, event.clientY, nodeId, layoutDirection);
-      if (handleHit) {
+      if (pointerPlan.type === 'right-connect') {
         pendingRightConnectFromRef.current = nodeId;
-        const anchors = handleHit.anchor === 'front' ? FRONT_HANDLE_CONNECT_ANCHORS : HANDLE_CONNECT_ANCHORS;
+        const anchors = pointerPlan.anchor === 'front' ? FRONT_HANDLE_CONNECT_ANCHORS : HANDLE_CONNECT_ANCHORS;
         pendingRightConnectAnchorsRef.current = anchors;
         beginConnectDrag(nodeId, anchors);
         return;
       }
       setSelectedEdgeId('');
-      setSelectedNodeIds([nodeId]);
-      selectedNodeIdsRef.current = [nodeId];
+      if (pointerPlan.type === 'right-select') {
+        setSelectedNodeIds(pointerPlan.nextSelection);
+        selectedNodeIdsRef.current = pointerPlan.nextSelection;
+      }
       return;
     }
-    if (event.button !== 0) return;
+    if (pointerPlan.type === 'ignore') return;
     event.preventDefault();
     setDragState(null);
     setDropParentTargetId(null);
     setSelectedEdgeId('');
-    if (event.shiftKey) {
-      const from = selectedNodeIds.length === 1 ? selectedNodeIds[0] : '';
-      if (from && from !== nodeId) {
-        tryCreateEdge(from, nodeId);
+    if (pointerPlan.type === 'shift-connect') {
+      if (pointerPlan.fromNodeId) {
+        tryCreateEdge(pointerPlan.fromNodeId, pointerPlan.targetNodeId);
       }
-      setSelectedNodeIds([nodeId]);
-      selectedNodeIdsRef.current = [nodeId];
+      setSelectedNodeIds(pointerPlan.nextSelection);
+      selectedNodeIdsRef.current = pointerPlan.nextSelection;
       return;
     }
-    if (event.ctrlKey || event.metaKey) {
-      const nextSelection = selectedNodeIdsRef.current.includes(nodeId)
-        ? selectedNodeIdsRef.current.filter(id => id !== nodeId)
-        : [...selectedNodeIdsRef.current, nodeId];
-      selectedNodeIdsRef.current = nextSelection;
-      setSelectedNodeIds(nextSelection);
+    if (pointerPlan.type === 'toggle-selection') {
+      selectedNodeIdsRef.current = pointerPlan.nextSelection;
+      setSelectedNodeIds(pointerPlan.nextSelection);
       return;
     }
-    const nextSelection: NodeId[] = [nodeId];
-    setSelectedNodeIds(nextSelection);
-    selectedNodeIdsRef.current = nextSelection;
+    if (pointerPlan.type !== 'select-and-drag') return;
+    setSelectedNodeIds(pointerPlan.nextSelection);
+    selectedNodeIdsRef.current = pointerPlan.nextSelection;
     const startPoint = getCanvasContentPoint(event.clientX, event.clientY);
     if (!startPoint) return;
     dragDidMoveRef.current = false;
