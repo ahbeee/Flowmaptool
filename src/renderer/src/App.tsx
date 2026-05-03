@@ -136,6 +136,15 @@ import {
   type TaskTableSort,
   type TaskTableSortKey
 } from './task-table';
+import {
+  boxesOverlap,
+  clampNodeLabel,
+  edgeStrokeDasharray,
+  effectiveEdgeStyle,
+  hasMixedValues,
+  nextCustomTagId,
+  sameValues
+} from './ui-helpers';
 
 const DEFAULT_NODE_SIZE: NodeSize = { width: 70, height: 28 };
 const NODE_MIN_WIDTH = 48;
@@ -144,7 +153,6 @@ const NODE_MIN_HEIGHT = 28;
 const NODE_PADDING_X = 10;
 const NODE_PADDING_Y = 6;
 const NODE_TEXT_BASELINE_Y = 26;
-const NODE_TEXT_MAX_LEN = 80;
 const ROOT_LABEL = '';
 const NEW_NODE_LABEL = '';
 const DEFAULT_FONT_FAMILY = 'Roboto';
@@ -411,50 +419,6 @@ function clampSidePanelWidth(width: number): number {
   const viewportMax =
     typeof window === 'undefined' ? SIDE_PANEL_MAX_WIDTH : Math.max(SIDE_PANEL_MIN_WIDTH, window.innerWidth - 520);
   return clamp(width, SIDE_PANEL_MIN_WIDTH, Math.min(SIDE_PANEL_MAX_WIDTH, viewportMax));
-}
-
-function boxesOverlap(a: NodeBox, b: NodeBox, gap = 0): boolean {
-  return !(
-    a.right + gap <= b.left ||
-    b.right + gap <= a.left ||
-    a.bottom + gap <= b.top ||
-    b.bottom + gap <= a.top
-  );
-}
-
-function clampNodeLabel(label: string): string {
-  return label.slice(0, NODE_TEXT_MAX_LEN);
-}
-
-function nextCustomTagId(tags: FlowTag[]): string {
-  let index = tags.length + 1;
-  const ids = new Set(tags.map(tag => tag.id));
-  while (ids.has(`tag-custom-${index}`)) index++;
-  return `tag-custom-${index}`;
-}
-
-function sameValues<T>(values: T[]): T | '' {
-  if (values.length === 0) return '';
-  const first = values[0];
-  return values.every(value => value === first) ? first : '';
-}
-
-function hasMixedValues<T>(values: T[]): boolean {
-  return values.length > 1 && values.some(value => value !== values[0]);
-}
-
-function effectiveEdgeStyle(edge: FlowEdge, defaultStyle: EdgeStyle): Required<EdgeStyle> {
-  return {
-    width: edge.style?.width || defaultStyle.width || 2,
-    lineType: edge.style?.lineType || defaultStyle.lineType || 'solid',
-    color: edge.style?.color || defaultStyle.color || '#64748b'
-  };
-}
-
-function edgeStrokeDasharray(lineType: EdgeLineType, width: number): string | undefined {
-  if (lineType === 'dashed') return `${width * 4} ${width * 3}`;
-  if (lineType === 'dotted') return `1 ${width * 3}`;
-  return undefined;
 }
 
 function getNodeIdFromEventTarget(target: EventTarget | null | undefined): NodeId | null {
