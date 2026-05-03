@@ -46,7 +46,7 @@ describe('qflow persistence helpers', () => {
       toolbarVisible: false,
       taskTable: {
         sort: { key: 'due', direction: 'desc' },
-        filters: { tagId: 'tag-pending', assignee: 'Amy' },
+        filters: { tagId: 'tag-pending', assignee: 'Amy', due: 'overdue' },
         visibleColumnKeys: ['task', 'priority', 'due'],
         expanded: true
       }
@@ -64,7 +64,7 @@ describe('qflow persistence helpers', () => {
     expect(parsed.ui.toolbarVisible).toBe(false);
     expect(parsed.ui.taskTable).toEqual({
       sort: { key: 'due', direction: 'desc' },
-      filters: { tagId: 'tag-pending', assignee: 'Amy' },
+      filters: { tagId: 'tag-pending', assignee: 'Amy', due: 'overdue' },
       visibleColumnKeys: ['task', 'priority', 'due'],
       expanded: true
     });
@@ -78,7 +78,7 @@ describe('qflow persistence helpers', () => {
         ui: {
           taskTable: {
             sort: { key: 'assignee', direction: 'asc' },
-            filters: { tagId: '  tag-done  ', assignee: '  Amy  ', ignored: 1 },
+            filters: { tagId: '  tag-done  ', assignee: '  Amy  ', due: 'bad', ignored: 1 },
             visibleColumnKeys: ['notes', 'bad', 'task'],
             expanded: 'yes'
           }

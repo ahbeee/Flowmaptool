@@ -51,7 +51,7 @@ The project does not currently use Zustand or ELK.js. State management and layou
 - Horizontal and vertical automatic layout with configurable spacing, compact node sizing, multi-parent behavior, root merge behavior, and fixed-spacing local reflow.
 - Styling controls for themes, fonts, text style, text alignment, text color, background color, shape, tags, default node style, and edge style.
 - Outline panel with hierarchy mirroring, selection sync, collapsible nodes, checklist completion state, and tag-derived checklist targets.
-- Task Table derived from tagged outline nodes, including tag/assignee filters, editable task fields, readonly tag/category columns, sortable headers, persisted table preferences, column visibility controls, and expanded workspace mode.
+- Task Table derived from tagged outline nodes, including tag/assignee/due-date filters, editable task fields, readonly tag/category columns, sortable headers, persisted table preferences, column visibility controls, and expanded workspace mode.
 - Export and output workflows for PNG export, PDF export, print, Windows portable builds, and Windows installer builds.
 
 ## 5. Test Strategy

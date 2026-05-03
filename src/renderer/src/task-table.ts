@@ -32,9 +32,11 @@ export type TaskTableSort = {
   key: TaskTableSortKey;
   direction: TaskTableSortDirection;
 };
+export type TaskTableDueFilter = 'overdue' | 'today' | 'next7' | 'none';
 export type TaskTableFilters = {
   tagId?: string;
   assignee?: string;
+  due?: TaskTableDueFilter;
 };
 export type TaskTableRow = {
   node: FlowNode;
@@ -48,6 +50,12 @@ export const DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS: TaskTableColumnKey[] = TASK
   column => column.key
 );
 export const REQUIRED_TASK_TABLE_COLUMN_KEYS = ['task'] as const satisfies readonly TaskTableColumnKey[];
+export const TASK_TABLE_DUE_FILTERS: Array<{ key: TaskTableDueFilter; label: string }> = [
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'today', label: 'Due today' },
+  { key: 'next7', label: 'Next 7 days' },
+  { key: 'none', label: 'No due date' }
+];
 
 export function getTaskNodeLabel(node: FlowNode): string {
   return node.label.trim() || 'Untitled Node';
@@ -144,19 +152,53 @@ export function getNextTaskTableSort(current: TaskTableSort | undefined, key: Ta
 export function normalizeTaskTableFilters(filters: TaskTableFilters | undefined): TaskTableFilters {
   const tagId = filters?.tagId?.trim();
   const assignee = filters?.assignee?.trim();
+  const rawDue = filters?.due;
+  const due = TASK_TABLE_DUE_FILTERS.some(option => option.key === rawDue) ? rawDue : undefined;
   return {
     ...(tagId ? { tagId } : {}),
-    ...(assignee ? { assignee } : {})
+    ...(assignee ? { assignee } : {}),
+    ...(due ? { due } : {})
   };
 }
 
-export function doesTaskTableRowMatchFilters(row: TaskTableRow, filters: TaskTableFilters | undefined): boolean {
+function normalizeDateKey(value: string | undefined): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  return value;
+}
+
+export function getTaskTableTodayKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return getTaskTableTodayKey(new Date(year, month - 1, day + days));
+}
+
+function doesDueDateMatchFilter(dueDate: string | undefined, dueFilter: TaskTableDueFilter, todayKey: string): boolean {
+  const normalizedDueDate = normalizeDateKey(dueDate);
+  if (dueFilter === 'none') return !normalizedDueDate;
+  if (!normalizedDueDate) return false;
+  if (dueFilter === 'overdue') return normalizedDueDate < todayKey;
+  if (dueFilter === 'today') return normalizedDueDate === todayKey;
+  return normalizedDueDate >= todayKey && normalizedDueDate <= addDaysToDateKey(todayKey, 7);
+}
+
+export function doesTaskTableRowMatchFilters(
+  row: TaskTableRow,
+  filters: TaskTableFilters | undefined,
+  todayKey = getTaskTableTodayKey()
+): boolean {
   const normalized = normalizeTaskTableFilters(filters);
   if (normalized.tagId && row.tagId !== normalized.tagId) return false;
   if (normalized.assignee) {
     const rowAssignee = normalizeTaskSortString(row.node.task?.assignee);
     if (rowAssignee !== normalizeTaskSortString(normalized.assignee)) return false;
   }
+  if (normalized.due && !doesDueDateMatchFilter(row.node.task?.dueDate, normalized.due, todayKey)) return false;
   return true;
 }
 
@@ -164,7 +206,8 @@ export function buildTaskTableRows(
   outlineTree: OutlineTreeNode[],
   tagById: Map<string, FlowTag>,
   sort?: TaskTableSort,
-  filters?: TaskTableFilters
+  filters?: TaskTableFilters,
+  todayKey?: string
 ): TaskTableRow[] {
   const rows: TaskTableRow[] = [];
 
@@ -183,6 +226,6 @@ export function buildTaskTableRows(
   };
 
   outlineTree.forEach(item => visit(item, []));
-  const filteredRows = filters ? rows.filter(row => doesTaskTableRowMatchFilters(row, filters)) : rows;
+  const filteredRows = filters ? rows.filter(row => doesTaskTableRowMatchFilters(row, filters, todayKey)) : rows;
   return sort ? [...filteredRows].sort((left, right) => compareTaskTableRows(left, right, sort)) : filteredRows;
 }

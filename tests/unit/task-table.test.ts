@@ -27,7 +27,7 @@ function tree(): OutlineTreeNode[] {
             id: 'n2',
             label: 'Bravo',
             style: { tagId: 'tag-pending' },
-            task: { enabled: true, done: false, priority: 'high', progress: 20, assignee: 'Zoe' }
+            task: { enabled: true, done: false, priority: 'high', progress: 20, assignee: 'Zoe', dueDate: '2026-05-03' }
           },
           children: []
         },
@@ -36,7 +36,7 @@ function tree(): OutlineTreeNode[] {
             id: 'n3',
             label: ' Alpha ',
             style: { tagId: 'tag-done' },
-            task: { enabled: true, done: false, priority: 'low', progress: 90, assignee: 'Amy' }
+            task: { enabled: true, done: false, priority: 'low', progress: 90, assignee: 'Amy', dueDate: '2026-05-10' }
           },
           children: []
         },
@@ -85,6 +85,19 @@ describe('task table helpers', () => {
     expect(
       buildTaskTableRows(tree(), tagById, undefined, { tagId: 'tag-pending', assignee: 'Amy' }).map(row => row.node.id)
     ).toEqual([]);
+  });
+
+  it('filters task rows by due date state', () => {
+    expect(
+      buildTaskTableRows(tree(), tagById, undefined, { due: 'overdue' }, '2026-05-04').map(row => row.node.id)
+    ).toEqual(['n2']);
+    expect(
+      buildTaskTableRows(tree(), tagById, undefined, { due: 'next7' }, '2026-05-04').map(row => row.node.id)
+    ).toEqual(['n3']);
+    expect(
+      buildTaskTableRows(tree(), tagById, undefined, { due: 'today' }, '2026-05-03').map(row => row.node.id)
+    ).toEqual(['n2']);
+    expect(buildTaskTableRows(tree(), tagById, undefined, { due: 'none' }, '2026-05-04')).toEqual([]);
   });
 
   it('toggles sort direction only when selecting the same ascending column', () => {

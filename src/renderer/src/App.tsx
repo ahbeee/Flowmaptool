@@ -154,6 +154,7 @@ import {
   getTaskNodeLabel,
   getVisibleTaskTableColumns,
   isTaskTableColumnHideable,
+  TASK_TABLE_DUE_FILTERS,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
   TASK_TABLE_COLUMNS,
@@ -1265,7 +1266,7 @@ export function App() {
   );
 
   const setTaskTableFilter = React.useCallback(
-    (key: 'tagId' | 'assignee', value: string) => {
+    (key: 'tagId' | 'assignee' | 'due', value: string) => {
       updateActiveTab(tab => {
         const nextFilters = { ...tab.taskTable.filters, [key]: value || undefined };
         if (!nextFilters[key]) delete nextFilters[key];
@@ -2691,6 +2692,21 @@ export function App() {
             {taskTableFilterAssigneeOptions.map(assignee => (
               <option key={assignee} value={assignee}>
                 {assignee}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Due</span>
+          <select
+            data-testid="task-filter-due"
+            value={activeTab.taskTable.filters.due || ''}
+            onChange={event => setTaskTableFilter('due', event.currentTarget.value)}
+          >
+            <option value="">All due dates</option>
+            {TASK_TABLE_DUE_FILTERS.map(option => (
+              <option key={option.key} value={option.key}>
+                {option.label}
               </option>
             ))}
           </select>

@@ -6,6 +6,7 @@ import {
   DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
   getVisibleTaskTableColumns,
   TASK_TABLE_COLUMNS,
+  TASK_TABLE_DUE_FILTERS,
   type TaskTableColumnKey,
   type TaskTableFilters,
   type TaskTableSort
@@ -165,12 +166,14 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
   const tagId = typeof rawFilters.tagId === 'string' && rawFilters.tagId.trim() ? rawFilters.tagId.trim() : undefined;
   const assignee =
     typeof rawFilters.assignee === 'string' && rawFilters.assignee.trim() ? rawFilters.assignee.trim() : undefined;
+  const due = TASK_TABLE_DUE_FILTERS.find(option => option.key === rawFilters.due)?.key;
 
   return {
     sort: sanitizeTaskTableSort(value.sort, visibleColumnKeys),
     filters: {
       ...(tagId ? { tagId } : {}),
-      ...(assignee ? { assignee } : {})
+      ...(assignee ? { assignee } : {}),
+      ...(due ? { due } : {})
     },
     visibleColumnKeys,
     expanded: value.expanded === true
