@@ -33,6 +33,7 @@ export type TaskTableSort = {
   direction: TaskTableSortDirection;
 };
 export type TaskTableDueFilter = 'overdue' | 'today' | 'next7' | 'none';
+export type TaskTableDensity = 'comfortable' | 'compact';
 export type TaskTableFilters = {
   tagId?: string;
   assignee?: string;
@@ -55,6 +56,10 @@ export const TASK_TABLE_DUE_FILTERS: Array<{ key: TaskTableDueFilter; label: str
   { key: 'today', label: 'Due today' },
   { key: 'next7', label: 'Next 7 days' },
   { key: 'none', label: 'No due date' }
+];
+export const TASK_TABLE_DENSITY_OPTIONS: Array<{ key: TaskTableDensity; label: string }> = [
+  { key: 'comfortable', label: 'Comfortable' },
+  { key: 'compact', label: 'Compact' }
 ];
 
 export function getTaskNodeLabel(node: FlowNode): string {

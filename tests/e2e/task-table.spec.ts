@@ -167,10 +167,12 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   await first.window.getByTestId('task-columns-menu').getByLabel('Category').uncheck();
   await first.window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
   await first.window.getByTestId('task-filter-due').selectOption('none');
+  await first.window.getByTestId('task-density').selectOption('compact');
   await first.window.getByTestId('task-sort-due').click();
   await first.window.getByTestId('task-sort-due').click();
   await first.window.getByTestId('task-expand-toggle').click();
   await expect(first.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
+  await expect(first.window.locator('.task-table')).toHaveClass(/task-table-compact/);
 
   await triggerMenuAction(first.app, 'file:save');
   await expect(first.window.getByTestId('file-status')).toContainText('Saved');
@@ -181,7 +183,8 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
     sort: { key: 'due', direction: 'desc' },
     filters: { tagId: 'tag-pink', due: 'none' },
     visibleColumnKeys: ['task', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
-    expanded: true
+    expanded: true,
+    density: 'compact'
   });
 
   const second = await launchAppWithFixture(testInfo, 'task-table-prefs-reopen.qflow', saved);
@@ -192,6 +195,8 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   await expect(second.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
   await expect(second.window.getByTestId('task-filter-tag')).toHaveValue('tag-pink');
   await expect(second.window.getByTestId('task-filter-due')).toHaveValue('none');
+  await expect(second.window.getByTestId('task-density')).toHaveValue('compact');
+  await expect(reopenedPanel.locator('.task-table')).toHaveClass(/task-table-compact/);
   await expect(reopenedPanel.locator('th').filter({ hasText: 'Category' })).toHaveCount(0);
   await expect(second.window.getByTestId('task-sort-due').locator('xpath=ancestor::th')).toHaveAttribute(
     'aria-sort',

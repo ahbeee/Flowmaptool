@@ -6,8 +6,10 @@ import {
   DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
   getVisibleTaskTableColumns,
   TASK_TABLE_COLUMNS,
+  TASK_TABLE_DENSITY_OPTIONS,
   TASK_TABLE_DUE_FILTERS,
   type TaskTableColumnKey,
+  type TaskTableDensity,
   type TaskTableFilters,
   type TaskTableSort
 } from './task-table';
@@ -24,6 +26,7 @@ export type PersistedTaskTableUiState = {
   filters: TaskTableFilters;
   visibleColumnKeys: TaskTableColumnKey[];
   expanded: boolean;
+  density: TaskTableDensity;
 };
 
 export type PersistedUiState = {
@@ -72,7 +75,8 @@ export function defaultTaskTableUiState(): PersistedTaskTableUiState {
   return {
     filters: {},
     visibleColumnKeys: [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS],
-    expanded: false
+    expanded: false,
+    density: 'comfortable'
   };
 }
 
@@ -167,6 +171,7 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
   const assignee =
     typeof rawFilters.assignee === 'string' && rawFilters.assignee.trim() ? rawFilters.assignee.trim() : undefined;
   const due = TASK_TABLE_DUE_FILTERS.find(option => option.key === rawFilters.due)?.key;
+  const density = TASK_TABLE_DENSITY_OPTIONS.find(option => option.key === value.density)?.key || 'comfortable';
 
   return {
     sort: sanitizeTaskTableSort(value.sort, visibleColumnKeys),
@@ -176,7 +181,8 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
       ...(due ? { due } : {})
     },
     visibleColumnKeys,
-    expanded: value.expanded === true
+    expanded: value.expanded === true,
+    density
   };
 }
 

@@ -154,11 +154,13 @@ import {
   getTaskNodeLabel,
   getVisibleTaskTableColumns,
   isTaskTableColumnHideable,
+  TASK_TABLE_DENSITY_OPTIONS,
   TASK_TABLE_DUE_FILTERS,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
   TASK_TABLE_COLUMNS,
   type TaskTableColumnKey,
+  type TaskTableDensity,
   type TaskTableSortKey
 } from './task-table';
 import {
@@ -1259,6 +1261,19 @@ export function App() {
         taskTable: {
           ...tab.taskTable,
           expanded: typeof expanded === 'function' ? expanded(tab.taskTable.expanded) : expanded
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
+
+  const setTaskTableDensity = React.useCallback(
+    (density: TaskTableDensity) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        taskTable: {
+          ...tab.taskTable,
+          density
         }
       }));
     },
@@ -2718,7 +2733,7 @@ export function App() {
         ) : taskTableRows.length === 0 ? (
           <p className="outline-empty">No task table rows match the current filters.</p>
         ) : (
-          <table className="task-table">
+          <table className={`task-table task-table-${activeTab.taskTable.density}`}>
             <colgroup>
               {visibleTaskTableColumns.map(column => (
                 <col key={column.key} className={`task-col-${column.key}`} />
@@ -2996,6 +3011,20 @@ export function App() {
                         })}
                       </div>
                     </details>
+                    <select
+                      className="outline-panel-action task-density-select"
+                      data-testid="task-density"
+                      value={activeTab.taskTable.density}
+                      onChange={event => setTaskTableDensity(event.currentTarget.value as TaskTableDensity)}
+                      aria-label="Task table density"
+                      title="Task table density"
+                    >
+                      {TASK_TABLE_DENSITY_OPTIONS.map(option => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       className="outline-panel-action"

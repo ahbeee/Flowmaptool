@@ -48,7 +48,8 @@ describe('document state helpers', () => {
       taskTable: {
         filters: {},
         visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
-        expanded: false
+        expanded: false,
+        density: 'comfortable'
       },
       interactionHistory: { past: [], future: [] }
     });
@@ -113,7 +114,8 @@ describe('document state helpers', () => {
       taskTable: {
         filters: {},
         visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
-        expanded: false
+        expanded: false,
+        density: 'comfortable'
       },
       nodeOffsetsByDirection: { horizontal: {}, vertical: {} },
       edgeBendsByDirection: { horizontal: {}, vertical: {} },
