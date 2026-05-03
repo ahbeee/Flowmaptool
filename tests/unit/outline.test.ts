@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowDoc } from '../../src/shared/graph';
-import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree } from '../../src/renderer/src/outline';
+import {
+  buildOutlineChecklistTargetsByNodeId,
+  buildOutlineTree,
+  toggleCollapsedOutlineNodeIds
+} from '../../src/renderer/src/outline';
 
 function fixtureDoc(): FlowDoc {
   return {
@@ -63,5 +67,15 @@ describe('outline helpers', () => {
     expect(targets.get('n1')).toEqual(['n3', 'n2']);
     expect(targets.get('n3')).toEqual(['n3']);
     expect(targets.get('n4')).toEqual(['n4']);
+  });
+
+  it('toggles collapsed outline nodes without mutating the current set', () => {
+    const current = new Set(['n1', 'n2']);
+    const expanded = toggleCollapsedOutlineNodeIds(current, 'n1');
+    const collapsed = toggleCollapsedOutlineNodeIds(current, 'n3');
+
+    expect([...current]).toEqual(['n1', 'n2']);
+    expect([...expanded]).toEqual(['n2']);
+    expect([...collapsed]).toEqual(['n1', 'n2', 'n3']);
   });
 });

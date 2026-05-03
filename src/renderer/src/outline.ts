@@ -111,3 +111,13 @@ export function buildOutlineChecklistTargetsByNodeId(
   outlineTree.forEach(visit);
   return targetsByNodeId;
 }
+
+export function toggleCollapsedOutlineNodeIds(collapsedNodeIds: Set<NodeId>, nodeId: NodeId): Set<NodeId> {
+  const next = new Set(collapsedNodeIds);
+  if (next.has(nodeId)) {
+    next.delete(nodeId);
+  } else {
+    next.add(nodeId);
+  }
+  return next;
+}

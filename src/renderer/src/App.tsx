@@ -124,7 +124,12 @@ import {
   NODE_TEXT_BASELINE_Y,
   ROOT_NODE_STYLE
 } from './node-style';
-import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree, type OutlineTreeNode } from './outline';
+import {
+  buildOutlineChecklistTargetsByNodeId,
+  buildOutlineTree,
+  toggleCollapsedOutlineNodeIds,
+  type OutlineTreeNode
+} from './outline';
 import {
   emptyEdgeBendsByDirection,
   emptyEdgeRoutesByDirection,
@@ -1515,15 +1520,7 @@ export function App() {
   );
 
   const toggleOutlineNode = React.useCallback((nodeId: NodeId) => {
-    setCollapsedOutlineNodeIds(prev => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
+    setCollapsedOutlineNodeIds(prev => toggleCollapsedOutlineNodeIds(prev, nodeId));
   }, []);
 
   const createLinkedNodeFromSelection = React.useCallback(() => {
