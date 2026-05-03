@@ -117,7 +117,9 @@ import {
 } from './edge-routing';
 import {
   applyDraggedEdgeRouteToHost,
-  buildDraggedEdgeRoute as buildDraggedEdgeRouteFromState
+  buildDraggedEdgeRoute as buildDraggedEdgeRouteFromState,
+  planEdgeSegmentDragFinish,
+  planEdgeSegmentDragMove
 } from './edge-route-dragging';
 import { basename } from './export-utils';
 import {
@@ -172,7 +174,6 @@ import {
   type EdgeRouteMap
 } from './persistence';
 import {
-  distanceSquared,
   pointInsideBox,
   segmentIntersectsBox,
   segmentsIntersect,
@@ -1614,18 +1615,20 @@ export function App() {
       autoPanCanvas(nativeEvent);
       const pointer = getPointerPoint(nativeEvent.clientX, nativeEvent.clientY);
       if (!pointer) return;
-      if (!didDrag && distanceSquared(start, pointer) < 16) return;
-      didDrag = true;
-      suppressNextEdgeClickRef.current = true;
+      const movePlan = planEdgeSegmentDragMove(start, pointer, didDrag);
+      if (movePlan.type === 'ignore') return;
+      didDrag = movePlan.didDrag;
+      suppressNextEdgeClickRef.current = movePlan.suppressNextEdgeClick;
       const route = buildDraggedEdgeRoute(edgeId, pointer);
       if (!route) return;
       updateActiveTab(tab => applyDraggedEdgeRouteToHost(tab, edgeId, route));
     };
     const onPointerUp = () => {
-      if (didDrag) {
+      const finishPlan = planEdgeSegmentDragFinish(edgeId, didDrag);
+      if (finishPlan.shouldCommitSnapshot) {
         commitCurrentEdgeUiSnapshot(initialEdgeUiSnapshot);
       }
-      setSelectedEdgeId(edgeId);
+      setSelectedEdgeId(finishPlan.selectedEdgeId);
       setSelectedRouteControl(null);
       setSelectedNodeIds([]);
       stopEdgeSegmentDragListeners();

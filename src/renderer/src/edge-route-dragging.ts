@@ -7,7 +7,9 @@ import {
   type RouteSpacing
 } from './edge-routing';
 import type { EdgeBendMap, EdgeRoute, EdgeRouteMap } from './persistence';
-import type { NodeBox, Point } from './routing-geometry';
+import { distanceSquared, type NodeBox, type Point } from './routing-geometry';
+
+export const EDGE_SEGMENT_DRAG_THRESHOLD_SQUARED = 16;
 
 export type EdgeRouteDragHost = {
   layoutDirection: LayoutDirection;
@@ -33,6 +35,39 @@ export type BuildDraggedEdgeRouteOptions = {
     toSize: NodeSize
   ) => { from: Point; to: Point };
 };
+
+export type EdgeSegmentDragMovePlan =
+  | { type: 'ignore' }
+  | { type: 'drag'; didDrag: true; suppressNextEdgeClick: true };
+
+export type EdgeSegmentDragFinishPlan = {
+  shouldCommitSnapshot: boolean;
+  selectedEdgeId: string;
+};
+
+export function hasEdgeSegmentDragExceededThreshold(
+  start: Point,
+  pointer: Point,
+  thresholdSquared = EDGE_SEGMENT_DRAG_THRESHOLD_SQUARED
+): boolean {
+  return distanceSquared(start, pointer) >= thresholdSquared;
+}
+
+export function planEdgeSegmentDragMove(
+  start: Point,
+  pointer: Point,
+  didDrag: boolean
+): EdgeSegmentDragMovePlan {
+  if (!didDrag && !hasEdgeSegmentDragExceededThreshold(start, pointer)) return { type: 'ignore' };
+  return { type: 'drag', didDrag: true, suppressNextEdgeClick: true };
+}
+
+export function planEdgeSegmentDragFinish(edgeId: string, didDrag: boolean): EdgeSegmentDragFinishPlan {
+  return {
+    shouldCommitSnapshot: didDrag,
+    selectedEdgeId: edgeId
+  };
+}
 
 export function buildDraggedEdgeRoute({
   doc,

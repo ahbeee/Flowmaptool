@@ -4,6 +4,9 @@ import type { LayoutDirection, NodePosition, NodeSize } from '../../src/shared/l
 import {
   applyDraggedEdgeRouteToHost,
   buildDraggedEdgeRoute,
+  hasEdgeSegmentDragExceededThreshold,
+  planEdgeSegmentDragFinish,
+  planEdgeSegmentDragMove,
   type EdgeRouteDragHost
 } from '../../src/renderer/src/edge-route-dragging';
 import { getEdgeRenderEndpoints } from '../../src/renderer/src/edge-routing';
@@ -37,6 +40,35 @@ function getHorizontalEndpoints(
 }
 
 describe('edge route dragging helpers', () => {
+  it('plans segment drag movement only after the pointer passes the threshold', () => {
+    const start = { x: 10, y: 10 };
+
+    expect(hasEdgeSegmentDragExceededThreshold(start, { x: 12, y: 11 })).toBe(false);
+    expect(hasEdgeSegmentDragExceededThreshold(start, { x: 14, y: 10 })).toBe(true);
+    expect(planEdgeSegmentDragMove(start, { x: 12, y: 11 }, false)).toEqual({ type: 'ignore' });
+    expect(planEdgeSegmentDragMove(start, { x: 12, y: 11 }, true)).toEqual({
+      type: 'drag',
+      didDrag: true,
+      suppressNextEdgeClick: true
+    });
+    expect(planEdgeSegmentDragMove(start, { x: 14, y: 10 }, false)).toEqual({
+      type: 'drag',
+      didDrag: true,
+      suppressNextEdgeClick: true
+    });
+  });
+
+  it('plans segment drag finish with snapshot commit only after dragging', () => {
+    expect(planEdgeSegmentDragFinish('e1', false)).toEqual({
+      selectedEdgeId: 'e1',
+      shouldCommitSnapshot: false
+    });
+    expect(planEdgeSegmentDragFinish('e1', true)).toEqual({
+      selectedEdgeId: 'e1',
+      shouldCommitSnapshot: true
+    });
+  });
+
   it('builds a dragged route from rendered endpoints and pointer lane', () => {
     const doc = createDoc();
     const route = buildDraggedEdgeRoute({
