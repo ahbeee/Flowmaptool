@@ -191,11 +191,14 @@ import {
   edgeStrokeDasharray,
   effectiveEdgeStyle,
   getSelectedStyleEdges,
-  hasMixedValues,
   nextCustomTagId,
   pruneSelectionForDoc,
-  sameValues
 } from './ui-helpers';
+import {
+  getNodeVisualStyle as buildNodeVisualStyle,
+  summarizeSelectedEdgeStyles,
+  summarizeSelectedNodeStyles
+} from './selection-style';
 import {
   ADVANCED_ROUTE_EDGE_LIMIT,
   ADVANCED_ROUTE_NODE_LIMIT,
@@ -2027,80 +2030,53 @@ export function App() {
 
   const getNodeVisualStyle = React.useCallback(
     (nodeId: NodeId, style?: NodeStyle): React.CSSProperties => {
-      const isRoot = rootNodeIds.has(nodeId);
-      const shape = style?.shape || (isRoot ? 'rounded' : doc.settings.defaultShape);
-      const backgroundColor = style?.backgroundColor || (isRoot ? activeTheme.rootBg : activeTheme.nodeBg);
-      const textColor = style?.textColor || (isRoot ? activeTheme.rootText : activeTheme.nodeText);
-      const borderRadius =
-        shape === 'pill' ? 999 : shape === 'square' || shape === 'underline' || shape === 'plain' ? 0 : 8;
-      return {
-        fontFamily: style?.fontFamily || DEFAULT_FONT_FAMILY,
-        fontSize: style?.fontSize || DEFAULT_FONT_SIZE,
-        fontWeight: style?.bold ? 700 : 400,
-        fontStyle: style?.italic ? 'italic' : 'normal',
-        textDecoration: style?.underline ? 'underline' : 'none',
-        color: textColor,
-        background: shape === 'underline' || shape === 'plain' ? 'transparent' : backgroundColor,
-        borderRadius,
-        borderStyle: 'solid',
-        borderWidth: shape === 'underline' ? '0 0 2px 0' : shape === 'plain' ? 0 : 1,
-        textAlign: style?.textAlign || 'left',
-        justifyContent:
-          style?.textAlign === 'center' ? 'center' : style?.textAlign === 'right' ? 'flex-end' : 'flex-start'
-      };
+      return buildNodeVisualStyle({
+        nodeId,
+        style,
+        rootNodeIds,
+        theme: activeTheme,
+        defaults: {
+          fontFamily: DEFAULT_FONT_FAMILY,
+          fontSize: DEFAULT_FONT_SIZE,
+          defaultShape: doc.settings.defaultShape
+        }
+      });
     },
     [activeTheme, doc.settings.defaultShape, rootNodeIds]
   );
 
-  const selectedEffectiveFontFamilies = selectedNodes.map(node => node.style?.fontFamily || DEFAULT_FONT_FAMILY);
-  const selectedFontFamilyMixed = hasMixedValues(selectedEffectiveFontFamilies);
-  const selectedFontFamily = sameValues(selectedEffectiveFontFamilies);
-  const selectedEffectiveFontSizes = selectedNodes.map(node => node.style?.fontSize || DEFAULT_FONT_SIZE);
-  const selectedFontSizeMixed = hasMixedValues(selectedEffectiveFontSizes);
-  const selectedFontSize = sameValues(selectedEffectiveFontSizes);
-  const selectedEffectiveTextColors = selectedNodes.map(node =>
-    node.style?.textColor || (rootNodeIds.has(node.id) ? activeTheme.rootText : activeTheme.nodeText)
-  );
-  const selectedTextColorMixed = new Set(selectedEffectiveTextColors).size > 1;
-  const selectedTextColor =
-    selectedEffectiveTextColors.length > 0 && !selectedTextColorMixed ? selectedEffectiveTextColors[0] : '';
-  const selectedEffectiveBackgroundColors = selectedNodes.map(node =>
-    node.style?.backgroundColor || (rootNodeIds.has(node.id) ? activeTheme.rootBg : activeTheme.nodeBg)
-  );
-  const selectedBackgroundColorMixed = new Set(selectedEffectiveBackgroundColors).size > 1;
-  const selectedBackgroundColor =
-    selectedEffectiveBackgroundColors.length > 0 && !selectedBackgroundColorMixed
-      ? selectedEffectiveBackgroundColors[0]
-      : '';
-  const selectedEffectiveTextAligns = selectedNodes.map(node => node.style?.textAlign || 'left');
-  const selectedTextAlign = sameValues(selectedEffectiveTextAligns);
-  const selectedEffectiveShapes = selectedNodes.map(node =>
-    node.style?.shape || (rootNodeIds.has(node.id) ? 'rounded' : doc.settings.defaultShape)
-  );
-  const selectedShapeMixed = hasMixedValues(selectedEffectiveShapes);
-  const selectedShape = sameValues(selectedEffectiveShapes);
-  const selectedEffectiveEdgeStyles = selectedStyleEdges.map(edge =>
-    effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle)
-  );
-  const selectedEffectiveEdgeWidths = selectedEffectiveEdgeStyles.map(style => style.width);
-  const selectedEdgeWidthMixed = hasMixedValues(selectedEffectiveEdgeWidths);
-  const selectedEdgeWidth = sameValues(selectedEffectiveEdgeWidths);
-  const selectedEffectiveEdgeLineTypes = selectedEffectiveEdgeStyles.map(style => style.lineType);
-  const selectedEdgeLineTypeMixed = hasMixedValues(selectedEffectiveEdgeLineTypes);
-  const selectedEdgeLineType = sameValues(selectedEffectiveEdgeLineTypes);
-  const selectedEffectiveEdgeColors = selectedEffectiveEdgeStyles.map(style => style.color);
-  const selectedEdgeColorMixed = new Set(selectedEffectiveEdgeColors).size > 1;
-  const selectedEdgeColor =
-    selectedEffectiveEdgeColors.length > 0 && !selectedEdgeColorMixed ? selectedEffectiveEdgeColors[0] : '';
-  const isAnyBold = selectedNodes.some(node => node.style?.bold === true);
-  const isAllBold = selectedNodes.length > 0 && selectedNodes.every(node => node.style?.bold === true);
-  const isAnyItalic = selectedNodes.some(node => node.style?.italic === true);
-  const isAllItalic = selectedNodes.length > 0 && selectedNodes.every(node => node.style?.italic === true);
-  const isAnyUnderline = selectedNodes.some(node => node.style?.underline === true);
-  const isAllUnderline = selectedNodes.length > 0 && selectedNodes.every(node => node.style?.underline === true);
-  const hasMixedBold = isAnyBold && !isAllBold;
-  const hasMixedItalic = isAnyItalic && !isAllItalic;
-  const hasMixedUnderline = isAnyUnderline && !isAllUnderline;
+  const selectedNodeStyleSummary = summarizeSelectedNodeStyles(selectedNodes, rootNodeIds, activeTheme, {
+    fontFamily: DEFAULT_FONT_FAMILY,
+    fontSize: DEFAULT_FONT_SIZE,
+    defaultShape: doc.settings.defaultShape
+  });
+  const {
+    selectedFontFamilyMixed,
+    selectedFontFamily,
+    selectedFontSizeMixed,
+    selectedFontSize,
+    selectedTextColorMixed,
+    selectedTextColor,
+    selectedBackgroundColorMixed,
+    selectedBackgroundColor,
+    selectedTextAlign,
+    selectedShapeMixed,
+    selectedShape,
+    isAllBold,
+    isAllItalic,
+    isAllUnderline,
+    hasMixedBold,
+    hasMixedItalic,
+    hasMixedUnderline
+  } = selectedNodeStyleSummary;
+  const {
+    selectedEdgeWidthMixed,
+    selectedEdgeWidth,
+    selectedEdgeLineTypeMixed,
+    selectedEdgeLineType,
+    selectedEdgeColorMixed,
+    selectedEdgeColor
+  } = summarizeSelectedEdgeStyles(selectedStyleEdges, doc.settings.defaultEdgeStyle);
   const hasNodeSelection = selectedNodeIds.length > 0;
   const tagNameById = React.useMemo(
     () => new Map(doc.settings.tags.map(tag => [tag.id, tag.name])),
