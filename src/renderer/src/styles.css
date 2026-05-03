@@ -328,7 +328,7 @@ select {
 
 .task-table-filter-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 8px;
   padding: 0 2px 8px;
 }
@@ -352,6 +352,31 @@ select {
   color: #0f172a;
   padding: 3px 5px;
   font-size: 12px;
+}
+
+.task-table-filter-actions {
+  display: flex;
+  align-items: end;
+}
+
+.task-table-filter-actions button {
+  min-height: 24px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.task-table-filter-actions button:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+.task-table-filter-actions button:not(:disabled):hover {
+  background: #f8fafc;
 }
 
 .task-table-scroll {
@@ -428,6 +453,18 @@ select {
 .task-table .task-progress-input {
   width: 58px;
   min-width: 58px;
+}
+
+.task-due-cell-overdue input {
+  border-color: #f87171;
+  background: #fff1f2;
+  color: #991b1b;
+}
+
+.task-due-cell-today input {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
 }
 
 .task-table-compact {

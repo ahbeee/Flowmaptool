@@ -152,6 +152,8 @@ import {
   getNextVisibleTaskTableColumnKeys,
   getNextTaskTableSort,
   getTaskNodeLabel,
+  getTaskTableDueStatus,
+  getTaskTableTodayKey,
   getVisibleTaskTableColumns,
   isTaskTableColumnHideable,
   TASK_TABLE_DENSITY_OPTIONS,
@@ -337,6 +339,7 @@ export function App() {
   const doc = activeTab.history.present;
   const taskTableExpanded = activeTab.taskTable.expanded;
   const taskTableSort = activeTab.taskTable.sort;
+  const taskTableTodayKey = React.useMemo(() => getTaskTableTodayKey(), []);
   const visibleTaskTableColumnKeys = activeTab.taskTable.visibleColumnKeys;
   const isLiveCanvasInteraction = Boolean(dragState || marquee || edgeBendDrag || connectDrag);
   const layoutDirection = activeTab.layoutDirection;
@@ -374,8 +377,8 @@ export function App() {
   );
   const taskTableSourceRows = React.useMemo(() => buildTaskTableRows(outlineTree, tagById), [outlineTree, tagById]);
   const taskTableRows = React.useMemo(
-    () => buildTaskTableRows(outlineTree, tagById, taskTableSort, activeTab.taskTable.filters),
-    [outlineTree, tagById, taskTableSort, activeTab.taskTable.filters]
+    () => buildTaskTableRows(outlineTree, tagById, taskTableSort, activeTab.taskTable.filters, taskTableTodayKey),
+    [outlineTree, tagById, taskTableSort, activeTab.taskTable.filters, taskTableTodayKey]
   );
   const taskTableFilterTagOptions = React.useMemo(
     () => doc.settings.tags.filter(tag => taskTableSourceRows.some(row => row.tagId === tag.id)),
@@ -389,6 +392,7 @@ export function App() {
     }
     return [...names].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
   }, [taskTableSourceRows]);
+  const hasTaskTableQueryState = taskTableSort !== undefined || Object.keys(activeTab.taskTable.filters).length > 0;
   const visibleTaskTableColumns = React.useMemo(
     () => getVisibleTaskTableColumns(visibleTaskTableColumnKeys),
     [visibleTaskTableColumnKeys]
@@ -1296,6 +1300,17 @@ export function App() {
     },
     [updateActiveTab]
   );
+
+  const clearTaskTableQueryState = React.useCallback(() => {
+    updateActiveTab(tab => ({
+      ...tab,
+      taskTable: {
+        ...tab.taskTable,
+        sort: undefined,
+        filters: {}
+      }
+    }));
+  }, [updateActiveTab]);
 
   const applySelectedEdgeStyle = React.useCallback(
     (patch: EdgeStyle) => {
@@ -2726,6 +2741,17 @@ export function App() {
             ))}
           </select>
         </label>
+        <div className="task-table-filter-actions">
+          <button
+            type="button"
+            data-testid="task-clear-query"
+            onClick={clearTaskTableQueryState}
+            disabled={!hasTaskTableQueryState}
+            title="Clear task filters and sort"
+          >
+            Clear
+          </button>
+        </div>
       </div>
       <div className="task-table-scroll">
         {taskTableSourceRows.length === 0 ? (
@@ -2771,6 +2797,7 @@ export function App() {
               {taskTableRows.map(row => {
                 const task = row.node.task;
                 const label = getTaskNodeLabel(row.node);
+                const dueStatus = getTaskTableDueStatus(task?.dueDate, taskTableTodayKey);
 
                 return (
                   <tr key={row.node.id}>
@@ -2848,8 +2875,10 @@ export function App() {
                       </td>
                     ) : null}
                     {visibleTaskTableColumnKeySet.has('due') ? (
-                      <td>
+                      <td className={dueStatus === 'none' ? undefined : `task-due-cell task-due-cell-${dueStatus}`}>
                         <input
+                          aria-label={`Due date for ${label}`}
+                          title={dueStatus === 'overdue' ? 'Overdue' : dueStatus === 'today' ? 'Due today' : 'Due date'}
                           type="date"
                           value={task?.dueDate || ''}
                           onKeyDown={event => event.stopPropagation()}

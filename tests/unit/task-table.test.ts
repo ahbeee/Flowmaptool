@@ -7,6 +7,7 @@ import {
   getNextTaskTableSort,
   getNextVisibleTaskTableColumnKeys,
   getTaskNodeLabel,
+  getTaskTableDueStatus,
   getVisibleTaskTableColumns,
   isTaskTableColumnHideable
 } from '../../src/renderer/src/task-table';
@@ -98,6 +99,13 @@ describe('task table helpers', () => {
       buildTaskTableRows(tree(), tagById, undefined, { due: 'today' }, '2026-05-03').map(row => row.node.id)
     ).toEqual(['n2']);
     expect(buildTaskTableRows(tree(), tagById, undefined, { due: 'none' }, '2026-05-04')).toEqual([]);
+  });
+
+  it('classifies due dates for task table status styling', () => {
+    expect(getTaskTableDueStatus('2026-05-03', '2026-05-04')).toBe('overdue');
+    expect(getTaskTableDueStatus('2026-05-04', '2026-05-04')).toBe('today');
+    expect(getTaskTableDueStatus('2026-05-05', '2026-05-04')).toBe('none');
+    expect(getTaskTableDueStatus(undefined, '2026-05-04')).toBe('none');
   });
 
   it('toggles sort direction only when selecting the same ascending column', () => {

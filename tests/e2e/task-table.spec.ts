@@ -129,6 +129,8 @@ test('task table filters by tag and assignee', async () => {
   await pendingRow.locator('input').nth(3).fill(dateKeyFromToday(-1));
   await doneRow.locator('input').nth(1).fill('Amy');
   await doneRow.locator('input').nth(3).fill(dateKeyFromToday(3));
+  await expect(pendingRow.locator('td.task-due-cell-overdue')).toHaveCount(1);
+  await expect(pendingRow.locator('input').nth(3)).toHaveAttribute('title', 'Overdue');
 
   await window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
   await expect(panel.locator('tbody tr')).toHaveCount(1);
@@ -153,6 +155,18 @@ test('task table filters by tag and assignee', async () => {
   await window.getByTestId('task-filter-due').selectOption('next7');
   await expect(panel.locator('tbody tr')).toHaveCount(1);
   await expect(panel.locator('tbody tr').first()).toContainText('Done Amy Task');
+
+  await window.getByTestId('task-sort-task').click();
+  await expect(window.getByTestId('task-sort-task').locator('xpath=ancestor::th')).toHaveAttribute(
+    'aria-sort',
+    'ascending'
+  );
+  await window.getByTestId('task-clear-query').click();
+  await expect(window.getByTestId('task-filter-tag')).toHaveValue('');
+  await expect(window.getByTestId('task-filter-assignee')).toHaveValue('');
+  await expect(window.getByTestId('task-filter-due')).toHaveValue('');
+  await expect(window.getByTestId('task-sort-task').locator('xpath=ancestor::th')).toHaveAttribute('aria-sort', 'none');
+  await expect(panel.locator('tbody tr')).toHaveCount(2);
 
   await app.close();
 });

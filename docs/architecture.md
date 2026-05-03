@@ -44,7 +44,9 @@ Core graph behavior lives in `src/shared` and is covered by unit or integration 
 Renderer-only pure helpers live under `src/renderer/src`:
 
 - `outline.ts`: outline tree construction and checklist completion target derivation.
-- `task-table.ts`: Task Table row derivation from tagged outline nodes, labels, columns, visibility, and sorting.
+- `task-table.ts`: Task Table row derivation from tagged outline nodes, labels, columns, visibility, filtering, sorting, density options, and due-date status helpers.
+
+Task Table UI preferences are persisted in the `.qflow` wrapper `ui.taskTable` object, not in the core `FlowDoc`. This currently includes sort, filters, visible columns, expanded mode, and density. Keep future table-only preferences in that wrapper unless they become durable task metadata.
 
 New pure renderer logic should usually be extracted into small modules like these before adding more code to `App.tsx`.
 

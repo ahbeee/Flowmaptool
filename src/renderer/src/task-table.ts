@@ -33,6 +33,7 @@ export type TaskTableSort = {
   direction: TaskTableSortDirection;
 };
 export type TaskTableDueFilter = 'overdue' | 'today' | 'next7' | 'none';
+export type TaskTableDueStatus = 'overdue' | 'today' | 'none';
 export type TaskTableDensity = 'comfortable' | 'compact';
 export type TaskTableFilters = {
   tagId?: string;
@@ -183,12 +184,22 @@ function addDaysToDateKey(dateKey: string, days: number): string {
   return getTaskTableTodayKey(new Date(year, month - 1, day + days));
 }
 
+export function getTaskTableDueStatus(
+  dueDate: string | undefined,
+  todayKey = getTaskTableTodayKey()
+): TaskTableDueStatus {
+  const normalizedDueDate = normalizeDateKey(dueDate);
+  if (!normalizedDueDate) return 'none';
+  if (normalizedDueDate < todayKey) return 'overdue';
+  if (normalizedDueDate === todayKey) return 'today';
+  return 'none';
+}
+
 function doesDueDateMatchFilter(dueDate: string | undefined, dueFilter: TaskTableDueFilter, todayKey: string): boolean {
   const normalizedDueDate = normalizeDateKey(dueDate);
   if (dueFilter === 'none') return !normalizedDueDate;
   if (!normalizedDueDate) return false;
-  if (dueFilter === 'overdue') return normalizedDueDate < todayKey;
-  if (dueFilter === 'today') return normalizedDueDate === todayKey;
+  if (dueFilter === 'overdue' || dueFilter === 'today') return getTaskTableDueStatus(dueDate, todayKey) === dueFilter;
   return normalizedDueDate >= todayKey && normalizedDueDate <= addDaysToDateKey(todayKey, 7);
 }
 
