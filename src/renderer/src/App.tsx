@@ -54,6 +54,21 @@ import {
   type NodeOffsetMap
 } from '@shared/local-reflow';
 import { extractSelection, pasteDetached, type CopiedSelection } from '@shared/subflow';
+import {
+  applyEdgeUiSnapshot,
+  cloneEdgeBendMap,
+  cloneEdgeBendsByDirection,
+  cloneEdgeRouteMap,
+  cloneEdgeRoutesByDirection,
+  edgeUiSnapshotsEqual,
+  emptyInteractionHistory,
+  getEdgeUiSnapshot,
+  pushInteractionPast,
+  translateEdgeBendsForMovedNodes,
+  translateEdgeRoutesForMovedNodes,
+  type EdgeUiSnapshot,
+  type InteractionHistory
+} from './edge-ui-state';
 import { basename, bytesToBase64, escapeXml } from './export-utils';
 import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree, type OutlineTreeNode } from './outline';
 import {
@@ -223,17 +238,6 @@ type DraggedRouteEndpointOffsets = {
   source?: number;
   target?: number;
 };
-type EdgeUiSnapshot = {
-  edgeBendsByDirection: EdgeBendsByDirection;
-  edgeRoutesByDirection: EdgeRoutesByDirection;
-};
-type InteractionHistoryEntry =
-  | { kind: 'doc' }
-  | { kind: 'edge-ui'; snapshot: EdgeUiSnapshot };
-type InteractionHistory = {
-  past: InteractionHistoryEntry[];
-  future: InteractionHistoryEntry[];
-};
 type EdgeBendDragState = { edgeId: string; pointIndex: number };
 type EdgeRouteControlSelection = { edgeId: string; pointIndex: number };
 type SidePanelResizeState = { pointerId: number; startX: number; startWidth: number };
@@ -313,117 +317,6 @@ function isNodeSideAnchor(anchor: EdgeAnchors['from'] | undefined): anchor is 'f
 
 function oppositeNodeSideAnchor(anchor: 'front' | 'back'): 'front' | 'back' {
   return anchor === 'front' ? 'back' : 'front';
-}
-
-function emptyInteractionHistory(): InteractionHistory {
-  return { past: [], future: [] };
-}
-
-function cloneEdgeBendMap(map: EdgeBendMap): EdgeBendMap {
-  return Object.fromEntries(Object.entries(map).map(([id, bend]) => [id, { ...bend }]));
-}
-
-function cloneEdgeBendsByDirection(value: EdgeBendsByDirection): EdgeBendsByDirection {
-  return {
-    horizontal: cloneEdgeBendMap(value.horizontal),
-    vertical: cloneEdgeBendMap(value.vertical)
-  };
-}
-
-function cloneEdgeRouteMap(map: EdgeRouteMap): EdgeRouteMap {
-  return Object.fromEntries(
-    Object.entries(map).map(([id, route]) => [id, { points: route.points.map(point => ({ ...point })) }])
-  );
-}
-
-function cloneEdgeRoutesByDirection(value: EdgeRoutesByDirection): EdgeRoutesByDirection {
-  return {
-    horizontal: cloneEdgeRouteMap(value.horizontal),
-    vertical: cloneEdgeRouteMap(value.vertical)
-  };
-}
-
-function translateEdgeBendsForMovedNodes(
-  doc: FlowDoc,
-  bends: EdgeBendMap,
-  movedNodeIds: Set<NodeId>,
-  deltaX: number,
-  deltaY: number
-): EdgeBendMap {
-  if (deltaX === 0 && deltaY === 0) return bends;
-  let changed = false;
-  const next = { ...bends };
-  for (const edge of doc.edges) {
-    const bend = bends[edge.id];
-    if (!bend) continue;
-    const fromMoved = movedNodeIds.has(edge.from);
-    const toMoved = movedNodeIds.has(edge.to);
-    if (!fromMoved && !toMoved) continue;
-    if (fromMoved !== toMoved) {
-      delete next[edge.id];
-      changed = true;
-      continue;
-    }
-    next[edge.id] = { x: bend.x + deltaX, y: bend.y + deltaY };
-    changed = true;
-  }
-  return changed ? next : bends;
-}
-
-function translateEdgeRoutesForMovedNodes(
-  doc: FlowDoc,
-  routes: EdgeRouteMap,
-  movedNodeIds: Set<NodeId>,
-  deltaX: number,
-  deltaY: number
-): EdgeRouteMap {
-  if (deltaX === 0 && deltaY === 0) return routes;
-  let changed = false;
-  const next = { ...routes };
-  for (const edge of doc.edges) {
-    const route = routes[edge.id];
-    if (!route) continue;
-    const fromMoved = movedNodeIds.has(edge.from);
-    const toMoved = movedNodeIds.has(edge.to);
-    if (!fromMoved && !toMoved) continue;
-    if (fromMoved !== toMoved) {
-      delete next[edge.id];
-      changed = true;
-      continue;
-    }
-    next[edge.id] = {
-      points: route.points.map(point => ({ x: point.x + deltaX, y: point.y + deltaY }))
-    };
-    changed = true;
-  }
-  return changed ? next : routes;
-}
-
-function getEdgeUiSnapshot(tab: TabDocument): EdgeUiSnapshot {
-  return {
-    edgeBendsByDirection: cloneEdgeBendsByDirection(tab.edgeBendsByDirection),
-    edgeRoutesByDirection: cloneEdgeRoutesByDirection(tab.edgeRoutesByDirection)
-  };
-}
-
-function applyEdgeUiSnapshot(tab: TabDocument, snapshot: EdgeUiSnapshot): TabDocument {
-  return {
-    ...tab,
-    edgeBendsByDirection: cloneEdgeBendsByDirection(snapshot.edgeBendsByDirection),
-    edgeRoutesByDirection: cloneEdgeRoutesByDirection(snapshot.edgeRoutesByDirection)
-  };
-}
-
-function edgeUiSnapshotsEqual(a: EdgeUiSnapshot, b: EdgeUiSnapshot): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function pushInteractionPast(
-  past: InteractionHistoryEntry[],
-  entry: InteractionHistoryEntry,
-  maxPast = 100
-): InteractionHistoryEntry[] {
-  return past.length >= maxPast ? [...past.slice(1), entry] : [...past, entry];
 }
 
 function createSeedDoc(): FlowDoc {
