@@ -7,6 +7,7 @@ import {
   getSelectedStyleEdges,
   hasMixedValues,
   nextCustomTagId,
+  pruneSelectionForDoc,
   sameValues
 } from '../../src/renderer/src/ui-helpers';
 
@@ -59,5 +60,24 @@ describe('UI helpers', () => {
     expect(getSelectedStyleEdges(edges, '', ['n2']).map(edge => edge.id)).toEqual(['e1', 'e2']);
     expect(getSelectedStyleEdges(edges, 'e3', ['n2']).map(edge => edge.id)).toEqual(['e3']);
     expect(getSelectedStyleEdges(edges, 'missing', ['n2'])).toEqual([]);
+  });
+
+  it('prunes selection to nodes and edges still present in the document', () => {
+    expect(
+      pruneSelectionForDoc(
+        [{ id: 'n1' }, { id: 'n3' }],
+        [{ id: 'e2' }],
+        ['n1', 'n2', 'n3'],
+        'e1'
+      )
+    ).toEqual({
+      selectedNodeIds: ['n1', 'n3'],
+      selectedEdgeId: ''
+    });
+
+    expect(pruneSelectionForDoc([{ id: 'n1' }], [{ id: 'e2' }], ['n1'], 'e2')).toEqual({
+      selectedNodeIds: ['n1'],
+      selectedEdgeId: 'e2'
+    });
   });
 });

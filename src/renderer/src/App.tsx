@@ -168,6 +168,7 @@ import {
   getSelectedStyleEdges,
   hasMixedValues,
   nextCustomTagId,
+  pruneSelectionForDoc,
   sameValues
 } from './ui-helpers';
 import {
@@ -1371,14 +1372,13 @@ export function App() {
   }, [activeTheme.canvas, activeTheme.edge, activeTheme.nodeBg, activeTheme.nodeText, activeTheme.rootBg, activeTheme.rootText, buildSvgSnapshot, canvasSize.height, canvasSize.width, doc.settings.defaultShape, layoutDirection]);
 
   React.useEffect(() => {
-    const nodeIds = doc.nodes.map(node => node.id);
-    const valid = new Set(nodeIds);
     setSelectedNodeIds(prev => {
-      const filtered = prev.filter(id => valid.has(id));
-      return filtered;
+      return pruneSelectionForDoc(doc.nodes, doc.edges, prev, selectedEdgeId).selectedNodeIds;
     });
-    if (selectedEdgeId && !doc.edges.some(edge => edge.id === selectedEdgeId)) {
-      setSelectedEdgeId('');
+    const nextSelectedEdgeId = pruneSelectionForDoc(doc.nodes, doc.edges, selectedNodeIdsRef.current, selectedEdgeId)
+      .selectedEdgeId;
+    if (nextSelectedEdgeId !== selectedEdgeId) {
+      setSelectedEdgeId(nextSelectedEdgeId);
     }
   }, [doc.edges, doc.nodes, selectedEdgeId]);
 

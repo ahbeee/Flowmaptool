@@ -52,6 +52,20 @@ export function getSelectedStyleEdges(
   return edges.filter(edge => selected.has(edge.from) || selected.has(edge.to));
 }
 
+export function pruneSelectionForDoc(
+  nodes: Array<{ id: NodeId }>,
+  edges: Array<{ id: string }>,
+  selectedNodeIds: NodeId[],
+  selectedEdgeId: string
+): { selectedNodeIds: NodeId[]; selectedEdgeId: string } {
+  const validNodeIds = new Set(nodes.map(node => node.id));
+  const validEdgeIds = new Set(edges.map(edge => edge.id));
+  return {
+    selectedNodeIds: selectedNodeIds.filter(id => validNodeIds.has(id)),
+    selectedEdgeId: selectedEdgeId && !validEdgeIds.has(selectedEdgeId) ? '' : selectedEdgeId
+  };
+}
+
 export function edgeStrokeDasharray(lineType: EdgeLineType, width: number): string | undefined {
   if (lineType === 'dashed') return `${width * 4} ${width * 3}`;
   if (lineType === 'dotted') return `1 ${width * 3}`;
