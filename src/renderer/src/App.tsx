@@ -55,6 +55,12 @@ import {
 } from '@shared/local-reflow';
 import { extractSelection, pasteDetached, type CopiedSelection } from '@shared/subflow';
 import {
+  buildNodeBoxMap,
+  buildRouteScopeNodeIdsByNodeId,
+  getCanvasSize,
+  getScopedRouteNodeBoxes
+} from './canvas-geometry';
+import {
   FRONT_HANDLE_CONNECT_ANCHORS,
   HANDLE_CONNECT_ANCHORS,
   isNodeSideAnchor,
@@ -94,7 +100,6 @@ import {
 import {
   computeAutoEdgeRoute,
   edgeIntersectsNodeCorridor,
-  filterNodeBoxesByIds,
   getDirectionalAnchorPoint,
   getEdgeRenderEndpoints,
   getEndpointSpacingOffset,
@@ -814,46 +819,18 @@ export function App() {
     [canvasZoom, nodeSizeMap, renderedPositionMap]
   );
 
-  const nodeBoxMap = React.useMemo(() => {
-    const map = new Map<NodeId, NodeBox>();
-    for (const node of doc.nodes) {
-      const pos = renderedPositionMap.get(node.id);
-      const size = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
-      if (!pos) continue;
-      map.set(node.id, {
-        left: pos.x,
-        right: pos.x + size.width,
-        top: pos.y,
-        bottom: pos.y + size.height
-      });
-    }
-    return map;
-  }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
+  const nodeBoxMap = React.useMemo(
+    () => buildNodeBoxMap(doc.nodes, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE),
+    [doc.nodes, nodeSizeMap, renderedPositionMap]
+  );
 
-  const routeScopeNodeIdsByNodeId = React.useMemo(() => {
-    const map = new Map<NodeId, NodeId[]>();
-    for (const node of doc.nodes) {
-      if (map.has(node.id)) continue;
-      const componentNodeIds = collectEdgeComponent(doc, node.id, layoutEdgeAnalysis.layoutEdgeIds);
-      for (const componentNodeId of componentNodeIds) {
-        map.set(componentNodeId, componentNodeIds);
-      }
-    }
-    return map;
-  }, [doc, layoutEdgeAnalysis.layoutEdgeIds]);
+  const routeScopeNodeIdsByNodeId = React.useMemo(
+    () => buildRouteScopeNodeIdsByNodeId(doc, layoutEdgeAnalysis.layoutEdgeIds),
+    [doc, layoutEdgeAnalysis.layoutEdgeIds]
+  );
 
   const getRouteNodeBoxes = React.useCallback(
-    (edge: FlowEdge) => {
-      const componentNodeIds = new Set<NodeId>();
-      for (const nodeId of routeScopeNodeIdsByNodeId.get(edge.from) || [edge.from]) {
-        componentNodeIds.add(nodeId);
-      }
-      for (const nodeId of routeScopeNodeIdsByNodeId.get(edge.to) || [edge.to]) {
-        componentNodeIds.add(nodeId);
-      }
-      const scopedNodeBoxes = filterNodeBoxesByIds(nodeBoxMap, [...componentNodeIds]);
-      return scopedNodeBoxes.size > 0 ? scopedNodeBoxes : nodeBoxMap;
-    },
+    (edge: FlowEdge) => getScopedRouteNodeBoxes(edge, nodeBoxMap, routeScopeNodeIdsByNodeId),
     [nodeBoxMap, routeScopeNodeIdsByNodeId]
   );
 
@@ -1161,20 +1138,10 @@ export function App() {
         };
   }, [dragState, layout.positions, layoutDirection, nodeOffsets, nodeSizeMap, renderedPositionMap]);
 
-  const canvasSize = React.useMemo(() => {
-    const boxes = doc.nodes.map(node => {
-      const pos = renderedPositionMap.get(node.id);
-      const size = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
-      if (!pos) return null;
-      return { x: pos.x, y: pos.y, width: size.width, height: size.height };
-    });
-    const maxX = boxes.reduce((acc, box) => Math.max(acc, box ? box.x + box.width : 0), 0);
-    const maxY = boxes.reduce((acc, box) => Math.max(acc, box ? box.y + box.height : 0), 0);
-    return {
-      width: Math.max(980, maxX + 120),
-      height: Math.max(520, maxY + 120)
-    };
-  }, [doc.nodes, nodeSizeMap, renderedPositionMap]);
+  const canvasSize = React.useMemo(
+    () => getCanvasSize(doc.nodes, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE),
+    [doc.nodes, nodeSizeMap, renderedPositionMap]
+  );
 
   const fitCanvasToView = React.useCallback(() => {
     const canvas = canvasRef.current;
