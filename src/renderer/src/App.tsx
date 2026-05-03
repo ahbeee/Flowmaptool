@@ -14,7 +14,6 @@ import {
   updateNodeTask,
   updateSettings,
   upsertTag,
-  validateEdge,
   type FlowEdge,
   type FlowTag,
   type FlowDoc,
@@ -64,10 +63,9 @@ import {
 import {
   FRONT_HANDLE_CONNECT_ANCHORS,
   HANDLE_CONNECT_ANCHORS,
-  isNodeSideAnchor,
-  resolveDraggedEdgeAnchors,
-  reverseEdgeAnchors
+  resolveDraggedEdgeAnchors
 } from './connect-anchors';
+import { planEdgeConnection } from './edge-connection';
 import {
   applyEdgeUiSnapshot,
   cloneEdgeBendMap,
@@ -116,7 +114,6 @@ import {
 import { basename, bytesToBase64 } from './export-utils';
 import {
   analyzeLayoutEdges,
-  collectConnectedComponent,
   collectEdgeComponent,
   getPrimaryParentId,
   type LayoutEdgeAnalysis
@@ -944,56 +941,21 @@ export function App() {
 
   const tryCreateEdge = React.useCallback(
     (from: NodeId, to: NodeId, anchors?: EdgeAnchors) => {
-      if (
-        (anchors?.from === 'front' && anchors.to === 'front') ||
-        (anchors?.from === 'back' && anchors.to === 'back')
-      ) {
-        setFileMessage('Connect blocked: use opposite node handles');
+      const plan = planEdgeConnection(doc, from, to, primaryRootNodeId, rootNodeIds, anchors);
+      if (!plan.ok) {
+        setFileMessage(plan.message);
         return false;
       }
-      let nextFrom = from;
-      let nextTo = to;
-      let nextAnchors = anchors;
-      const sameComponentBeforeConnect = new Set(collectConnectedComponent(doc, from)).has(to);
-      const isExplicitOppositeHandleConnection = Boolean(
-        isNodeSideAnchor(anchors?.from) &&
-          isNodeSideAnchor(anchors.to) &&
-          anchors.from !== anchors.to
-      );
-      if (from === primaryRootNodeId && to !== from && isExplicitOppositeHandleConnection) {
-        nextFrom = to;
-        nextTo = from;
-        nextAnchors = reverseEdgeAnchors(anchors);
-      } else if (to === primaryRootNodeId && from !== to && !sameComponentBeforeConnect) {
-        nextFrom = to;
-        nextTo = from;
-        nextAnchors = reverseEdgeAnchors(anchors);
-      }
-      const fromComponent = new Set(collectConnectedComponent(doc, nextFrom));
-      const mergesTwoComponents = !fromComponent.has(nextTo);
-      const mergedComponentNodeIds = mergesTwoComponents
-        ? new Set([...fromComponent, ...collectConnectedComponent(doc, nextTo)])
-        : null;
-      const edgeRole = mergesTwoComponents ? 'layout' : 'manual';
-      const validation = validateEdge(doc, nextFrom, nextTo, edgeRole, nextAnchors);
-      if (!validation.ok) {
-        if (validation.reason === 'self-edge') setFileMessage('Connect blocked: source and target are the same node');
-        if (validation.reason === 'duplicate-edge') setFileMessage('Connect blocked: edge already exists');
-        if (validation.reason === 'same-side-anchors') setFileMessage('Connect blocked: use opposite node handles');
-        return false;
-      }
-      const shouldNormalizeAttachedRoot =
-        rootNodeIds.has(nextTo) && nextTo !== primaryRootNodeId;
       commitDoc(prev => {
-        const withEdge = addEdge(prev, nextFrom, nextTo, edgeRole, nextAnchors);
-        return shouldNormalizeAttachedRoot
-          ? updateNodeStyle(withEdge, [nextTo], createChildNodeStyle(withEdge.settings.defaultShape))
+        const withEdge = addEdge(prev, plan.from, plan.to, plan.role, plan.anchors);
+        return plan.shouldNormalizeAttachedRoot
+          ? updateNodeStyle(withEdge, [plan.to], createChildNodeStyle(withEdge.settings.defaultShape))
           : withEdge;
       });
-      if (mergedComponentNodeIds) {
+      if (plan.mergedComponentNodeIds) {
         setCurrentNodeOffsets(prev => {
           const next = { ...prev };
-          for (const nodeId of mergedComponentNodeIds) {
+          for (const nodeId of plan.mergedComponentNodeIds || []) {
             delete next[nodeId];
           }
           return next;
