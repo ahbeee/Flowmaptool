@@ -56,6 +56,61 @@ export function createTabDocument(id: string, title: string, doc?: FlowDoc): Tab
   };
 }
 
+export function buildNewTabUpdate(tabs: TabDocument[], tabCounter: number): {
+  tabs: TabDocument[];
+  activeTabId: string;
+  tabCounter: number;
+  resetNodeId: string;
+} {
+  const id = `tab-${tabCounter}`;
+  return {
+    tabs: [...tabs, createTabDocument(id, `Untitled ${tabCounter}`)],
+    activeTabId: id,
+    tabCounter: tabCounter + 1,
+    resetNodeId: 'n1'
+  };
+}
+
+export function buildCloseTabUpdate(
+  tabs: TabDocument[],
+  activeTabId: string,
+  tabId: string
+): { tabs: TabDocument[]; activeTabId: string } | null {
+  if (tabs.length === 1) return null;
+  const index = tabs.findIndex(tab => tab.id === tabId);
+  if (index < 0) return null;
+  const next = tabs.filter(tab => tab.id !== tabId);
+  if (tabId !== activeTabId) return { tabs: next, activeTabId };
+  const fallback = next[Math.max(0, index - 1)] || next[0];
+  return { tabs: next, activeTabId: fallback.id };
+}
+
+export function getTabResetNodeId(tab: TabDocument | undefined): string | undefined {
+  return tab?.history.present.nodes[0]?.id;
+}
+
+export function replaceTabWithNewDocument(tab: TabDocument, tabCounter: number): {
+  tab: TabDocument;
+  resetNodeId: string | undefined;
+} {
+  const nextDoc = createSeedDoc();
+  return {
+    tab: {
+      ...tab,
+      history: createHistory(nextDoc),
+      currentFilePath: null,
+      isDirty: false,
+      title: tab.title.startsWith('Untitled') ? tab.title : `Untitled ${tabCounter}`,
+      nodeOffsetsByDirection: emptyOffsetsByDirection(),
+      edgeBendsByDirection: emptyEdgeBendsByDirection(),
+      edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
+      toolbarVisible: true,
+      interactionHistory: emptyInteractionHistory()
+    },
+    resetNodeId: nextDoc.nodes[0]?.id
+  };
+}
+
 function pruneNodeOffsetMap(offsets: NodeOffsetMap, validNodeIds: Set<string>): NodeOffsetMap {
   let changed = false;
   const next: NodeOffsetMap = {};

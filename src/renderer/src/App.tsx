@@ -25,10 +25,7 @@ import {
   type TaskPriority,
   type TextAlign
 } from '@shared/graph';
-import {
-  commitHistory,
-  createHistory,
-} from '@shared/history';
+import { commitHistory } from '@shared/history';
 import {
   getLayoutSecondaryGap,
   layoutFlow,
@@ -76,7 +73,6 @@ import {
   commitDocHistoryToHost,
   commitCurrentEdgeUiSnapshotToHost,
   commitEdgeUiChangeToHost,
-  emptyInteractionHistory,
   getEdgeUiSnapshot,
   redoInteractionInHost,
   undoInteractionInHost,
@@ -88,10 +84,13 @@ import {
   printSvgDiagram
 } from './diagram-export';
 import {
-  createSeedDoc,
+  buildCloseTabUpdate,
+  buildNewTabUpdate,
   createTabDocument,
   ensureDocHasNode,
+  getTabResetNodeId,
   pruneTabTransientUiState,
+  replaceTabWithNewDocument,
   ROOT_LABEL,
   type TabDocument
 } from './document-state';
@@ -163,9 +162,6 @@ import {
   type OutlineTreeNode
 } from './outline';
 import {
-  emptyEdgeBendsByDirection,
-  emptyEdgeRoutesByDirection,
-  emptyOffsetsByDirection,
   parsePersistedQflow,
   serializePersistedQflow,
   type EdgeBend,
@@ -576,53 +572,38 @@ export function App() {
   );
 
   const newTab = React.useCallback(() => {
-    const id = `tab-${tabCounter}`;
-    const title = `Untitled ${tabCounter}`;
-    setTabs(prev => [...prev, createTabDocument(id, title)]);
-    setActiveTabId(id);
-    setTabCounter(prev => prev + 1);
+    const update = buildNewTabUpdate(tabs, tabCounter);
+    setTabs(update.tabs);
+    setActiveTabId(update.activeTabId);
+    setTabCounter(update.tabCounter);
     setFileMessage('New tab');
-    resetTransientUiState('n1');
-  }, [resetTransientUiState, tabCounter]);
+    resetTransientUiState(update.resetNodeId);
+  }, [resetTransientUiState, tabCounter, tabs]);
 
   const closeTab = React.useCallback((tabId: string) => {
-    setTabs(prev => {
-      if (prev.length === 1) return prev;
-      const index = prev.findIndex(tab => tab.id === tabId);
-      const next = prev.filter(tab => tab.id !== tabId);
-      if (tabId === activeTabId) {
-        const fallback = next[Math.max(0, index - 1)] || next[0];
-        setActiveTabId(fallback.id);
-      }
-      return next;
-    });
+    const update = buildCloseTabUpdate(tabs, activeTabId, tabId);
+    if (!update) return;
+    setTabs(update.tabs);
+    setActiveTabId(update.activeTabId);
     setFileMessage('Tab closed');
     resetTransientUiState();
-  }, [activeTabId, resetTransientUiState]);
+  }, [activeTabId, resetTransientUiState, tabs]);
 
   const switchTab = React.useCallback((tabId: string) => {
     setActiveTabId(tabId);
     const tab = tabs.find(item => item.id === tabId);
-    const firstNodeId = tab?.history.present.nodes[0]?.id;
-    resetTransientUiState(firstNodeId);
+    resetTransientUiState(getTabResetNodeId(tab));
   }, [resetTransientUiState, tabs]);
 
   const createNewDocument = React.useCallback(() => {
-    const nextDoc = createSeedDoc();
-    updateActiveTab(tab => ({
-      ...tab,
-      history: createHistory(nextDoc),
-      currentFilePath: null,
-      isDirty: false,
-      title: tab.title.startsWith('Untitled') ? tab.title : `Untitled ${tabCounter}`,
-      nodeOffsetsByDirection: emptyOffsetsByDirection(),
-      edgeBendsByDirection: emptyEdgeBendsByDirection(),
-      edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
-      toolbarVisible: true,
-      interactionHistory: emptyInteractionHistory()
-    }));
+    let resetNodeId: string | undefined;
+    updateActiveTab(tab => {
+      const update = replaceTabWithNewDocument(tab, tabCounter);
+      resetNodeId = update.resetNodeId;
+      return update.tab;
+    });
     setFileMessage('New document');
-    resetTransientUiState(nextDoc.nodes[0]?.id);
+    resetTransientUiState(resetNodeId);
   }, [resetTransientUiState, tabCounter, updateActiveTab]);
 
   const openDocument = React.useCallback(async () => {
