@@ -1,21 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { addChildNode, launchApp, renameSelectedNode } from './helpers';
+import { addChild, applyTag, launchApp, renameNode } from './helpers';
 
 test('task table derives tagged nodes only and keeps tag read-only', async () => {
   const { app, window } = await launchApp();
 
-  const root = window.getByTestId('node-n1');
-  await root.click();
-  await renameSelectedNode(window, 'Root Task');
+  await renameNode(window, 'n1', 'Root Task');
 
-  await root.click();
-  await addChildNode(window);
+  await addChild(window, 'n1');
 
-  const child = window.getByTestId('node-n2');
-  await child.click();
-  await renameSelectedNode(window, 'Child Task');
-  await child.click();
-  await window.getByLabel('Apply tag Pending').click();
+  await renameNode(window, 'n2', 'Child Task');
+  await applyTag(window, 'n2', 'Pending');
 
   await window.getByTestId('task-toggle').click();
   const panel = window.getByTestId('task-panel');
@@ -40,25 +34,15 @@ test('task table derives tagged nodes only and keeps tag read-only', async () =>
 test('task table headers sort imported checklist rows', async () => {
   const { app, window } = await launchApp();
 
-  const root = window.getByTestId('node-n1');
-  await root.click();
-  await renameSelectedNode(window, 'Root Task');
+  await renameNode(window, 'n1', 'Root Task');
 
-  await root.click();
-  await addChildNode(window);
-  const secondTask = window.getByTestId('node-n2');
-  await secondTask.click();
-  await renameSelectedNode(window, 'Bravo Task');
-  await secondTask.click();
-  await window.getByLabel('Apply tag Pending').click();
+  await addChild(window, 'n1');
+  await renameNode(window, 'n2', 'Bravo Task');
+  await applyTag(window, 'n2', 'Pending');
 
-  await root.click();
-  await addChildNode(window);
-  const firstTask = window.getByTestId('node-n3');
-  await firstTask.click();
-  await renameSelectedNode(window, 'Alpha Task');
-  await firstTask.click();
-  await window.getByLabel('Apply tag Pending').click();
+  await addChild(window, 'n1');
+  await renameNode(window, 'n3', 'Alpha Task');
+  await applyTag(window, 'n3', 'Pending');
 
   await window.getByTestId('task-toggle').click();
   const panel = window.getByTestId('task-panel');
@@ -81,18 +65,12 @@ test('task table headers sort imported checklist rows', async () => {
 test('task table can expand to the main workspace without horizontal table scrolling', async () => {
   const { app, window } = await launchApp();
 
-  const root = window.getByTestId('node-n1');
-  await root.click();
-  await renameSelectedNode(window, 'Root Task');
+  await renameNode(window, 'n1', 'Root Task');
 
-  await root.click();
-  await addChildNode(window);
+  await addChild(window, 'n1');
 
-  const child = window.getByTestId('node-n2');
-  await child.click();
-  await renameSelectedNode(window, 'Very long child task title that wraps in expanded table');
-  await child.click();
-  await window.getByLabel('Apply tag Pending').click();
+  await renameNode(window, 'n2', 'Very long child task title that wraps in expanded table');
+  await applyTag(window, 'n2', 'Pending');
 
   await window.getByTestId('task-toggle').click();
   await window.getByTestId('task-expand-toggle').click();

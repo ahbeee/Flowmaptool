@@ -1,10 +1,8 @@
-import { _electron as electron, expect, test } from '@playwright/test';
-import { join } from 'node:path';
+import { expect, test } from '@playwright/test';
+import { addChild, launchApp } from './helpers';
 
 test('new documents and nodes use configured defaults', async () => {
-  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
 
   const root = window.getByTestId('node-n1');
   await expect(root).toBeVisible();
@@ -12,9 +10,7 @@ test('new documents and nodes use configured defaults', async () => {
   await expect(root).toHaveCSS('border-radius', '8px');
 
   await window.getByLabel('Default Shape').selectOption('rounded');
-  await root.click();
-  await window.keyboard.press('Tab');
-  await window.keyboard.press('Escape');
+  await addChild(window, 'n1');
 
   const child = window.getByTestId('node-n2');
   await expect(child).toBeVisible();

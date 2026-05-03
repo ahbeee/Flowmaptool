@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { launchApp, triggerMenuAction, writeFixture } from './helpers';
+import { createDefaultDocFixture, launchApp, launchAppWithFixture, triggerMenuAction } from './helpers';
 
 async function launchWithOpenPath(filePath: string) {
   const { app, window } = await launchApp({ FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: filePath });
@@ -9,56 +9,29 @@ async function launchWithOpenPath(filePath: string) {
 }
 
 function createChecklistFixture() {
-  return {
-    schemaVersion: 1,
-    doc: {
-      schemaVersion: 1,
-      nodes: [
-        { id: 'n1', label: 'Root Topic' },
-        { id: 'n2', label: 'First task' },
-        { id: 'n3', label: 'Second task', style: { tagId: 'tag-pink' } },
-        { id: 'n4', label: 'Reference only' }
-      ],
-      edges: [
-        { id: 'e1', from: 'n1', to: 'n2', role: 'layout' },
-        { id: 'e2', from: 'n2', to: 'n3', role: 'layout' },
-        { id: 'e3', from: 'n1', to: 'n4', role: 'layout' }
-      ],
-      meta: {
-        nextNodeSeq: 5,
-        nextEdgeSeq: 4
-      },
-      settings: {
-        themeId: 'blue-gray',
-        spacing: {
-          horizontal: 48,
-          vertical: 8
-        },
-        defaultShape: 'plain',
-        defaultEdgeStyle: {
-          width: 2,
-          lineType: 'solid',
-          color: '#64748b'
-        },
-        tags: [
-          { id: 'tag-blue', name: 'Blue', color: '#3b82f6' },
-          { id: 'tag-pink', name: 'Pending', color: '#ec4899' },
-          { id: 'tag-green', name: 'Done', color: '#22c55e' },
-          { id: 'tag-orange', name: 'Orange', color: '#f97316' }
-        ]
-      },
-      checklist: {
-        checkedNodeIds: []
-      }
+  return createDefaultDocFixture({
+    nodes: [
+      { id: 'n1', label: 'Root Topic' },
+      { id: 'n2', label: 'First task' },
+      { id: 'n3', label: 'Second task', style: { tagId: 'tag-pink' } },
+      { id: 'n4', label: 'Reference only' }
+    ],
+    edges: [
+      { id: 'e1', from: 'n1', to: 'n2', role: 'layout' },
+      { id: 'e2', from: 'n2', to: 'n3', role: 'layout' },
+      { id: 'e3', from: 'n1', to: 'n4', role: 'layout' }
+    ],
+    meta: {
+      nextNodeSeq: 5,
+      nextEdgeSeq: 4
     },
-    ui: {
-      layoutDirection: 'horizontal',
-      nodeOffsetsByDirection: { horizontal: {}, vertical: {} },
-      edgeBendsByDirection: { horizontal: {}, vertical: {} },
-      edgeRoutesByDirection: { horizontal: {}, vertical: {} },
-      toolbarVisible: true
+    settings: {
+      spacing: {
+        horizontal: 48,
+        vertical: 8
+      }
     }
-  };
+  });
 }
 
 test('outline mirrors hierarchy and selection', async () => {
@@ -95,8 +68,8 @@ test('outline mirrors hierarchy and selection', async () => {
 });
 
 test('outline checklist state persists after save and reopen', async ({}, testInfo) => {
-  const filePath = await writeFixture(testInfo, 'checklist-persist.qflow', JSON.stringify(createChecklistFixture()));
-  const first = await launchWithOpenPath(filePath);
+  const first = await launchAppWithFixture(testInfo, 'checklist-persist.qflow', createChecklistFixture());
+  const filePath = first.filePath;
 
   await triggerMenuAction(first.app, 'file:open');
   await expect(first.window.getByTestId('outline-check-n1')).toBeVisible();

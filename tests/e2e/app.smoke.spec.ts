@@ -1,13 +1,11 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { launchApp, mainEntry } from './helpers';
 
 test('app starts after build', async () => {
-  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
   expect(existsSync(mainEntry)).toBeTruthy();
 
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
   await expect(window).toHaveTitle(/Flowmaptool/i);
   await app.close();
 });

@@ -1,21 +1,16 @@
-import { _electron as electron, expect, test } from '@playwright/test';
-import { join } from 'node:path';
+import { expect, test } from '@playwright/test';
+import { addChild, applyTag, launchApp } from './helpers';
 
 test('tag toolbar applies, renames, and deletes node tags', async () => {
-  const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
-  const app = await electron.launch({ args: [mainEntry] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
 
-  const root = window.getByTestId('node-n1');
-  await root.click();
-  await window.keyboard.press('Tab');
-  await window.keyboard.press('Escape');
+  await addChild(window, 'n1');
 
   const child = window.getByTestId('node-n2');
   await child.click();
   await expect(window.getByText('Node Style', { exact: true })).toBeVisible();
 
-  await window.getByLabel('Apply tag Pending').click();
+  await applyTag(window, 'n2', 'Pending');
   await expect(child).toHaveAttribute('data-tag-name', 'Pending');
   await expect(child.locator('.node-tag-marker')).toHaveCSS('background-color', 'rgb(236, 72, 153)');
 

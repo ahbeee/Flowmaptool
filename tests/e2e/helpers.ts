@@ -1,11 +1,18 @@
 import { _electron as electron, type ElectronApplication, type Page, type TestInfo } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { FlowDoc } from '../../src/shared/graph';
+import { addEdge, addNode, createEmptyDoc, type FlowDoc } from '../../src/shared/graph';
+import type { PersistedQflowFile, PersistedUiState } from '../../src/renderer/src/persistence';
 
 type LaunchedApp = {
   app: ElectronApplication;
   window: Page;
+};
+
+type DefaultDocFixtureOverrides = Partial<Omit<FlowDoc, 'schemaVersion' | 'settings' | 'checklist'>> & {
+  settings?: Partial<FlowDoc['settings']>;
+  checklist?: Partial<FlowDoc['checklist']>;
+  ui?: Partial<PersistedUiState>;
 };
 
 export const mainEntry = join(process.cwd(), 'out', 'main', 'index.js');
@@ -38,11 +45,55 @@ export async function writeFixture(testInfo: Pick<TestInfo, 'outputPath'>, name:
 export async function launchAppWithFixture(
   testInfo: Pick<TestInfo, 'outputPath'>,
   name: string,
-  doc: FlowDoc
+  fixture: FlowDoc | PersistedQflowFile
 ): Promise<LaunchedApp & { filePath: string }> {
-  const filePath = await writeFixture(testInfo, name, JSON.stringify(doc, null, 2));
+  const filePath = await writeFixture(testInfo, name, JSON.stringify(fixture, null, 2));
   const launched = await launchApp({ FLOWMAPTOOL_TEST_OPEN_DOCUMENT_PATH: filePath });
+  await launched.window.getByTestId('node-n1').waitFor({ state: 'visible' });
   return { ...launched, filePath };
+}
+
+export function createDefaultDocFixture(overrides: DefaultDocFixtureOverrides = {}): PersistedQflowFile {
+  const { ui, settings, checklist, ...docOverrides } = overrides;
+  let doc = createEmptyDoc();
+  doc = addNode(doc, 'Root Topic');
+  doc = addNode(doc, 'First task');
+  doc = addNode(doc, 'Second task', { tagId: 'tag-pink' });
+  doc = addEdge(doc, 'n1', 'n2');
+  doc = addEdge(doc, 'n2', 'n3');
+
+  return {
+    schemaVersion: 1,
+    doc: {
+      ...doc,
+      ...docOverrides,
+      settings: {
+        ...doc.settings,
+        ...settings,
+        spacing: {
+          ...doc.settings.spacing,
+          ...settings?.spacing
+        },
+        defaultEdgeStyle: {
+          ...doc.settings.defaultEdgeStyle,
+          ...settings?.defaultEdgeStyle
+        },
+        tags: settings?.tags || doc.settings.tags
+      },
+      checklist: {
+        ...doc.checklist,
+        ...checklist
+      }
+    },
+    ui: {
+      layoutDirection: 'horizontal',
+      nodeOffsetsByDirection: { horizontal: {}, vertical: {} },
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} },
+      toolbarVisible: true,
+      ...ui
+    }
+  };
 }
 
 export async function renameSelectedNode(window: Page, label: string) {
@@ -52,9 +103,25 @@ export async function renameSelectedNode(window: Page, label: string) {
   await labelInput.press('Enter');
 }
 
+export async function renameNode(window: Page, nodeId: string, label: string) {
+  await window.getByTestId(`node-${nodeId}`).click();
+  await renameSelectedNode(window, label);
+}
+
 export async function addChildNode(window: Page) {
   await window.keyboard.press('Tab');
   await window.keyboard.press('Escape');
+}
+
+export async function addChild(window: Page, parentId: string) {
+  const parent = window.getByTestId(`node-${parentId}`);
+  await parent.click();
+  await addChildNode(window);
+}
+
+export async function applyTag(window: Page, nodeId: string, tagName: string) {
+  await window.getByTestId(`node-${nodeId}`).click();
+  await window.getByLabel(`Apply tag ${tagName}`).click();
 }
 
 export async function triggerMenuAction(app: ElectronApplication, action: string) {
