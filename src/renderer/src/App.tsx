@@ -1,14 +1,12 @@
 import React from 'react';
 import {
   addEdge,
-  addNode,
   deleteTag,
   removeEdge,
   removeNodes,
   resetNodeStyle,
   setNodeChecked,
   updateEdgeStyle,
-  updateNodeLabel,
   updateNodeStyle,
   updateNodeTask,
   updateSettings,
@@ -49,7 +47,7 @@ import {
   type NodeOffset,
   type NodeOffsetMap
 } from '@shared/local-reflow';
-import { extractSelection, pasteDetached, type CopiedSelection } from '@shared/subflow';
+import { extractSelection, type CopiedSelection } from '@shared/subflow';
 import {
   buildDragInsertPreviewRect,
   buildNodeBoxMap,
@@ -81,7 +79,6 @@ import {
   createSeedDoc,
   createTabDocument,
   ensureDocHasNode,
-  NEW_NODE_LABEL,
   pruneTabTransientUiState,
   ROOT_LABEL,
   type TabDocument
@@ -113,7 +110,6 @@ import { basename, bytesToBase64 } from './export-utils';
 import {
   analyzeLayoutEdges,
   collectEdgeComponent,
-  getPrimaryParentId,
   type LayoutEdgeAnalysis
 } from './graph-analysis';
 import {
@@ -129,6 +125,12 @@ import {
   NODE_TEXT_BASELINE_Y,
   ROOT_NODE_STYLE
 } from './node-style';
+import {
+  applyCommittedNodeLabel,
+  buildInsertNodeFromSelectionResult,
+  buildPasteDetachedSelectionResult,
+  getNodeEditingDraft
+} from './node-actions';
 import {
   applyNodeDragToHost,
   buildNodeReparentDragResult,
@@ -1119,26 +1121,26 @@ export function App() {
 
   const pasteSelectedNodes = React.useCallback(() => {
     if (!copiedSelection || copiedSelection.nodes.length === 0) return;
-    const result = pasteDetached(doc, copiedSelection);
-    commitDoc(() => ensureDocHasNode(result.doc));
+    const result = buildPasteDetachedSelectionResult(doc, copiedSelection);
+    if (!result) return;
+    commitDoc(() => result.doc);
     setSelectedNodeIds(result.newNodeIds);
     setSelectedEdgeId('');
     setCurrentNodeOffsets(prev => {
       const next = { ...prev };
-      for (const id of result.newNodeIds) next[id] = { dx: 40, dy: 40 };
+      for (const [id, offset] of Object.entries(result.offsetUpdates)) next[id] = offset;
       return next;
     });
   }, [commitDoc, copiedSelection, doc, setCurrentNodeOffsets]);
 
   const startEditingNode = React.useCallback((nodeId: NodeId) => {
-    const node = doc.nodes.find(item => item.id === nodeId);
-    if (!node) return;
-    const label = clampNodeLabel(node.label);
-    editingNodeIdRef.current = nodeId;
-    editingLabelRef.current = label;
-    setEditingNodeId(nodeId);
-    setEditingLabel(label);
-  }, [doc.nodes]);
+    const draft = getNodeEditingDraft(doc, nodeId);
+    if (!draft) return;
+    editingNodeIdRef.current = draft.nodeId;
+    editingLabelRef.current = draft.label;
+    setEditingNodeId(draft.nodeId);
+    setEditingLabel(draft.label);
+  }, [doc]);
 
   const updateEditingLabel = React.useCallback((value: string) => {
     const label = clampNodeLabel(value);
@@ -1154,10 +1156,9 @@ export function App() {
     editingLabelRef.current = '';
     setEditingNodeId(null);
     setEditingLabel('');
-    const currentNode = doc.nodes.find(node => node.id === nodeId);
-    if (currentNode?.label === nextLabel) return;
-    commitDoc(prev => updateNodeLabel(prev, nodeId, nextLabel));
-  }, [commitDoc, doc.nodes]);
+    if (applyCommittedNodeLabel(doc, nodeId, nextLabel) === doc) return;
+    commitDoc(prev => applyCommittedNodeLabel(prev, nodeId, nextLabel));
+  }, [commitDoc, doc]);
 
   const selectOutlineNode = React.useCallback(
     (nodeId: NodeId) => {
@@ -1177,65 +1178,39 @@ export function App() {
 
   const createLinkedNodeFromSelection = React.useCallback(() => {
     const currentSelection = selectedNodeIdsRef.current;
-    if (currentSelection.length !== 1) return;
-    const parentId = currentSelection[0];
-    const parentOffset = getNodeOffset(nodeOffsets, parentId);
-    const newNodeId = `n${doc.meta.nextNodeSeq}`;
-    const newLabel = NEW_NODE_LABEL;
-    commitDoc(prev => {
-      let next = addNode(prev, newLabel, createChildNodeStyle(prev.settings.defaultShape));
-      next = addEdge(next, parentId, newNodeId);
-      return next;
-    });
+    const result = buildInsertNodeFromSelectionResult(doc, currentSelection, nodeOffsets, 'child');
+    if (!result) return;
+    commitDoc(() => result.doc);
     setCurrentNodeOffsets(prev => ({
       ...prev,
-      [newNodeId]: { dx: parentOffset.dx, dy: parentOffset.dy }
+      [result.newNodeId]: result.offset
     }));
-    setSelectedNodeIds([newNodeId]);
-    selectedNodeIdsRef.current = [newNodeId];
+    setSelectedNodeIds([result.newNodeId]);
+    selectedNodeIdsRef.current = [result.newNodeId];
     setSelectedEdgeId('');
-    editingNodeIdRef.current = newNodeId;
-    editingLabelRef.current = newLabel;
-    setEditingNodeId(newNodeId);
-    setEditingLabel(newLabel);
-  }, [commitDoc, doc.meta.nextNodeSeq, nodeOffsets, setCurrentNodeOffsets]);
+    editingNodeIdRef.current = result.newNodeId;
+    editingLabelRef.current = result.newLabel;
+    setEditingNodeId(result.newNodeId);
+    setEditingLabel(result.newLabel);
+  }, [commitDoc, doc, nodeOffsets, setCurrentNodeOffsets]);
 
   const createSiblingNodeFromSelection = React.useCallback(() => {
     const currentSelection = selectedNodeIdsRef.current;
-    if (currentSelection.length !== 1) return;
-    const selectedNodeId = currentSelection[0];
-    const parentId = getPrimaryParentId(doc, selectedNodeId);
-    if (!parentId) {
-      createLinkedNodeFromSelection();
-      return;
-    }
-    const parentOffset = getNodeOffset(nodeOffsets, parentId);
-    const newNodeId = `n${doc.meta.nextNodeSeq}`;
-    const newLabel = NEW_NODE_LABEL;
-    commitDoc(prev => {
-      let next = addNode(prev, newLabel, createChildNodeStyle(prev.settings.defaultShape));
-      next = addEdge(next, parentId, newNodeId);
-      return next;
-    });
+    const result = buildInsertNodeFromSelectionResult(doc, currentSelection, nodeOffsets, 'sibling');
+    if (!result) return;
+    commitDoc(() => result.doc);
     setCurrentNodeOffsets(prev => ({
       ...prev,
-      [newNodeId]: { dx: parentOffset.dx, dy: parentOffset.dy }
+      [result.newNodeId]: result.offset
     }));
-    setSelectedNodeIds([newNodeId]);
-    selectedNodeIdsRef.current = [newNodeId];
+    setSelectedNodeIds([result.newNodeId]);
+    selectedNodeIdsRef.current = [result.newNodeId];
     setSelectedEdgeId('');
-    editingNodeIdRef.current = newNodeId;
-    editingLabelRef.current = newLabel;
-    setEditingNodeId(newNodeId);
-    setEditingLabel(newLabel);
-  }, [
-    commitDoc,
-    createLinkedNodeFromSelection,
-    doc,
-    doc.meta.nextNodeSeq,
-    nodeOffsets,
-    setCurrentNodeOffsets
-  ]);
+    editingNodeIdRef.current = result.newNodeId;
+    editingLabelRef.current = result.newLabel;
+    setEditingNodeId(result.newNodeId);
+    setEditingLabel(result.newLabel);
+  }, [commitDoc, doc, nodeOffsets, setCurrentNodeOffsets]);
 
   const selectNodeByDirection = React.useCallback((directionKey: string) => {
     const currentSelection = selectedNodeIdsRef.current;
