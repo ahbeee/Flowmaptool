@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppHeader, FileStatus } from './app-header';
+import { CanvasEdgesLayer } from './canvas-edges-layer';
 import { CanvasNodesLayer } from './canvas-nodes-layer';
 import {
   addEdge,
@@ -81,7 +82,6 @@ import {
   ROOT_LABEL,
   type TabDocument
 } from './document-state';
-import { edgeMidpoint, edgePath, routeControlPoint, routeFromBend } from './edge-path';
 import { findEdgeHitAtPoint as findEdgeHitAtPointFromState } from './edge-hit-testing';
 import { buildAutoEdgeRouteMap, buildEdgeForceBendMap, buildEdgeLaneMap } from './edge-render-state';
 import {
@@ -154,14 +154,7 @@ import {
 } from './task-table';
 import { TaskTablePanel } from './task-table-panel';
 import { ToolbarPanel } from './toolbar-panel';
-import {
-  clampNodeLabel,
-  edgeStrokeDasharray,
-  effectiveEdgeStyle,
-  getSelectedStyleEdges,
-  nextCustomTagId,
-  pruneSelectionForDoc
-} from './ui-helpers';
+import { clampNodeLabel, getSelectedStyleEdges, nextCustomTagId, pruneSelectionForDoc } from './ui-helpers';
 import {
   getNodeVisualStyle as buildNodeVisualStyle,
   summarizeSelectedEdgeStyles,
@@ -1928,6 +1921,20 @@ export function App() {
     startEdgeSegmentDragAtPoint(edgeHit.edgeId, start, (clientX, clientY) => getSvgContentPoint(svg, clientX, clientY));
   };
 
+  const selectEdgeFromPathClick = (event: React.MouseEvent<SVGPathElement>, edge: FlowEdge) => {
+    if (suppressNextEdgeClickRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      suppressNextEdgeClickRef.current = false;
+      return;
+    }
+    const point = getSvgContentPoint(event.currentTarget.ownerSVGElement, event.clientX, event.clientY);
+    const edgeHit = point ? findEdgeHitAtPoint(point, event.currentTarget.dataset.edgeId) : null;
+    setSelectedEdgeId(edgeHit?.edgeId || edge.id);
+    setSelectedRouteControl(null);
+    setSelectedNodeIds([]);
+  };
+
   const beginConnectDrag = (nodeId: NodeId, anchors: EdgeAnchors = HANDLE_CONNECT_ANCHORS) => {
     stopConnectDragListeners();
     const nodePos = renderedPositionMap.get(nodeId);
@@ -2279,207 +2286,31 @@ export function App() {
                 onWheel={onCanvasWheel}
                 onContextMenu={event => event.preventDefault()}
               >
-                <svg
-                  className="edge-layer"
-                  aria-label="edge-layer"
-                  style={{ width: canvasSize.width, height: canvasSize.height }}
-                  onPointerDown={onCanvasPointerDown}
-                >
-                  {doc.edges.map(edge => {
-                    const fromPos = renderedPositionMap.get(edge.from);
-                    const toPos = renderedPositionMap.get(edge.to);
-                    if (!fromPos || !toPos) return null;
-                    const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-                    const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-                    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-                    const lane = edgeLaneMap.get(edge.id) || 0;
-                    const forceBend = edgeForceBendMap.get(edge.id) || false;
-                    const selected = edge.id === selectedEdgeId;
-                    const route =
-                      edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
-                    const edgeStyle = effectiveEdgeStyle(edge, doc.settings.defaultEdgeStyle);
-                    const strokeDasharray = edgeStrokeDasharray(edgeStyle.lineType, edgeStyle.width);
-                    return (
-                      <path
-                        key={edge.id}
-                        data-testid={`edge-path-${edge.id}`}
-                        data-edge-id={edge.id}
-                        d={edgePath(
-                          endpoints.from,
-                          endpoints.to,
-                          lane,
-                          layoutDirection,
-                          fromSize,
-                          toSize,
-                          forceBend,
-                          route
-                        )}
-                        className={selected ? 'edge-path edge-path-selected' : 'edge-path'}
-                        style={{
-                          stroke: edgeStyle.color,
-                          strokeWidth: selected ? edgeStyle.width + 1 : edgeStyle.width,
-                          strokeDasharray
-                        }}
-                        onPointerDown={event => {
-                          startEdgeSegmentDrag(event);
-                        }}
-                        onClick={event => {
-                          if (suppressNextEdgeClickRef.current) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            suppressNextEdgeClickRef.current = false;
-                            return;
-                          }
-                          const point = getSvgContentPoint(
-                            event.currentTarget.ownerSVGElement,
-                            event.clientX,
-                            event.clientY
-                          );
-                          const edgeHit = point ? findEdgeHitAtPoint(point, event.currentTarget.dataset.edgeId) : null;
-                          setSelectedEdgeId(edgeHit?.edgeId || edge.id);
-                          setSelectedRouteControl(null);
-                          setSelectedNodeIds([]);
-                        }}
-                      />
-                    );
-                  })}
-                  {connectDrag ? (
-                    <path
-                      className="edge-path edge-path-preview"
-                      d={`M ${connectDrag.start.x} ${connectDrag.start.y} Q ${(connectDrag.start.x + connectDrag.current.x) / 2} ${(connectDrag.start.y + connectDrag.current.y) / 2} ${connectDrag.current.x} ${connectDrag.current.y}`}
-                    />
-                  ) : null}
-                  {edgeBendDrag
-                    ? doc.edges.map(edge => {
-                        if (edge.id !== edgeBendDrag.edgeId) return null;
-                        const fromPos = renderedPositionMap.get(edge.from);
-                        const toPos = renderedPositionMap.get(edge.to);
-                        if (!fromPos || !toPos) return null;
-                        const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-                        const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-                        const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-                        const lane = edgeLaneMap.get(edge.id) || 0;
-                        const forceBend = edgeForceBendMap.get(edge.id) || false;
-                        const route =
-                          edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
-                        return (
-                          <path
-                            key={`route-preview-${edge.id}`}
-                            data-testid="edge-route-drag-preview"
-                            className="edge-route-drag-preview"
-                            d={edgePath(
-                              endpoints.from,
-                              endpoints.to,
-                              lane,
-                              layoutDirection,
-                              fromSize,
-                              toSize,
-                              forceBend,
-                              route
-                            )}
-                          />
-                        );
-                      })
-                    : null}
-                  {!edgeBendDrag && selectedEdgeId
-                    ? doc.edges.map(edge => {
-                        if (edge.id !== selectedEdgeId) return null;
-                        const fromPos = renderedPositionMap.get(edge.from);
-                        const toPos = renderedPositionMap.get(edge.to);
-                        if (!fromPos || !toPos) return null;
-                        const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-                        const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-                        const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-                        const lane = edgeLaneMap.get(edge.id) || 0;
-                        const forceBend = edgeForceBendMap.get(edge.id) || false;
-                        const isForwardAlignedEdge =
-                          layoutDirection === 'horizontal'
-                            ? endpoints.to.x >= endpoints.from.x && Math.abs(endpoints.to.y - endpoints.from.y) <= 2
-                            : endpoints.to.y >= endpoints.from.y && Math.abs(endpoints.to.x - endpoints.from.x) <= 2;
-                        const automaticManualRoute =
-                          layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) || isForwardAlignedEdge
-                            ? undefined
-                            : autoEdgeRouteMap.get(edge.id);
-                        const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || automaticManualRoute;
-                        if (!route || route.points.length === 0) return null;
-                        return (
-                          <path
-                            key={`route-guide-${edge.id}`}
-                            data-testid="edge-route-guide"
-                            className="edge-route-guide"
-                            d={edgePath(
-                              endpoints.from,
-                              endpoints.to,
-                              lane,
-                              layoutDirection,
-                              fromSize,
-                              toSize,
-                              forceBend,
-                              route
-                            )}
-                          />
-                        );
-                      })
-                    : null}
-                  {doc.edges.map(edge => {
-                    if (edge.id !== selectedEdgeId) return null;
-                    const fromPos = renderedPositionMap.get(edge.from);
-                    const toPos = renderedPositionMap.get(edge.to);
-                    if (!fromPos || !toPos) return null;
-                    const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-                    const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-                    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-                    const isForwardAlignedEdge =
-                      layoutDirection === 'horizontal'
-                        ? endpoints.to.x >= endpoints.from.x && Math.abs(endpoints.to.y - endpoints.from.y) <= 2
-                        : endpoints.to.y >= endpoints.from.y && Math.abs(endpoints.to.x - endpoints.from.x) <= 2;
-                    const automaticManualRoute =
-                      layoutEdgeAnalysis.layoutEdgeIds.has(edge.id) || isForwardAlignedEdge
-                        ? undefined
-                        : autoEdgeRouteMap.get(edge.id);
-                    const route =
-                      edgeRoutes[edge.id] ||
-                      routeFromBend(edgeBends[edge.id]) ||
-                      automaticManualRoute ||
-                      routeFromBend(edgeMidpoint(endpoints.from, endpoints.to));
-                    const point =
-                      route.points.length === 1
-                        ? route.points[0]
-                        : routeControlPoint(endpoints.from, endpoints.to, route);
-                    const pointIndex = 0;
-                    return (
-                      <g key={`bend-${edge.id}`}>
-                        <circle
-                          className="edge-bend-hit-area"
-                          cx={point.x}
-                          cy={point.y}
-                          r={9}
-                          onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
-                          onContextMenu={event => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
-                        />
-                        <circle
-                          data-testid={`edge-route-point-${pointIndex}`}
-                          className={
-                            selectedRouteControl?.edgeId === edge.id && selectedRouteControl.pointIndex === pointIndex
-                              ? 'edge-bend-handle edge-bend-handle-selected'
-                              : 'edge-bend-handle'
-                          }
-                          cx={point.x}
-                          cy={point.y}
-                          r={7}
-                          onPointerDown={event => startEdgeBendDrag(event, edge.id, pointIndex)}
-                          onContextMenu={event => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
-                        />
-                      </g>
-                    );
-                  })}
-                </svg>
+                <CanvasEdgesLayer
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  edges={doc.edges}
+                  defaultEdgeStyle={doc.settings.defaultEdgeStyle}
+                  renderedPositionMap={renderedPositionMap}
+                  nodeSizeMap={nodeSizeMap}
+                  defaultNodeSize={DEFAULT_NODE_SIZE}
+                  layoutDirection={layoutDirection}
+                  layoutEdgeIds={layoutEdgeAnalysis.layoutEdgeIds}
+                  edgeRoutes={edgeRoutes}
+                  edgeBends={edgeBends}
+                  autoEdgeRouteMap={autoEdgeRouteMap}
+                  edgeLaneMap={edgeLaneMap}
+                  edgeForceBendMap={edgeForceBendMap}
+                  selectedEdgeId={selectedEdgeId}
+                  selectedRouteControl={selectedRouteControl}
+                  edgeBendDrag={edgeBendDrag}
+                  connectDrag={connectDrag}
+                  getRenderedEdgeEndpoints={getRenderedEdgeEndpoints}
+                  onCanvasPointerDown={onCanvasPointerDown}
+                  onStartEdgeSegmentDrag={startEdgeSegmentDrag}
+                  onSelectEdge={selectEdgeFromPathClick}
+                  onStartEdgeBendDrag={startEdgeBendDrag}
+                />
 
                 {marquee ? (
                   <div

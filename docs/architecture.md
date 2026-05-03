@@ -44,6 +44,7 @@ Core graph behavior lives in `src/shared` and is covered by unit or integration 
 Renderer-only pure helpers live under `src/renderer/src`:
 
 - `app-header.tsx`: top-level tab strip, panel toggles, toolbar visibility toggle, and file status rendering. It receives tab state and callbacks from `App.tsx`.
+- `canvas-edges-layer.tsx`: canvas edge SVG rendering, connect preview, route guide display, and bend handle entry points. Edge selection, hit testing, routing state mutation, and drag lifecycle ownership stay in `App.tsx`.
 - `canvas-nodes-layer.tsx`: canvas node rendering, inline node label editing, tag marker display, and connect handle entry points. Drag, edit, and connect state ownership stay in `App.tsx`.
 - `outline.ts`: outline tree construction and checklist completion target derivation.
 - `outline-panel.tsx`: Outline tree rendering, checklist controls, collapsed state display, and node selection entry points. It receives tree data and callbacks from `App.tsx`.
