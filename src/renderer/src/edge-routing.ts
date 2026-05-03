@@ -231,6 +231,72 @@ function getNodeBoxesBounds(boxes: NodeBox[]): NodeBox | undefined {
   };
 }
 
+function getAdjacentGapLanes(box: NodeBox, boxes: NodeBox[], direction: LayoutDirection, minimumGap: number): number[] {
+  if (direction === 'horizontal') {
+    const overlapsPrimaryAxis = (candidate: NodeBox) => candidate.right >= box.left && candidate.left <= box.right;
+    const above = boxes
+      .filter(
+        candidate =>
+          overlapsPrimaryAxis(candidate) && candidate.bottom <= box.top && box.top - candidate.bottom >= minimumGap
+      )
+      .sort((left, right) => right.bottom - left.bottom)[0];
+    const below = boxes
+      .filter(
+        candidate =>
+          overlapsPrimaryAxis(candidate) && candidate.top >= box.bottom && candidate.top - box.bottom >= minimumGap
+      )
+      .sort((left, right) => left.top - right.top)[0];
+    return [
+      above ? above.bottom + (box.top - above.bottom) / 2 : undefined,
+      below ? box.bottom + (below.top - box.bottom) / 2 : undefined
+    ].filter((lane): lane is number => typeof lane === 'number');
+  }
+
+  const overlapsPrimaryAxis = (candidate: NodeBox) => candidate.bottom >= box.top && candidate.top <= box.bottom;
+  const left = boxes
+    .filter(
+      candidate =>
+        overlapsPrimaryAxis(candidate) && candidate.right <= box.left && box.left - candidate.right >= minimumGap
+    )
+    .sort((a, b) => b.right - a.right)[0];
+  const right = boxes
+    .filter(
+      candidate =>
+        overlapsPrimaryAxis(candidate) && candidate.left >= box.right && candidate.left - box.right >= minimumGap
+    )
+    .sort((a, b) => a.left - b.left)[0];
+  return [
+    left ? left.right + (box.left - left.right) / 2 : undefined,
+    right ? box.right + (right.left - box.right) / 2 : undefined
+  ].filter((lane): lane is number => typeof lane === 'number');
+}
+
+function getPreferredBackEdgeLanes(
+  box: NodeBox | undefined,
+  boxes: NodeBox[],
+  direction: LayoutDirection,
+  secondaryClearance: number,
+  lanePadding: number,
+  fallbackLane: number,
+  referenceLane: number = fallbackLane
+): number[] {
+  if (!box) return [fallbackLane];
+  const secondaryDelta = Math.abs(referenceLane - fallbackLane);
+  if (secondaryDelta <= secondaryClearance) {
+    return direction === 'horizontal'
+      ? [box.top - secondaryClearance - lanePadding]
+      : [box.left - secondaryClearance - lanePadding];
+  }
+  const adjacentGapLanes = getAdjacentGapLanes(box, boxes, direction, 8);
+  if (adjacentGapLanes.length > 0) {
+    return adjacentGapLanes.sort((left, right) => Math.abs(left - referenceLane) - Math.abs(right - referenceLane));
+  }
+  if (direction === 'horizontal') {
+    return [box.top - secondaryClearance - lanePadding, box.bottom + secondaryClearance + lanePadding];
+  }
+  return [box.left - secondaryClearance - lanePadding, box.right + secondaryClearance + lanePadding];
+}
+
 export function filterNodeBoxesByIds(nodeBoxes: Map<NodeId, NodeBox>, nodeIds: Iterable<NodeId>): Map<NodeId, NodeBox> {
   const filtered = new Map<NodeId, NodeBox>();
   for (const nodeId of nodeIds) {
@@ -337,6 +403,7 @@ export function computeAutoEdgeRoute(
   const secondaryClearance = getEndpointSpacingOffset(spacing.secondary) || 24;
   const lanePadding = Math.min(72, Math.max(0, routeLane) * 14);
   const graphBounds = getNodeBoxesBounds([...nodeBoxes.values()]);
+  const allBoxes = [...nodeBoxes.values()];
 
   if (direction === 'horizontal') {
     const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
@@ -346,22 +413,33 @@ export function computeAutoEdgeRoute(
       const targetEntryX = to.x + targetSign * primaryClearance;
       const sourceBox = nodeBoxes.get(fromId);
       const targetBox = nodeBoxes.get(toId);
-      const sourcePreferredLanes = sourceBox
-        ? [sourceBox.top - secondaryClearance - lanePadding, sourceBox.bottom + secondaryClearance + lanePadding]
-        : [from.y];
-      const targetPreferredLanes = targetBox
-        ? [targetBox.top - secondaryClearance - lanePadding, targetBox.bottom + secondaryClearance + lanePadding]
-        : [to.y];
+      const sourcePreferredLanes = getPreferredBackEdgeLanes(
+        sourceBox,
+        allBoxes,
+        direction,
+        secondaryClearance,
+        lanePadding,
+        from.y,
+        to.y
+      );
+      const targetPreferredLanes = getPreferredBackEdgeLanes(
+        targetBox,
+        allBoxes,
+        direction,
+        secondaryClearance,
+        lanePadding,
+        to.y,
+        from.y
+      );
       const laneCandidates = uniqueSortedNumbers([
         ...getDraggedRouteLaneCandidates(from, to, direction, from, nodeBoxes, spacing, false),
         ...sourcePreferredLanes,
         ...targetPreferredLanes
       ]);
       const routes = laneCandidates.map(lane => ({
-        laneDistance: Math.min(
-          ...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred)),
-          ...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))
-        ),
+        laneDistance:
+          Math.min(...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred))) * 2 +
+          Math.min(...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))),
         points: [
           from,
           { x: sourceExitX, y: from.y },
@@ -413,22 +491,33 @@ export function computeAutoEdgeRoute(
     const targetEntryY = to.y + targetSign * primaryClearance;
     const sourceBox = nodeBoxes.get(fromId);
     const targetBox = nodeBoxes.get(toId);
-    const sourcePreferredLanes = sourceBox
-      ? [sourceBox.left - secondaryClearance - lanePadding, sourceBox.right + secondaryClearance + lanePadding]
-      : [from.x];
-    const targetPreferredLanes = targetBox
-      ? [targetBox.left - secondaryClearance - lanePadding, targetBox.right + secondaryClearance + lanePadding]
-      : [to.x];
+    const sourcePreferredLanes = getPreferredBackEdgeLanes(
+      sourceBox,
+      allBoxes,
+      direction,
+      secondaryClearance,
+      lanePadding,
+      from.x,
+      to.x
+    );
+    const targetPreferredLanes = getPreferredBackEdgeLanes(
+      targetBox,
+      allBoxes,
+      direction,
+      secondaryClearance,
+      lanePadding,
+      to.x,
+      from.x
+    );
     const laneCandidates = uniqueSortedNumbers([
       ...getDraggedRouteLaneCandidates(from, to, direction, from, nodeBoxes, spacing, false),
       ...sourcePreferredLanes,
       ...targetPreferredLanes
     ]);
     const routes = laneCandidates.map(lane => ({
-      laneDistance: Math.min(
-        ...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred)),
-        ...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))
-      ),
+      laneDistance:
+        Math.min(...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred))) * 2 +
+        Math.min(...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))),
       points: [
         from,
         { x: from.x, y: sourceExitY },

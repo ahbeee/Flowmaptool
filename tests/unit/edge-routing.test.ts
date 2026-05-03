@@ -59,6 +59,34 @@ describe('edge routing helpers', () => {
     expect(backRoute?.points.length).toBeGreaterThan(1);
   });
 
+  it('prefers the adjacent sibling gap for horizontal back edges', () => {
+    const boxes = new Map([
+      ['root', { left: 0, right: 140, top: 260, bottom: 328 }],
+      ['above', { left: 620, right: 900, top: 120, bottom: 188 }],
+      ['source', { left: 620, right: 740, top: 204, bottom: 272 }],
+      ['below', { left: 620, right: 740, top: 344, bottom: 412 }]
+    ]);
+
+    const route = computeAutoEdgeRoute(
+      { x: 740, y: 238 },
+      { x: 0, y: 294 },
+      'horizontal',
+      'source',
+      'root',
+      boxes,
+      0,
+      { primary: 72, secondary: 48 },
+      { from: 'back', to: 'front' }
+    );
+
+    expect(route?.points).toEqual([
+      { x: 776, y: 238 },
+      { x: 776, y: 308 },
+      { x: -36, y: 308 },
+      { x: -36, y: 294 }
+    ]);
+  });
+
   it('snaps dragged route controls to clear lanes', () => {
     const boxes = new Map([
       ['n1', { left: -70, right: 0, top: -14, bottom: 14 }],
