@@ -5,6 +5,88 @@ import { DEFAULT_NODE_SIZE } from './node-style';
 import { getNodeCenter } from './edge-routing';
 
 export type DirectionKey = 'arrowright' | 'arrowleft' | 'arrowdown' | 'arrowup';
+export type KeyboardShortcutAction =
+  | { type: 'undo' }
+  | { type: 'redo' }
+  | { type: 'new-document' }
+  | { type: 'open-document' }
+  | { type: 'save-document'; saveAs: boolean }
+  | { type: 'fit-canvas' }
+  | { type: 'copy-selection' }
+  | { type: 'paste-selection' }
+  | { type: 'create-linked-node' }
+  | { type: 'create-sibling-node' }
+  | { type: 'reorder-sibling'; direction: -1 | 1 }
+  | { type: 'select-node-by-direction'; directionKey: DirectionKey }
+  | { type: 'delete-edge' }
+  | { type: 'delete-nodes' }
+  | { type: 'edit-node'; nodeId: NodeId };
+
+export type KeyboardShortcutContext = {
+  selectedNodeIds: NodeId[];
+  selectedEdgeId: string;
+  inEditor: boolean;
+};
+
+export type KeyboardShortcutInput = {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+};
+
+export function isTextEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable === true
+  );
+}
+
+function isDirectionKey(key: string): key is DirectionKey {
+  return key === 'arrowright' || key === 'arrowleft' || key === 'arrowdown' || key === 'arrowup';
+}
+
+export function getKeyboardShortcutAction(
+  input: KeyboardShortcutInput,
+  context: KeyboardShortcutContext
+): KeyboardShortcutAction | null {
+  const key = input.key.toLowerCase();
+  const mod = input.ctrlKey === true || input.metaKey === true;
+  const shift = input.shiftKey === true;
+
+  if (mod && key === 'z' && !shift) return { type: 'undo' };
+  if (mod && ((key === 'z' && shift) || key === 'y')) return { type: 'redo' };
+  if (mod && key === 'n') return { type: 'new-document' };
+  if (mod && key === 'o') return { type: 'open-document' };
+  if (mod && key === 's') return { type: 'save-document', saveAs: shift };
+  if (mod && key === '0') return { type: 'fit-canvas' };
+
+  if (context.inEditor) return null;
+
+  const selectedNodeCount = context.selectedNodeIds.length;
+  if (mod && key === 'c') return { type: 'copy-selection' };
+  if (mod && key === 'v') return { type: 'paste-selection' };
+  if (key === 'tab' && selectedNodeCount === 1) return { type: 'create-linked-node' };
+  if (key === 'enter' && selectedNodeCount === 1) return { type: 'create-sibling-node' };
+  if (mod && selectedNodeCount === 1 && (key === 'arrowup' || key === 'arrowdown')) {
+    return { type: 'reorder-sibling', direction: key === 'arrowdown' ? 1 : -1 };
+  }
+  if (selectedNodeCount > 0 && isDirectionKey(key)) {
+    return { type: 'select-node-by-direction', directionKey: key };
+  }
+  if (key === 'delete' || key === 'backspace') {
+    if (context.selectedEdgeId) return { type: 'delete-edge' };
+    if (selectedNodeCount > 0) return { type: 'delete-nodes' };
+  }
+  if (key === ' ' && selectedNodeCount === 1) {
+    return { type: 'edit-node', nodeId: context.selectedNodeIds[0] };
+  }
+
+  return null;
+}
 
 export function getNodeSelectionByDirection(
   nodes: Array<{ id: NodeId }>,

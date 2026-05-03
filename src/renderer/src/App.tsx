@@ -129,7 +129,9 @@ import {
   type LayoutEdgeAnalysis
 } from './graph-analysis';
 import {
+  getKeyboardShortcutAction,
   getNodeSelectionByDirection,
+  isTextEditingTarget,
   reorderSelectedNodeSibling as reorderDocSelectedNodeSibling
 } from './keyboard-navigation';
 import {
@@ -1290,97 +1292,69 @@ export function App() {
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const inEditor =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        target?.isContentEditable === true;
-      const key = event.key.toLowerCase();
-      const mod = event.ctrlKey || event.metaKey;
-
-      if (mod && key === 'z' && !event.shiftKey) {
-        event.preventDefault();
-        undoInteraction();
-        return;
-      }
-      if (mod && ((key === 'z' && event.shiftKey) || key === 'y')) {
-        event.preventDefault();
-        redoInteraction();
-        return;
-      }
-      if (mod && key === 'n') {
-        event.preventDefault();
-        createNewDocument();
-        return;
-      }
-      if (mod && key === 'o') {
-        event.preventDefault();
-        void openDocument();
-        return;
-      }
-      if (mod && key === 's' && event.shiftKey) {
-        event.preventDefault();
-        void saveDocument(true);
-        return;
-      }
-      if (mod && key === 's') {
-        event.preventDefault();
-        void saveDocument(false);
-        return;
-      }
-      if (mod && key === '0') {
-        event.preventDefault();
-        fitCanvasToView();
-        return;
-      }
-      if (inEditor) return;
       const latestSelectedNodeIds = selectedNodeIdsRef.current;
-      if (mod && key === 'c') {
-        event.preventDefault();
-        copySelectedNodes();
-        return;
-      }
-      if (mod && key === 'v') {
-        event.preventDefault();
-        pasteSelectedNodes();
-        return;
-      }
-      if (key === 'tab' && latestSelectedNodeIds.length === 1) {
-        event.preventDefault();
-        createLinkedNodeFromSelection();
-        return;
-      }
-      if (key === 'enter' && latestSelectedNodeIds.length === 1) {
-        event.preventDefault();
-        createSiblingNodeFromSelection();
-        return;
-      }
-      if (mod && latestSelectedNodeIds.length === 1 && (key === 'arrowup' || key === 'arrowdown')) {
-        event.preventDefault();
-        reorderSelectedNodeSibling(key === 'arrowdown' ? 1 : -1);
-        return;
-      }
-      if (latestSelectedNodeIds.length > 0 && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-        event.preventDefault();
-        selectNodeByDirection(key);
-        return;
-      }
-      if (key === 'delete' || key === 'backspace') {
-        if (selectedEdgeId) {
-          event.preventDefault();
+      const action = getKeyboardShortcutAction(
+        {
+          key: event.key,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey
+        },
+        {
+          selectedNodeIds: latestSelectedNodeIds,
+          selectedEdgeId,
+          inEditor: isTextEditingTarget(event.target)
+        }
+      );
+      if (!action) return;
+      event.preventDefault();
+
+      switch (action.type) {
+        case 'undo':
+          undoInteraction();
+          break;
+        case 'redo':
+          redoInteraction();
+          break;
+        case 'new-document':
+          createNewDocument();
+          break;
+        case 'open-document':
+          void openDocument();
+          break;
+        case 'save-document':
+          void saveDocument(action.saveAs);
+          break;
+        case 'fit-canvas':
+          fitCanvasToView();
+          break;
+        case 'copy-selection':
+          copySelectedNodes();
+          break;
+        case 'paste-selection':
+          pasteSelectedNodes();
+          break;
+        case 'create-linked-node':
+          createLinkedNodeFromSelection();
+          break;
+        case 'create-sibling-node':
+          createSiblingNodeFromSelection();
+          break;
+        case 'reorder-sibling':
+          reorderSelectedNodeSibling(action.direction);
+          break;
+        case 'select-node-by-direction':
+          selectNodeByDirection(action.directionKey);
+          break;
+        case 'delete-edge':
           deleteSelectedEdge();
-          return;
-        }
-        if (latestSelectedNodeIds.length > 0) {
-          event.preventDefault();
+          break;
+        case 'delete-nodes':
           deleteSelectedNodes();
-          return;
-        }
-      }
-      if (key === ' ' && latestSelectedNodeIds.length === 1) {
-        event.preventDefault();
-        startEditingNode(latestSelectedNodeIds[0]);
+          break;
+        case 'edit-node':
+          startEditingNode(action.nodeId);
+          break;
       }
     };
 
