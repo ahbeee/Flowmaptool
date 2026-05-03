@@ -28,6 +28,7 @@ pnpm test:all
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Development and test strategy](development-and-test-strategy.md)
 - [Release checklist](docs/release-checklist.md)
 
 ## Windows Packaging
