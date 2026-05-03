@@ -116,11 +116,13 @@ import {
   analyzeLayoutEdges,
   collectConnectedComponent,
   collectEdgeComponent,
-  getOrderedLayoutChildEdges,
-  getPrimaryParentEdge,
   getPrimaryParentId,
   type LayoutEdgeAnalysis
 } from './graph-analysis';
+import {
+  getNodeSelectionByDirection,
+  reorderSelectedNodeSibling as reorderDocSelectedNodeSibling
+} from './keyboard-navigation';
 import {
   createChildNodeStyle,
   DEFAULT_FONT_FAMILY,
@@ -1351,49 +1353,14 @@ export function App() {
   const selectNodeByDirection = React.useCallback((directionKey: string) => {
     const currentSelection = selectedNodeIdsRef.current;
     if (currentSelection.length !== 1) return false;
-    const selectedNodeId = currentSelection[0];
-    const selectedPos = renderedPositionMap.get(selectedNodeId);
-    if (!selectedPos) return false;
-    const selectedSize = nodeSizeMap[selectedNodeId] || DEFAULT_NODE_SIZE;
-    const selectedCenter = getNodeCenter(selectedPos.x, selectedPos.y, selectedSize);
-    const candidates = doc.nodes
-      .filter(node => node.id !== selectedNodeId)
-      .map(node => {
-        const pos = renderedPositionMap.get(node.id);
-        if (!pos) return null;
-        const size = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
-        const center = getNodeCenter(pos.x, pos.y, size);
-        const dx = center.x - selectedCenter.x;
-        const dy = center.y - selectedCenter.y;
-        let primaryDelta = 0;
-        let secondaryDelta = 0;
-        if (directionKey === 'arrowright') {
-          if (dx <= 0) return null;
-          primaryDelta = dx;
-          secondaryDelta = Math.abs(dy);
-        } else if (directionKey === 'arrowleft') {
-          if (dx >= 0) return null;
-          primaryDelta = Math.abs(dx);
-          secondaryDelta = Math.abs(dy);
-        } else if (directionKey === 'arrowdown') {
-          if (dy <= 0) return null;
-          primaryDelta = dy;
-          secondaryDelta = Math.abs(dx);
-        } else if (directionKey === 'arrowup') {
-          if (dy >= 0) return null;
-          primaryDelta = Math.abs(dy);
-          secondaryDelta = Math.abs(dx);
-        } else {
-          return null;
-        }
-        return {
-          nodeId: node.id,
-          score: secondaryDelta * 1000 + primaryDelta
-        };
-      })
-      .filter((entry): entry is { nodeId: NodeId; score: number } => Boolean(entry))
-      .sort((a, b) => a.score - b.score);
-    const next = candidates[0]?.nodeId;
+    const next = getNodeSelectionByDirection(
+      doc.nodes,
+      currentSelection[0],
+      directionKey,
+      renderedPositionMap,
+      nodeSizeMap,
+      DEFAULT_NODE_SIZE
+    );
     if (!next) return false;
     setSelectedNodeIds([next]);
     selectedNodeIdsRef.current = [next];
@@ -1409,29 +1376,9 @@ export function App() {
       const selectedNodeId = currentSelection[0];
       let changed = false;
       commitDoc(prev => {
-        const parentEdge = getPrimaryParentEdge(prev, selectedNodeId);
-        if (!parentEdge) return prev;
-        const siblings = getOrderedLayoutChildEdges(prev, parentEdge.from);
-        const selectedIndex = siblings.findIndex(edge => edge.id === parentEdge.id);
-        const targetIndex = selectedIndex + direction;
-        if (selectedIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) return prev;
-
-        const siblingOrderById = new Map<string, number>();
-        siblings.forEach((edge, index) => {
-          siblingOrderById.set(edge.id, typeof edge.order === 'number' ? edge.order : index + 1);
-        });
-        const selectedOrder = siblingOrderById.get(siblings[selectedIndex].id)!;
-        const targetOrder = siblingOrderById.get(siblings[targetIndex].id)!;
-        siblingOrderById.set(siblings[selectedIndex].id, targetOrder);
-        siblingOrderById.set(siblings[targetIndex].id, selectedOrder);
-        changed = true;
-
-        return {
-          ...prev,
-          edges: prev.edges.map(edge =>
-            siblingOrderById.has(edge.id) ? { ...edge, order: siblingOrderById.get(edge.id)! } : edge
-          )
-        };
+        const next = reorderDocSelectedNodeSibling(prev, selectedNodeId, direction);
+        changed = next !== prev;
+        return next;
       });
       if (changed) {
         setSelectedNodeIds([selectedNodeId]);
