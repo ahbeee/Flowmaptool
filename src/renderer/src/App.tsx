@@ -86,6 +86,11 @@ import {
   type EdgeUiSnapshot
 } from './edge-ui-state';
 import {
+  exportPdfFromSvg as exportPdfDiagramFromSvg,
+  exportPngFromSvg,
+  printSvgDiagram
+} from './diagram-export';
+import {
   createSeedDoc,
   createTabDocument,
   ensureDocHasNode,
@@ -117,7 +122,7 @@ import {
   applyDraggedEdgeRouteToHost,
   buildDraggedEdgeRoute as buildDraggedEdgeRouteFromState
 } from './edge-route-dragging';
-import { basename, bytesToBase64 } from './export-utils';
+import { basename } from './export-utils';
 import {
   analyzeLayoutEdges,
   collectEdgeComponent,
@@ -204,7 +209,6 @@ import {
   getTheme,
   MIXED_OPTION,
   NODE_SHAPES,
-  PNG_FILTER,
   SIDE_PANEL_DEFAULT_WIDTH,
   SIDE_PANEL_MAX_WIDTH,
   SIDE_PANEL_MIN_WIDTH,
@@ -2029,70 +2033,39 @@ export function App() {
   };
 
   const exportPng = React.useCallback(async () => {
-    try {
-      const snapshot = buildCanvasSvg(true);
-      const svgBlob = new Blob([snapshot], { type: 'image/svg+xml;charset=utf-8' });
-      const svgUrl = URL.createObjectURL(svgBlob);
-      const image = new Image();
-      await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve();
-        image.onerror = () => reject(new Error('Failed to render export image'));
-        image.src = svgUrl;
-      });
-      const scale = 2;
-      const canvas = document.createElement('canvas');
-      const exportWidth = image.naturalWidth || image.width || canvasSize.width;
-      const exportHeight = image.naturalHeight || image.height || canvasSize.height;
-      canvas.width = exportWidth * scale;
-      canvas.height = exportHeight * scale;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Canvas context unavailable');
-      context.scale(scale, scale);
-      context.fillStyle = '#f8fafc';
-      context.fillRect(0, 0, exportWidth, exportHeight);
-      context.drawImage(image, 0, 0);
-      URL.revokeObjectURL(svgUrl);
-      const pngBlob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('PNG encode failed'))), 'image/png');
-      });
-      const bytes = new Uint8Array(await pngBlob.arrayBuffer());
-      const result = await window.flowmaptool.saveBinary({
-        dataBase64: bytesToBase64(bytes),
-        defaultPath: `${activeTab.title.replace('.qflow', '')}.png`,
-        filters: PNG_FILTER
-      });
-      if (!result) return;
+    const result = await exportPngFromSvg({
+      svg: buildCanvasSvg(true),
+      title: activeTab.title,
+      canvasSize,
+      saveBinary: window.flowmaptool.saveBinary
+    });
+    if (!result.ok) {
+      setFileMessage(`PNG export failed: ${result.message}`);
+    } else if (result.filePath) {
       setFileMessage(`Exported PNG: ${result.filePath}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'PNG export failed';
-      setFileMessage(`PNG export failed: ${message}`);
     }
   }, [activeTab.title, buildCanvasSvg, canvasSize.height, canvasSize.width]);
 
   const exportPdf = React.useCallback(async () => {
-    try {
-      const result = await window.flowmaptool.exportPdfFromSvg({
-        svg: buildCanvasSvg(),
-        defaultPath: `${activeTab.title.replace('.qflow', '')}.pdf`,
-        width: canvasSize.width,
-        height: canvasSize.height
-      });
-      if (!result) return;
+    const result = await exportPdfDiagramFromSvg({
+      svg: buildCanvasSvg(),
+      title: activeTab.title,
+      canvasSize,
+      exportPdfFromSvg: window.flowmaptool.exportPdfFromSvg
+    });
+    if (!result.ok) {
+      setFileMessage(`PDF export failed: ${result.message}`);
+    } else if (result.filePath) {
       setFileMessage(`Exported PDF: ${result.filePath}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'PDF export failed';
-      setFileMessage(`PDF export failed: ${message}`);
     }
   }, [activeTab.title, buildCanvasSvg, canvasSize.height, canvasSize.width]);
 
   const printDiagram = React.useCallback(async () => {
-    try {
-      const result = await window.flowmaptool.printSvg({ svg: buildCanvasSvg() });
-      setFileMessage(result.success ? 'Print completed' : 'Print canceled');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Print failed';
-      setFileMessage(`Print failed: ${message}`);
-    }
+    const result = await printSvgDiagram({
+      svg: buildCanvasSvg(),
+      printSvg: window.flowmaptool.printSvg
+    });
+    setFileMessage(result.ok ? result.message || 'Print completed' : `Print failed: ${result.message}`);
   }, [buildCanvasSvg]);
 
   const switchLayoutDirection = React.useCallback(
