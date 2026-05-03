@@ -102,14 +102,15 @@ import {
 import {
   getDirectionalAnchorPoint,
   getEdgeRenderEndpoints,
-  getEndpointSpacingOffset,
   getNodeCenter,
   getRouteSpacingOffsets,
-  routeFromSnappedDraggedControl,
-  type DraggedRouteEndpointOffsets,
   type LayoutPoint,
   type RouteSpacing
 } from './edge-routing';
+import {
+  applyDraggedEdgeRouteToHost,
+  buildDraggedEdgeRoute as buildDraggedEdgeRouteFromState
+} from './edge-route-dragging';
 import { basename, bytesToBase64 } from './export-utils';
 import {
   analyzeLayoutEdges,
@@ -905,32 +906,20 @@ export function App() {
   );
 
   const buildDraggedEdgeRoute = React.useCallback((edgeId: string, pointer: Point): EdgeRoute | undefined => {
-    const edge = doc.edges.find(candidate => candidate.id === edgeId);
-    if (!edge) return undefined;
-    const fromPos = renderedPositionMap.get(edge.from);
-    const toPos = renderedPositionMap.get(edge.to);
-    if (!fromPos || !toPos) return undefined;
-    const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-    const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-    const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-    const endpointOffsets: DraggedRouteEndpointOffsets = {
-      source: getEndpointSpacingOffset(layoutSpacing.primary),
-      target: getEndpointSpacingOffset(layoutSpacing.primary)
-    };
-    return routeFromSnappedDraggedControl(
-      endpoints.from,
-      endpoints.to,
-      layoutDirection,
+    return buildDraggedEdgeRouteFromState({
+      doc,
+      edgeId,
       pointer,
-      edge.from,
-      edge.to,
-      getRouteNodeBoxes(edge),
+      renderedPositionMap,
+      nodeSizeMap,
+      defaultNodeSize: DEFAULT_NODE_SIZE,
+      layoutDirection,
       layoutSpacing,
-      edge.anchors,
-      endpointOffsets
-    );
+      getRouteNodeBoxes,
+      getRenderedEdgeEndpoints
+    });
   }, [
-    doc.edges,
+    doc,
     getRenderedEdgeEndpoints,
     getRouteNodeBoxes,
     layoutSpacing,
@@ -1676,11 +1665,7 @@ export function App() {
       if (!pointer) return;
       const route = buildDraggedEdgeRoute(edgeBendDrag.edgeId, pointer);
       if (!route) return;
-      setCurrentEdgeBends(prev => {
-        const { [edgeBendDrag.edgeId]: _removed, ...rest } = prev;
-        return rest;
-      });
-      setCurrentEdgeRoutes(prev => ({ ...prev, [edgeBendDrag.edgeId]: route }));
+      updateActiveTab(tab => applyDraggedEdgeRouteToHost(tab, edgeBendDrag.edgeId, route));
     };
     const finishEdgeBend = (event: PointerEvent | MouseEvent) => {
       event.preventDefault();
@@ -1704,8 +1689,7 @@ export function App() {
     commitCurrentEdgeUiSnapshot,
     edgeBendDrag,
     getCanvasContentPoint,
-    setCurrentEdgeBends,
-    setCurrentEdgeRoutes
+    updateActiveTab
   ]);
 
   React.useEffect(() => {
@@ -1755,11 +1739,7 @@ export function App() {
       suppressNextEdgeClickRef.current = true;
       const route = buildDraggedEdgeRoute(edgeId, pointer);
       if (!route) return;
-      setCurrentEdgeBends(prev => {
-        const { [edgeId]: _removed, ...rest } = prev;
-        return rest;
-      });
-      setCurrentEdgeRoutes(prev => ({ ...prev, [edgeId]: route }));
+      updateActiveTab(tab => applyDraggedEdgeRouteToHost(tab, edgeId, route));
     };
     const onPointerUp = () => {
       if (didDrag) {
