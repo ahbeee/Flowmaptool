@@ -1,8 +1,16 @@
-import type { FlowDoc, NodeId } from '../../shared/graph';
-import type { NodePosition, NodeSize, NodeSizeMap } from '../../shared/layout';
+import { reparentNode, type FlowDoc, type NodeId } from '../../shared/graph';
+import {
+  layoutFlow,
+  type LayoutDirection,
+  type LayoutSpacing,
+  type NodePosition,
+  type NodeSize,
+  type NodeSizeMap
+} from '../../shared/layout';
 import { getNodeOffset, type NodeOffset, type NodeOffsetMap } from '../../shared/local-reflow';
 import { translateEdgeBendsForMovedNodes, translateEdgeRoutesForMovedNodes } from './edge-ui-state';
 import { getNodeCenter } from './edge-routing';
+import { analyzeLayoutEdges, collectEdgeComponent } from './graph-analysis';
 import type { EdgeBendMap, EdgeRouteMap } from './persistence';
 import { boxesOverlap } from './ui-helpers';
 
@@ -33,6 +41,26 @@ export type ApplyNodeDragOptions = {
   defaultNodeSize: NodeSize;
   snapThreshold?: number;
   collisionGap?: number;
+};
+
+export type BuildNodeReparentDragResultOptions = {
+  doc: FlowDoc;
+  movingNodeId: NodeId;
+  dropParentTargetId: NodeId;
+  anchorRootId: NodeId;
+  renderedPositionMap: Map<NodeId, NodePosition>;
+  layoutDirection: LayoutDirection;
+  nodeSizeMap: NodeSizeMap;
+  layoutSpacing: LayoutSpacing;
+};
+
+export type NodeReparentDragResult = {
+  doc: FlowDoc;
+  movingNodeId: NodeId;
+  preservedComponentOffset: {
+    nodeIds: NodeId[];
+    offset: NodeOffset;
+  } | null;
 };
 
 export function applyNodeDragToHost<T extends NodeDragHost>(
@@ -161,6 +189,75 @@ export function applyNodeDragToHost<T extends NodeDragHost>(
     edgeRoutesByDirection: {
       ...host.edgeRoutesByDirection,
       [direction]: nextRoutesForDirection
+    }
+  };
+}
+
+export function restoreDetachedNodeDragToHost<T extends NodeDragHost>(
+  host: T,
+  dragState: NodeDragStateSnapshot
+): T {
+  const direction = host.layoutDirection;
+  const nextOffsets = { ...host.nodeOffsetsByDirection[direction] };
+  for (const nodeId of dragState.nodeIds) {
+    const startOffset = dragState.startOffsets[nodeId] || { dx: 0, dy: 0 };
+    if (startOffset.dx === 0 && startOffset.dy === 0) {
+      delete nextOffsets[nodeId];
+    } else {
+      nextOffsets[nodeId] = startOffset;
+    }
+  }
+  return {
+    ...host,
+    nodeOffsetsByDirection: {
+      ...host.nodeOffsetsByDirection,
+      [direction]: nextOffsets
+    },
+    edgeBendsByDirection: {
+      ...host.edgeBendsByDirection,
+      [direction]: dragState.startEdgeBends
+    },
+    edgeRoutesByDirection: {
+      ...host.edgeRoutesByDirection,
+      [direction]: dragState.startEdgeRoutes
+    }
+  };
+}
+
+export function buildNodeReparentDragResult({
+  doc,
+  movingNodeId,
+  dropParentTargetId,
+  anchorRootId,
+  renderedPositionMap,
+  layoutDirection,
+  nodeSizeMap,
+  layoutSpacing
+}: BuildNodeReparentDragResultOptions): NodeReparentDragResult {
+  const nextDoc = reparentNode(doc, movingNodeId, dropParentTargetId);
+  const rootRenderedBefore = renderedPositionMap.get(anchorRootId);
+  const nextLayoutEdgeAnalysis = analyzeLayoutEdges(nextDoc);
+  const nextLayoutDoc = { ...nextDoc, edges: nextLayoutEdgeAnalysis.layoutEdges };
+  const nextLayout = layoutFlow(nextLayoutDoc, layoutDirection, nodeSizeMap, layoutSpacing);
+  const rootBaseAfter = nextLayout.positions.find(pos => pos.id === anchorRootId);
+
+  if (!rootRenderedBefore || !rootBaseAfter) {
+    return {
+      doc: nextDoc,
+      movingNodeId,
+      preservedComponentOffset: null
+    };
+  }
+
+  return {
+    doc: nextDoc,
+    movingNodeId,
+    preservedComponentOffset: {
+      nodeIds: collectEdgeComponent(nextDoc, anchorRootId, nextLayoutEdgeAnalysis.layoutEdgeIds),
+      offset: {
+        dx: rootRenderedBefore.x - rootBaseAfter.x,
+        dy: rootRenderedBefore.y - rootBaseAfter.y
+      }
     }
   };
 }

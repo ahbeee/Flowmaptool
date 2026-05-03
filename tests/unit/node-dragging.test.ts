@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { addEdge, addNode, createEmptyDoc, type FlowDoc } from '../../src/shared/graph';
 import type { NodePosition, NodeSizeMap } from '../../src/shared/layout';
-import { applyNodeDragToHost, type NodeDragHost, type NodeDragStateSnapshot } from '../../src/renderer/src/node-dragging';
+import {
+  applyNodeDragToHost,
+  buildNodeReparentDragResult,
+  restoreDetachedNodeDragToHost,
+  type NodeDragHost,
+  type NodeDragStateSnapshot
+} from '../../src/renderer/src/node-dragging';
 
 const defaultNodeSize = { width: 70, height: 28 };
 function createDoc(): FlowDoc {
@@ -128,5 +134,64 @@ describe('node dragging helpers', () => {
     });
     expect(movedOneEndpoint.edgeBendsByDirection.horizontal).toEqual({});
     expect(movedOneEndpoint.edgeRoutesByDirection.horizontal).toEqual({});
+  });
+
+  it('restores original offsets and edge UI for detached non-root drags', () => {
+    const result = restoreDetachedNodeDragToHost(
+      {
+        ...host(),
+        nodeOffsetsByDirection: {
+          horizontal: { n1: { dx: 30, dy: 10 }, n2: { dx: 40, dy: 20 } },
+          vertical: {}
+        },
+        edgeBendsByDirection: { horizontal: { e1: { x: 200, y: 120 } }, vertical: {} },
+        edgeRoutesByDirection: { horizontal: { e1: { points: [{ x: 200, y: 120 }] } }, vertical: {} }
+      },
+      dragState({
+        nodeIds: ['n1', 'n2'],
+        startOffsets: { n1: { dx: 5, dy: 6 }, n2: { dx: 0, dy: 0 } },
+        startEdgeBends: { e1: { x: 120, y: 90 } },
+        startEdgeRoutes: { e1: { points: [{ x: 120, y: 90 }] } }
+      })
+    );
+
+    expect(result.nodeOffsetsByDirection.horizontal).toEqual({ n1: { dx: 5, dy: 6 } });
+    expect(result.edgeBendsByDirection.horizontal).toEqual({ e1: { x: 120, y: 90 } });
+    expect(result.edgeRoutesByDirection.horizontal).toEqual({ e1: { points: [{ x: 120, y: 90 }] } });
+  });
+
+  it('builds reparent drag result with preserved root component offset', () => {
+    const result = buildNodeReparentDragResult({
+      doc: createDoc(),
+      movingNodeId: 'n2',
+      dropParentTargetId: 'n3',
+      anchorRootId: 'n1',
+      renderedPositionMap: new Map([['n1', { id: 'n1', x: 200, y: 210 }]]),
+      layoutDirection: 'horizontal',
+      nodeSizeMap: {},
+      layoutSpacing: { primary: 56, secondary: 76 }
+    });
+
+    expect(result.doc.edges).toContainEqual(expect.objectContaining({ from: 'n3', to: 'n2' }));
+    expect(result.preservedComponentOffset).toEqual({
+      nodeIds: ['n1'],
+      offset: { dx: 120, dy: 130 }
+    });
+  });
+
+  it('returns no preserved offset when the anchor root was not rendered before reparenting', () => {
+    const result = buildNodeReparentDragResult({
+      doc: createDoc(),
+      movingNodeId: 'n2',
+      dropParentTargetId: 'n3',
+      anchorRootId: 'n1',
+      renderedPositionMap: new Map(),
+      layoutDirection: 'horizontal',
+      nodeSizeMap: {},
+      layoutSpacing: { primary: 56, secondary: 76 }
+    });
+
+    expect(result.doc.edges).toContainEqual(expect.objectContaining({ from: 'n3', to: 'n2' }));
+    expect(result.preservedComponentOffset).toBeNull();
   });
 });

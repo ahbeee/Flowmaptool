@@ -3,7 +3,6 @@ import {
   addEdge,
   addNode,
   deleteTag,
-  reparentNode,
   removeEdge,
   removeNodes,
   resetNodeStyle,
@@ -129,7 +128,11 @@ import {
   NODE_TEXT_BASELINE_Y,
   ROOT_NODE_STYLE
 } from './node-style';
-import { applyNodeDragToHost } from './node-dragging';
+import {
+  applyNodeDragToHost,
+  buildNodeReparentDragResult,
+  restoreDetachedNodeDragToHost
+} from './node-dragging';
 import {
   buildOutlineChecklistTargetsByNodeId,
   buildOutlineTree,
@@ -1635,31 +1638,27 @@ export function App() {
       }
       if (dragState.nodeIds.length === 1 && finalDropParentTargetId && !isRootDrag) {
         const movingNodeId = dragState.anchorNodeId;
-        const nextDoc = reparentNode(doc, movingNodeId, finalDropParentTargetId);
         const anchorRootId = primaryRootNodeId || doc.nodes[0]?.id || movingNodeId;
-        const rootRenderedBefore = renderedPositionMap.get(anchorRootId);
-        const nextLayoutEdgeAnalysis = analyzeLayoutEdges(nextDoc);
-        const nextLayoutDoc = { ...nextDoc, edges: nextLayoutEdgeAnalysis.layoutEdges };
-        const nextLayout = layoutFlow(nextLayoutDoc, layoutDirection, nodeSizeMap, layoutSpacing);
-        const rootBaseAfter = nextLayout.positions.find(pos => pos.id === anchorRootId);
-        commitDoc(() => nextDoc);
-        if (rootRenderedBefore && rootBaseAfter) {
-          const nextComponentIds = collectEdgeComponent(
-            nextDoc,
-            anchorRootId,
-            nextLayoutEdgeAnalysis.layoutEdgeIds
-          );
-          const preservedOffset = {
-            dx: rootRenderedBefore.x - rootBaseAfter.x,
-            dy: rootRenderedBefore.y - rootBaseAfter.y
-          };
+        const reparentResult = buildNodeReparentDragResult({
+          doc,
+          movingNodeId,
+          dropParentTargetId: finalDropParentTargetId,
+          anchorRootId,
+          renderedPositionMap,
+          layoutDirection,
+          nodeSizeMap,
+          layoutSpacing
+        });
+        commitDoc(() => reparentResult.doc);
+        if (reparentResult.preservedComponentOffset) {
+          const { nodeIds, offset } = reparentResult.preservedComponentOffset;
           setCurrentNodeOffsets(prev => {
             const next = { ...prev };
-            for (const nodeId of nextComponentIds) {
-              if (preservedOffset.dx === 0 && preservedOffset.dy === 0) {
+            for (const nodeId of nodeIds) {
+              if (offset.dx === 0 && offset.dy === 0) {
                 delete next[nodeId];
               } else {
-                next[nodeId] = preservedOffset;
+                next[nodeId] = offset;
               }
             }
             return next;
@@ -1669,32 +1668,7 @@ export function App() {
         }
         setSelectedNodeIds([movingNodeId]);
       } else if (!isRootDrag) {
-        updateActiveTab(tab => {
-          const nextOffsets = { ...tab.nodeOffsetsByDirection[layoutDirection] };
-          for (const nodeId of dragState.nodeIds) {
-            const startOffset = dragState.startOffsets[nodeId] || { dx: 0, dy: 0 };
-            if (startOffset.dx === 0 && startOffset.dy === 0) {
-              delete nextOffsets[nodeId];
-            } else {
-              nextOffsets[nodeId] = startOffset;
-            }
-          }
-          return {
-            ...tab,
-            nodeOffsetsByDirection: {
-              ...tab.nodeOffsetsByDirection,
-              [layoutDirection]: nextOffsets
-            },
-            edgeBendsByDirection: {
-              ...tab.edgeBendsByDirection,
-              [layoutDirection]: dragState.startEdgeBends
-            },
-            edgeRoutesByDirection: {
-              ...tab.edgeRoutesByDirection,
-              [layoutDirection]: dragState.startEdgeRoutes
-            }
-          };
-        });
+        updateActiveTab(tab => restoreDetachedNodeDragToHost(tab, dragState));
       }
       setDragState(null);
       setDropParentTargetId(null);
