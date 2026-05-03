@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { addEdge, addNode, createEmptyDoc } from '../../src/shared/graph';
+import { commitHistory, createHistory } from '../../src/shared/history';
 import {
   applyEdgeUiSnapshot,
   cloneEdgeBendMap,
   cloneEdgeRouteMap,
+  commitDocHistoryToHost,
+  commitCurrentEdgeUiSnapshotToHost,
+  commitEdgeUiChangeToHost,
   edgeUiSnapshotsEqual,
   emptyInteractionHistory,
   getEdgeUiSnapshot,
   pushInteractionPast,
+  redoInteractionInHost,
   translateEdgeBendsForMovedNodes,
-  translateEdgeRoutesForMovedNodes
+  translateEdgeRoutesForMovedNodes,
+  undoInteractionInHost
 } from '../../src/renderer/src/edge-ui-state';
 
 function createTwoEdgeDoc() {
@@ -80,5 +86,133 @@ describe('edge UI state helpers', () => {
     const past = [{ kind: 'doc' as const }, { kind: 'doc' as const }];
 
     expect(pushInteractionPast(past, { kind: 'doc' }, 2)).toEqual([{ kind: 'doc' }, { kind: 'doc' }]);
+  });
+
+  it('commits edge UI changes into interaction history only when snapshots change', () => {
+    const doc = createTwoEdgeDoc();
+    const host = {
+      history: createHistory(doc),
+      isDirty: false,
+      interactionHistory: emptyInteractionHistory(),
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    };
+
+    const unchanged = commitEdgeUiChangeToHost(host, snapshot => snapshot, 'horizontal');
+    expect(unchanged).toBe(host);
+
+    const changed = commitEdgeUiChangeToHost(
+      host,
+      snapshot => ({
+        ...snapshot,
+        edgeBendsByDirection: {
+          ...snapshot.edgeBendsByDirection,
+          horizontal: { e1: { x: 10, y: 20 } }
+        }
+      }),
+      'horizontal'
+    );
+    expect(changed.isDirty).toBe(true);
+    expect(changed.edgeBendsByDirection.horizontal).toEqual({ e1: { x: 10, y: 20 } });
+    expect(changed.interactionHistory.past).toHaveLength(1);
+    expect(changed.interactionHistory.future).toEqual([]);
+  });
+
+  it('commits the current edge UI snapshot after drag changes', () => {
+    const doc = createTwoEdgeDoc();
+    const host = {
+      history: createHistory(doc),
+      isDirty: false,
+      interactionHistory: emptyInteractionHistory(),
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    };
+    const before = getEdgeUiSnapshot(host);
+    const afterDrag = {
+      ...host,
+      edgeRoutesByDirection: {
+        horizontal: { e1: { points: [{ x: 1, y: 2 }] } },
+        vertical: {}
+      }
+    };
+
+    expect(commitCurrentEdgeUiSnapshotToHost(afterDrag, null)).toBe(afterDrag);
+    const committed = commitCurrentEdgeUiSnapshotToHost(afterDrag, before);
+    expect(committed.isDirty).toBe(true);
+    expect(committed.interactionHistory.past).toEqual([{ kind: 'edge-ui', snapshot: before }]);
+  });
+
+  it('undoes and redoes edge UI interaction history entries', () => {
+    const doc = createTwoEdgeDoc();
+    const clean = {
+      history: createHistory(doc),
+      isDirty: false,
+      interactionHistory: emptyInteractionHistory(),
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    };
+    const before = getEdgeUiSnapshot(clean);
+    const changed = commitEdgeUiChangeToHost(
+      clean,
+      snapshot => ({
+        ...snapshot,
+        edgeBendsByDirection: {
+          ...snapshot.edgeBendsByDirection,
+          horizontal: { e1: { x: 10, y: 20 } }
+        }
+      }),
+      'horizontal'
+    );
+
+    const undone = undoInteractionInHost(changed);
+    expect(getEdgeUiSnapshot(undone)).toEqual(before);
+    expect(undone.interactionHistory.past).toEqual([]);
+    expect(undone.interactionHistory.future).toHaveLength(1);
+
+    const redone = redoInteractionInHost(undone);
+    expect(redone.edgeBendsByDirection.horizontal).toEqual({ e1: { x: 10, y: 20 } });
+    expect(redone.interactionHistory.past).toHaveLength(1);
+    expect(redone.interactionHistory.future).toEqual([]);
+  });
+
+  it('falls back to document history when no interaction entries exist', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'A');
+    const nextDoc = addNode(doc, 'B');
+    const host = {
+      history: commitHistory(createHistory(doc), nextDoc),
+      isDirty: false,
+      interactionHistory: emptyInteractionHistory(),
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    };
+
+    const undone = undoInteractionInHost(host);
+    expect(undone.history.present.nodes).toHaveLength(1);
+    expect(undone.isDirty).toBe(true);
+
+    const redone = redoInteractionInHost(undone);
+    expect(redone.history.present.nodes).toHaveLength(2);
+  });
+
+  it('commits document history entries into the shared interaction stack', () => {
+    let doc = createEmptyDoc();
+    doc = addNode(doc, 'A');
+    const nextDoc = addNode(doc, 'B');
+    const host = {
+      history: createHistory(doc),
+      isDirty: false,
+      interactionHistory: emptyInteractionHistory(),
+      edgeBendsByDirection: { horizontal: {}, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    };
+    const nextHistory = commitHistory(host.history, nextDoc);
+
+    const committed = commitDocHistoryToHost(host, nextHistory);
+
+    expect(committed.history.present.nodes).toHaveLength(2);
+    expect(committed.isDirty).toBe(true);
+    expect(committed.interactionHistory).toEqual({ past: [{ kind: 'doc' }], future: [] });
+    expect(commitDocHistoryToHost(host, host.history).interactionHistory).toBe(host.interactionHistory);
   });
 });

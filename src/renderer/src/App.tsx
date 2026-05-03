@@ -28,8 +28,6 @@ import {
 import {
   commitHistory,
   createHistory,
-  redoHistory,
-  undoHistory
 } from '@shared/history';
 import {
   getLayoutSecondaryGap,
@@ -74,15 +72,17 @@ import {
 } from './connect-dragging';
 import { planEdgeConnection } from './edge-connection';
 import {
-  applyEdgeUiSnapshot,
   cloneEdgeBendMap,
   cloneEdgeBendsByDirection,
   cloneEdgeRouteMap,
   cloneEdgeRoutesByDirection,
-  edgeUiSnapshotsEqual,
+  commitDocHistoryToHost,
+  commitCurrentEdgeUiSnapshotToHost,
+  commitEdgeUiChangeToHost,
   emptyInteractionHistory,
   getEdgeUiSnapshot,
-  pushInteractionPast,
+  redoInteractionInHost,
+  undoInteractionInHost,
   type EdgeUiSnapshot
 } from './edge-ui-state';
 import {
@@ -478,19 +478,7 @@ export function App() {
 
   const commitEdgeUiChange = React.useCallback(
     (recipe: (snapshot: EdgeUiSnapshot, layoutDirection: LayoutDirection) => EdgeUiSnapshot) => {
-      updateActiveTab(tab => {
-        const before = getEdgeUiSnapshot(tab);
-        const after = recipe(before, tab.layoutDirection);
-        if (edgeUiSnapshotsEqual(before, after)) return tab;
-        return {
-          ...applyEdgeUiSnapshot(tab, after),
-          isDirty: true,
-          interactionHistory: {
-            past: pushInteractionPast(tab.interactionHistory.past, { kind: 'edge-ui', snapshot: before }),
-            future: []
-          }
-        };
-      });
+      updateActiveTab(tab => commitEdgeUiChangeToHost(tab, recipe, tab.layoutDirection));
       setFileMessage('Edited');
     },
     [updateActiveTab]
@@ -499,74 +487,19 @@ export function App() {
   const commitCurrentEdgeUiSnapshot = React.useCallback(
     (before: EdgeUiSnapshot | null) => {
       if (!before) return;
-      updateActiveTab(tab => {
-        const after = getEdgeUiSnapshot(tab);
-        if (edgeUiSnapshotsEqual(before, after)) return tab;
-        return {
-          ...tab,
-          isDirty: true,
-          interactionHistory: {
-            past: pushInteractionPast(tab.interactionHistory.past, { kind: 'edge-ui', snapshot: before }),
-            future: []
-          }
-        };
-      });
+      updateActiveTab(tab => commitCurrentEdgeUiSnapshotToHost(tab, before));
       setFileMessage('Edited');
     },
     [updateActiveTab]
   );
 
   const undoInteraction = React.useCallback(() => {
-    updateActiveTab(tab => {
-      const entry = tab.interactionHistory.past[tab.interactionHistory.past.length - 1];
-      if (!entry) {
-        const nextHistory = undoHistory(tab.history);
-        return nextHistory === tab.history ? tab : { ...tab, history: nextHistory, isDirty: true };
-      }
-      const base = {
-        ...tab,
-        isDirty: true,
-        interactionHistory: {
-          past: tab.interactionHistory.past.slice(0, -1),
-          future: [
-            entry.kind === 'edge-ui'
-              ? { kind: 'edge-ui' as const, snapshot: getEdgeUiSnapshot(tab) }
-              : { kind: 'doc' as const },
-            ...tab.interactionHistory.future
-          ]
-        }
-      };
-      return entry.kind === 'edge-ui'
-        ? applyEdgeUiSnapshot(base, entry.snapshot)
-        : { ...base, history: undoHistory(tab.history) };
-    });
+    updateActiveTab(undoInteractionInHost);
     setFileMessage('Edited');
   }, [updateActiveTab]);
 
   const redoInteraction = React.useCallback(() => {
-    updateActiveTab(tab => {
-      const entry = tab.interactionHistory.future[0];
-      if (!entry) {
-        const nextHistory = redoHistory(tab.history);
-        return nextHistory === tab.history ? tab : { ...tab, history: nextHistory, isDirty: true };
-      }
-      const base = {
-        ...tab,
-        isDirty: true,
-        interactionHistory: {
-          past: pushInteractionPast(
-            tab.interactionHistory.past,
-            entry.kind === 'edge-ui'
-              ? { kind: 'edge-ui' as const, snapshot: getEdgeUiSnapshot(tab) }
-              : { kind: 'doc' as const }
-          ),
-          future: tab.interactionHistory.future.slice(1)
-        }
-      };
-      return entry.kind === 'edge-ui'
-        ? applyEdgeUiSnapshot(base, entry.snapshot)
-        : { ...base, history: redoHistory(tab.history) };
-    });
+    updateActiveTab(redoInteractionInHost);
     setFileMessage('Edited');
   }, [updateActiveTab]);
 
@@ -624,18 +557,7 @@ export function App() {
     updateActiveTab(tab => {
       const nextDoc = ensureDocHasNode(recipe(tab.history.present));
       const nextHistory = commitHistory(tab.history, nextDoc);
-      return {
-        ...tab,
-        history: nextHistory,
-        interactionHistory:
-          nextHistory === tab.history
-            ? tab.interactionHistory
-            : {
-                past: pushInteractionPast(tab.interactionHistory.past, { kind: 'doc' }),
-                future: []
-              },
-        isDirty: true
-      };
+      return commitDocHistoryToHost(tab, nextHistory);
     });
     setFileMessage('Edited');
   }, [updateActiveTab]);

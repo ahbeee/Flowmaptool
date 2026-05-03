@@ -1,4 +1,5 @@
 import type { FlowDoc, NodeId } from '@shared/graph';
+import { redoHistory, undoHistory, type HistoryState } from '../../shared/history';
 import type {
   EdgeBendMap,
   EdgeBendsByDirection,
@@ -23,6 +24,12 @@ export type InteractionHistory = {
 type EdgeUiHost = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
+};
+
+type InteractionHost = EdgeUiHost & {
+  history: HistoryState<FlowDoc>;
+  isDirty: boolean;
+  interactionHistory: InteractionHistory;
 };
 
 export function emptyInteractionHistory(): InteractionHistory {
@@ -134,4 +141,102 @@ export function pushInteractionPast(
   maxPast = 100
 ): InteractionHistoryEntry[] {
   return past.length >= maxPast ? [...past.slice(1), entry] : [...past, entry];
+}
+
+export function commitEdgeUiChangeToHost<T extends InteractionHost>(
+  host: T,
+  recipe: (snapshot: EdgeUiSnapshot, layoutDirection: 'horizontal' | 'vertical') => EdgeUiSnapshot,
+  layoutDirection: 'horizontal' | 'vertical'
+): T {
+  const before = getEdgeUiSnapshot(host);
+  const after = recipe(before, layoutDirection);
+  if (edgeUiSnapshotsEqual(before, after)) return host;
+  return {
+    ...applyEdgeUiSnapshot(host, after),
+    isDirty: true,
+    interactionHistory: {
+      past: pushInteractionPast(host.interactionHistory.past, { kind: 'edge-ui', snapshot: before }),
+      future: []
+    }
+  };
+}
+
+export function commitCurrentEdgeUiSnapshotToHost<T extends InteractionHost>(
+  host: T,
+  before: EdgeUiSnapshot | null
+): T {
+  if (!before) return host;
+  const after = getEdgeUiSnapshot(host);
+  if (edgeUiSnapshotsEqual(before, after)) return host;
+  return {
+    ...host,
+    isDirty: true,
+    interactionHistory: {
+      past: pushInteractionPast(host.interactionHistory.past, { kind: 'edge-ui', snapshot: before }),
+      future: []
+    }
+  };
+}
+
+export function commitDocHistoryToHost<T extends InteractionHost>(host: T, nextHistory: HistoryState<FlowDoc>): T {
+  return {
+    ...host,
+    history: nextHistory,
+    interactionHistory:
+      nextHistory === host.history
+        ? host.interactionHistory
+        : {
+            past: pushInteractionPast(host.interactionHistory.past, { kind: 'doc' }),
+            future: []
+          },
+    isDirty: true
+  };
+}
+
+export function undoInteractionInHost<T extends InteractionHost>(host: T): T {
+  const entry = host.interactionHistory.past[host.interactionHistory.past.length - 1];
+  if (!entry) {
+    const nextHistory = undoHistory(host.history);
+    return nextHistory === host.history ? host : { ...host, history: nextHistory, isDirty: true };
+  }
+  const base = {
+    ...host,
+    isDirty: true,
+    interactionHistory: {
+      past: host.interactionHistory.past.slice(0, -1),
+      future: [
+        entry.kind === 'edge-ui'
+          ? { kind: 'edge-ui' as const, snapshot: getEdgeUiSnapshot(host) }
+          : { kind: 'doc' as const },
+        ...host.interactionHistory.future
+      ]
+    }
+  };
+  return entry.kind === 'edge-ui'
+    ? applyEdgeUiSnapshot(base, entry.snapshot)
+    : { ...base, history: undoHistory(host.history) };
+}
+
+export function redoInteractionInHost<T extends InteractionHost>(host: T): T {
+  const entry = host.interactionHistory.future[0];
+  if (!entry) {
+    const nextHistory = redoHistory(host.history);
+    return nextHistory === host.history ? host : { ...host, history: nextHistory, isDirty: true };
+  }
+  const base = {
+    ...host,
+    isDirty: true,
+    interactionHistory: {
+      past: pushInteractionPast(
+        host.interactionHistory.past,
+        entry.kind === 'edge-ui'
+          ? { kind: 'edge-ui' as const, snapshot: getEdgeUiSnapshot(host) }
+          : { kind: 'doc' as const }
+      ),
+      future: host.interactionHistory.future.slice(1)
+    }
+  };
+  return entry.kind === 'edge-ui'
+    ? applyEdgeUiSnapshot(base, entry.snapshot)
+    : { ...base, history: redoHistory(host.history) };
 }
