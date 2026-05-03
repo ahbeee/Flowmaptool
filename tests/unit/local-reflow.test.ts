@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   getLayerReorderPreview,
+  hasAnyNodeOffset,
+  removeNodeOffsets,
   reorderLayerGroupOnDrop,
   reorderLayerOnDrop,
   type NodeOffsetMap
@@ -66,5 +68,21 @@ describe('local reflow', () => {
     const preview = getLayerReorderPreview(basePositions, offsets, ['n3'], 'n3', 'horizontal');
     expect(preview).not.toBeNull();
     expect(preview?.insertionIndex).toBe(0);
+  });
+
+  it('detects and removes manual offsets for selected nodes', () => {
+    const offsets: NodeOffsetMap = {
+      n1: { dx: 0, dy: 0 },
+      n2: { dx: 12, dy: 0 },
+      n3: { dx: 0, dy: -4 }
+    };
+
+    expect(hasAnyNodeOffset(offsets, ['n1'])).toBe(false);
+    expect(hasAnyNodeOffset(offsets, ['n1', 'n2'])).toBe(true);
+    expect(removeNodeOffsets(offsets, ['n2', 'missing'])).toEqual({
+      n1: { dx: 0, dy: 0 },
+      n3: { dx: 0, dy: -4 }
+    });
+    expect(removeNodeOffsets(offsets, [])).toBe(offsets);
   });
 });

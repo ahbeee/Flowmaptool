@@ -78,6 +78,22 @@ export function getNodeOffset(offsets: NodeOffsetMap, nodeId: NodeId): NodeOffse
   return offsets[nodeId] || { dx: 0, dy: 0 };
 }
 
+export function hasAnyNodeOffset(offsets: NodeOffsetMap, nodeIds: NodeId[]): boolean {
+  return nodeIds.some(nodeId => {
+    const offset = getNodeOffset(offsets, nodeId);
+    return offset.dx !== 0 || offset.dy !== 0;
+  });
+}
+
+export function removeNodeOffsets(offsets: NodeOffsetMap, nodeIds: NodeId[]): NodeOffsetMap {
+  if (nodeIds.length === 0) return offsets;
+  const next = { ...offsets };
+  for (const nodeId of nodeIds) {
+    delete next[nodeId];
+  }
+  return next;
+}
+
 export function applyNodeOffset(pos: NodePosition, offset: NodeOffset): NodePosition {
   return {
     id: pos.id,

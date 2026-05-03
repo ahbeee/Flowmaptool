@@ -47,6 +47,8 @@ import {
   applyNodeOffset,
   getLayerReorderPreview,
   getNodeOffset,
+  hasAnyNodeOffset,
+  removeNodeOffsets,
   type NodeOffset,
   type NodeOffsetMap
 } from '@shared/local-reflow';
@@ -1696,23 +1698,13 @@ export function App() {
   }, [commitEdgeUiChange, selectedEdgeId]);
 
   const hasManualOffset = React.useMemo(
-    () =>
-      selectedNodeIds.some(nodeId => {
-        const offset = getNodeOffset(nodeOffsets, nodeId);
-        return offset.dx !== 0 || offset.dy !== 0;
-      }),
+    () => hasAnyNodeOffset(nodeOffsets, selectedNodeIds),
     [nodeOffsets, selectedNodeIds]
   );
 
   const resetSelectedNodeOffsets = React.useCallback(() => {
     if (selectedNodeIds.length === 0) return;
-    setCurrentNodeOffsets(prev => {
-      const next = { ...prev };
-      for (const nodeId of selectedNodeIds) {
-        delete next[nodeId];
-      }
-      return next;
-    });
+    setCurrentNodeOffsets(prev => removeNodeOffsets(prev, selectedNodeIds));
   }, [selectedNodeIds, setCurrentNodeOffsets]);
 
   const applySelectedNodeStyle = React.useCallback(
