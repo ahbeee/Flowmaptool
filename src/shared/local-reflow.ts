@@ -94,6 +94,24 @@ export function removeNodeOffsets(offsets: NodeOffsetMap, nodeIds: NodeId[]): No
   return next;
 }
 
+export function mergeNodeOffsets(offsets: NodeOffsetMap, updates: Record<NodeId, NodeOffset>): NodeOffsetMap {
+  const next = { ...offsets };
+  let changed = false;
+  for (const [nodeId, offset] of Object.entries(updates)) {
+    const current = getNodeOffset(offsets, nodeId);
+    if (offset.dx === 0 && offset.dy === 0) {
+      if (nodeId in next) {
+        delete next[nodeId];
+        changed = true;
+      }
+    } else if (current.dx !== offset.dx || current.dy !== offset.dy) {
+      next[nodeId] = offset;
+      changed = true;
+    }
+  }
+  return changed ? next : offsets;
+}
+
 export function applyNodeOffset(pos: NodePosition, offset: NodeOffset): NodePosition {
   return {
     id: pos.id,

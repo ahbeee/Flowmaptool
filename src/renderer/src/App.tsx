@@ -48,6 +48,7 @@ import {
   getLayerReorderPreview,
   getNodeOffset,
   hasAnyNodeOffset,
+  mergeNodeOffsets,
   removeNodeOffsets,
   type NodeOffset,
   type NodeOffsetMap
@@ -459,23 +460,7 @@ export function App() {
   }, [updateActiveTab]);
 
   const restoreCurrentNodeOffsets = React.useCallback((offsets: Record<NodeId, NodeOffset>) => {
-    setCurrentNodeOffsets(prev => {
-      const next = { ...prev };
-      let changed = false;
-      for (const [nodeId, offset] of Object.entries(offsets)) {
-        const current = getNodeOffset(prev, nodeId);
-        if (offset.dx === 0 && offset.dy === 0) {
-          if (nodeId in next) {
-            delete next[nodeId];
-            changed = true;
-          }
-        } else if (current.dx !== offset.dx || current.dy !== offset.dy) {
-          next[nodeId] = offset;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
+    setCurrentNodeOffsets(prev => mergeNodeOffsets(prev, offsets));
   }, [setCurrentNodeOffsets]);
 
   const setCurrentEdgeBends = React.useCallback((updater: (prev: EdgeBendMap) => EdgeBendMap) => {

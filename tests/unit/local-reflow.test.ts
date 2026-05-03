@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getLayerReorderPreview,
   hasAnyNodeOffset,
+  mergeNodeOffsets,
   removeNodeOffsets,
   reorderLayerGroupOnDrop,
   reorderLayerOnDrop,
@@ -84,5 +85,19 @@ describe('local reflow', () => {
       n3: { dx: 0, dy: -4 }
     });
     expect(removeNodeOffsets(offsets, [])).toBe(offsets);
+  });
+
+  it('merges node offset updates and removes zero offsets', () => {
+    const offsets: NodeOffsetMap = {
+      n1: { dx: 4, dy: 0 },
+      n2: { dx: 2, dy: 3 }
+    };
+
+    expect(mergeNodeOffsets(offsets, { n1: { dx: 4, dy: 0 } })).toBe(offsets);
+    expect(mergeNodeOffsets(offsets, { n1: { dx: 0, dy: 0 }, n3: { dx: 6, dy: 7 } })).toEqual({
+      n2: { dx: 2, dy: 3 },
+      n3: { dx: 6, dy: 7 }
+    });
+    expect(mergeNodeOffsets(offsets, { missing: { dx: 0, dy: 0 } })).toBe(offsets);
   });
 });
