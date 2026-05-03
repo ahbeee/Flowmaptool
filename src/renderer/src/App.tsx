@@ -2,7 +2,6 @@ import React from 'react';
 import {
   addEdge,
   addNode,
-  createEmptyDoc,
   deleteTag,
   reparentNode,
   removeEdge,
@@ -36,7 +35,6 @@ import {
   commitHistory,
   createHistory,
   redoHistory,
-  type HistoryState,
   undoHistory
 } from '@shared/history';
 import {
@@ -73,9 +71,16 @@ import {
   pushInteractionPast,
   translateEdgeBendsForMovedNodes,
   translateEdgeRoutesForMovedNodes,
-  type EdgeUiSnapshot,
-  type InteractionHistory
+  type EdgeUiSnapshot
 } from './edge-ui-state';
+import {
+  createSeedDoc,
+  createTabDocument,
+  ensureDocHasNode,
+  NEW_NODE_LABEL,
+  ROOT_LABEL,
+  type TabDocument
+} from './document-state';
 import {
   distanceToPathSquared,
   edgeMidpoint,
@@ -129,11 +134,8 @@ import {
   serializePersistedQflow,
   type EdgeBend,
   type EdgeBendMap,
-  type EdgeBendsByDirection,
   type EdgeRoute,
-  type EdgeRouteMap,
-  type EdgeRoutesByDirection,
-  type NodeOffsetsByDirection
+  type EdgeRouteMap
 } from './persistence';
 import {
   distanceSquared,
@@ -163,8 +165,6 @@ import {
   sameValues
 } from './ui-helpers';
 
-const ROOT_LABEL = '';
-const NEW_NODE_LABEL = '';
 const SPACING_MIN = 0;
 const SPACING_MAX = 320;
 const SIDE_PANEL_MIN_WIDTH = 220;
@@ -302,45 +302,7 @@ type SvgNodeSnapshot = {
   width: number;
   height: number;
 };
-type TabDocument = {
-  id: string;
-  title: string;
-  history: HistoryState<FlowDoc>;
-  currentFilePath: string | null;
-  isDirty: boolean;
-  layoutDirection: LayoutDirection;
-  nodeOffsetsByDirection: NodeOffsetsByDirection;
-  edgeBendsByDirection: EdgeBendsByDirection;
-  edgeRoutesByDirection: EdgeRoutesByDirection;
-  toolbarVisible: boolean;
-  interactionHistory: InteractionHistory;
-};
-
 const PNG_FILTER = [{ name: 'PNG Image', extensions: ['png'] }];
-
-function createSeedDoc(): FlowDoc {
-  return addNode(createEmptyDoc(), ROOT_LABEL, ROOT_NODE_STYLE);
-}
-
-function ensureDocHasNode(doc: FlowDoc): FlowDoc {
-  return doc.nodes.length === 0 ? addNode(doc, ROOT_LABEL, ROOT_NODE_STYLE) : doc;
-}
-
-function createTabDocument(id: string, title: string, doc?: FlowDoc): TabDocument {
-  return {
-    id,
-    title,
-    history: createHistory(doc || createSeedDoc()),
-    currentFilePath: null,
-    isDirty: false,
-    layoutDirection: 'horizontal',
-    nodeOffsetsByDirection: emptyOffsetsByDirection(),
-    edgeBendsByDirection: emptyEdgeBendsByDirection(),
-    edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
-    toolbarVisible: true,
-    interactionHistory: emptyInteractionHistory()
-  };
-}
 
 function getTheme(themeId: string) {
   return THEMES[(themeId as ThemeId) in THEMES ? (themeId as ThemeId) : 'blue-gray'];
