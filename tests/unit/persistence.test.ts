@@ -43,7 +43,12 @@ describe('qflow persistence helpers', () => {
         horizontal: { e1: { points: [{ x: 4, y: 5 }] } },
         vertical: { e1: { points: [] } }
       },
-      toolbarVisible: false
+      toolbarVisible: false,
+      taskTable: {
+        sort: { key: 'due', direction: 'desc' },
+        visibleColumnKeys: ['task', 'priority', 'due'],
+        expanded: true
+      }
     });
 
     const parsed = parsePersistedQflow(raw, parseOptions);
@@ -56,6 +61,34 @@ describe('qflow persistence helpers', () => {
     expect(parsed.ui.edgeRoutesByDirection.horizontal).toEqual({ e1: { points: [{ x: 4, y: 5 }] } });
     expect(parsed.ui.edgeRoutesByDirection.vertical).toEqual({});
     expect(parsed.ui.toolbarVisible).toBe(false);
+    expect(parsed.ui.taskTable).toEqual({
+      sort: { key: 'due', direction: 'desc' },
+      visibleColumnKeys: ['task', 'priority', 'due'],
+      expanded: true
+    });
+  });
+
+  it('sanitizes persisted task table preferences', () => {
+    const parsed = parsePersistedQflow(
+      JSON.stringify({
+        schemaVersion: 1,
+        doc: { schemaVersion: 1, nodes: [{ id: 'n1', label: 'A' }], edges: [] },
+        ui: {
+          taskTable: {
+            sort: { key: 'assignee', direction: 'asc' },
+            visibleColumnKeys: ['notes', 'bad', 'task'],
+            expanded: 'yes'
+          }
+        }
+      }),
+      parseOptions
+    );
+
+    expect(parsed.ui.taskTable).toEqual({
+      sort: undefined,
+      visibleColumnKeys: ['task', 'notes'],
+      expanded: false
+    });
   });
 
   it('migrates legacy flat edge bends into the active layout direction', () => {

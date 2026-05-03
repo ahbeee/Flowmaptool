@@ -2,6 +2,13 @@ import { addNode, deserialize, SCHEMA_VERSION, type FlowDoc, type NodeId, type N
 import type { LayoutDirection } from '../../shared/layout';
 import type { NodeOffsetMap } from '../../shared/local-reflow';
 import type { Point } from './routing-geometry';
+import {
+  DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
+  getVisibleTaskTableColumns,
+  TASK_TABLE_COLUMNS,
+  type TaskTableColumnKey,
+  type TaskTableSort
+} from './task-table';
 
 export type NodeOffsetsByDirection = Record<LayoutDirection, NodeOffsetMap>;
 export type EdgeBend = { x: number; y: number };
@@ -10,6 +17,11 @@ export type EdgeBendsByDirection = Record<LayoutDirection, EdgeBendMap>;
 export type EdgeRoute = { points: Point[] };
 export type EdgeRouteMap = Record<string, EdgeRoute>;
 export type EdgeRoutesByDirection = Record<LayoutDirection, EdgeRouteMap>;
+export type PersistedTaskTableUiState = {
+  sort?: TaskTableSort;
+  visibleColumnKeys: TaskTableColumnKey[];
+  expanded: boolean;
+};
 
 export type PersistedUiState = {
   layoutDirection: LayoutDirection;
@@ -17,6 +29,7 @@ export type PersistedUiState = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
   toolbarVisible: boolean;
+  taskTable: PersistedTaskTableUiState;
 };
 
 export type PersistedQflowFile = {
@@ -37,6 +50,7 @@ export type PersistedQflowSerializable = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
   toolbarVisible: boolean;
+  taskTable: PersistedTaskTableUiState;
 };
 
 export function emptyOffsetsByDirection(): NodeOffsetsByDirection {
@@ -49,6 +63,13 @@ export function emptyEdgeBendsByDirection(): EdgeBendsByDirection {
 
 export function emptyEdgeRoutesByDirection(): EdgeRoutesByDirection {
   return { horizontal: {}, vertical: {} };
+}
+
+export function defaultTaskTableUiState(): PersistedTaskTableUiState {
+  return {
+    visibleColumnKeys: [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS],
+    expanded: false
+  };
 }
 
 function ensureDocHasNode(doc: FlowDoc, options: ParsePersistedQflowOptions): FlowDoc {
@@ -115,6 +136,33 @@ export function sanitizeEdgeRouteMap(value: unknown, validEdgeIds: Set<string>):
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeTaskTableSort(value: unknown, visibleColumnKeys: TaskTableColumnKey[]): TaskTableSort | undefined {
+  if (!isRecord(value)) return undefined;
+  const validKeys = new Set(TASK_TABLE_COLUMNS.map(column => column.key));
+  const key = value.key;
+  const direction = value.direction;
+  if (typeof key !== 'string' || !validKeys.has(key as TaskTableColumnKey)) return undefined;
+  if (direction !== 'asc' && direction !== 'desc') return undefined;
+  if (!visibleColumnKeys.includes(key as TaskTableColumnKey)) return undefined;
+  return { key: key as TaskTableColumnKey, direction };
+}
+
+export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiState {
+  if (!isRecord(value)) return defaultTaskTableUiState();
+
+  const visibleColumnKeys = Array.isArray(value.visibleColumnKeys)
+    ? getVisibleTaskTableColumns(
+        value.visibleColumnKeys.filter((key): key is TaskTableColumnKey => typeof key === 'string')
+      ).map(column => column.key)
+    : [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS];
+
+  return {
+    sort: sanitizeTaskTableSort(value.sort, visibleColumnKeys),
+    visibleColumnKeys,
+    expanded: value.expanded === true
+  };
 }
 
 function parseJsonFile(raw: string): unknown {
@@ -192,9 +240,17 @@ export function parsePersistedQflow(
     };
   }
   const toolbarVisible = rawUi?.toolbarVisible === false ? false : true;
+  const taskTable = sanitizeTaskTableUiState(rawUi?.taskTable);
   return {
     doc,
-    ui: { layoutDirection, nodeOffsetsByDirection, edgeBendsByDirection, edgeRoutesByDirection, toolbarVisible }
+    ui: {
+      layoutDirection,
+      nodeOffsetsByDirection,
+      edgeBendsByDirection,
+      edgeRoutesByDirection,
+      toolbarVisible,
+      taskTable
+    }
   };
 }
 
@@ -207,7 +263,8 @@ export function serializePersistedQflow(input: PersistedQflowSerializable): stri
       nodeOffsetsByDirection: input.nodeOffsetsByDirection,
       edgeBendsByDirection: input.edgeBendsByDirection,
       edgeRoutesByDirection: input.edgeRoutesByDirection,
-      toolbarVisible: input.toolbarVisible
+      toolbarVisible: input.toolbarVisible,
+      taskTable: input.taskTable
     }
   };
   return JSON.stringify(payload, null, 2);

@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { addChild, applyTag, launchApp, renameNode } from './helpers';
+import { readFile } from 'node:fs/promises';
+import type { PersistedQflowFile } from '../../src/renderer/src/persistence';
+import {
+  addChild,
+  applyTag,
+  createDefaultDocFixture,
+  launchApp,
+  launchAppWithFixture,
+  renameNode,
+  triggerMenuAction
+} from './helpers';
 
 test('task table derives tagged nodes only and keeps tag read-only', async () => {
   const { app, window } = await launchApp();
@@ -89,6 +99,45 @@ test('task table column menu hides optional columns and keeps task visible', asy
   await expect(panel.locator('tbody tr').first()).toContainText('Root Task');
 
   await app.close();
+});
+
+test('task table preferences persist after save and reopen', async ({}, testInfo) => {
+  const first = await launchAppWithFixture(testInfo, 'task-table-prefs.qflow', createDefaultDocFixture());
+  const filePath = first.filePath;
+
+  await triggerMenuAction(first.app, 'file:open');
+  await first.window.getByTestId('task-toggle').click();
+  await first.window.getByTestId('task-columns-toggle').click();
+  await first.window.getByTestId('task-columns-menu').getByLabel('Category').uncheck();
+  await first.window.getByTestId('task-sort-due').click();
+  await first.window.getByTestId('task-sort-due').click();
+  await first.window.getByTestId('task-expand-toggle').click();
+  await expect(first.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
+
+  await triggerMenuAction(first.app, 'file:save');
+  await expect(first.window.getByTestId('file-status')).toContainText('Saved');
+  await first.app.close();
+
+  const saved = JSON.parse(await readFile(filePath, 'utf-8')) as PersistedQflowFile;
+  expect(saved.ui?.taskTable).toEqual({
+    sort: { key: 'due', direction: 'desc' },
+    visibleColumnKeys: ['task', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
+    expanded: true
+  });
+
+  const second = await launchAppWithFixture(testInfo, 'task-table-prefs-reopen.qflow', saved);
+  await triggerMenuAction(second.app, 'file:open');
+  await second.window.getByTestId('task-toggle').click();
+
+  const reopenedPanel = second.window.getByTestId('task-panel');
+  await expect(second.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
+  await expect(reopenedPanel.locator('th').filter({ hasText: 'Category' })).toHaveCount(0);
+  await expect(second.window.getByTestId('task-sort-due').locator('xpath=ancestor::th')).toHaveAttribute(
+    'aria-sort',
+    'descending'
+  );
+
+  await second.app.close();
 });
 
 test('task table can expand to the main workspace without horizontal table scrolling', async () => {

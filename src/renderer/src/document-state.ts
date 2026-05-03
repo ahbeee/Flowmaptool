@@ -12,7 +12,9 @@ import {
   type EdgeBendsByDirection,
   type EdgeRouteMap,
   type EdgeRoutesByDirection,
-  type NodeOffsetsByDirection
+  type NodeOffsetsByDirection,
+  defaultTaskTableUiState,
+  type PersistedTaskTableUiState
 } from './persistence';
 
 export const ROOT_LABEL = '';
@@ -29,6 +31,7 @@ export type TabDocument = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
   toolbarVisible: boolean;
+  taskTable: PersistedTaskTableUiState;
   interactionHistory: InteractionHistory;
 };
 
@@ -52,6 +55,7 @@ export function createTabDocument(id: string, title: string, doc?: FlowDoc): Tab
     edgeBendsByDirection: emptyEdgeBendsByDirection(),
     edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
     toolbarVisible: true,
+    taskTable: defaultTaskTableUiState(),
     interactionHistory: emptyInteractionHistory()
   };
 }
@@ -111,6 +115,7 @@ export function replaceTabWithNewDocument(
       edgeBendsByDirection: emptyEdgeBendsByDirection(),
       edgeRoutesByDirection: emptyEdgeRoutesByDirection(),
       toolbarVisible: true,
+      taskTable: defaultTaskTableUiState(),
       interactionHistory: emptyInteractionHistory()
     },
     resetNodeId: nextDoc.nodes[0]?.id

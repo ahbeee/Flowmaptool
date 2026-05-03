@@ -45,6 +45,10 @@ describe('document state helpers', () => {
       edgeBendsByDirection: { horizontal: {}, vertical: {} },
       edgeRoutesByDirection: { horizontal: {}, vertical: {} },
       toolbarVisible: true,
+      taskTable: {
+        visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
+        expanded: false
+      },
       interactionHistory: { past: [], future: [] }
     });
     expect(tab.history).toEqual({ past: [], present: doc, future: [] });
@@ -105,6 +109,10 @@ describe('document state helpers', () => {
       currentFilePath: null,
       isDirty: false,
       toolbarVisible: true,
+      taskTable: {
+        visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
+        expanded: false
+      },
       nodeOffsetsByDirection: { horizontal: {}, vertical: {} },
       edgeBendsByDirection: { horizontal: {}, vertical: {} },
       edgeRoutesByDirection: { horizontal: {}, vertical: {} },

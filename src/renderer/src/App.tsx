@@ -149,7 +149,6 @@ import {
 import { pointInsideBox, segmentIntersectsBox, segmentsIntersect, type Point } from './routing-geometry';
 import {
   buildTaskTableRows,
-  DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
   getNextVisibleTaskTableColumnKeys,
   getNextTaskTableSort,
   getTaskNodeLabel,
@@ -159,7 +158,6 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_TABLE_COLUMNS,
   type TaskTableColumnKey,
-  type TaskTableSort,
   type TaskTableSortKey
 } from './task-table';
 import {
@@ -250,11 +248,6 @@ export function App() {
   const [newTagColor, setNewTagColor] = React.useState(COLOR_SWATCHES[0]);
   const [outlineVisible, setOutlineVisible] = React.useState(true);
   const [taskTableVisible, setTaskTableVisible] = React.useState(false);
-  const [taskTableExpanded, setTaskTableExpanded] = React.useState(false);
-  const [taskTableSort, setTaskTableSort] = React.useState<TaskTableSort | undefined>();
-  const [visibleTaskTableColumnKeys, setVisibleTaskTableColumnKeys] = React.useState<TaskTableColumnKey[]>(
-    DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS
-  );
   const [sidePanelWidth, setSidePanelWidth] = React.useState(SIDE_PANEL_DEFAULT_WIDTH);
   const [sidePanelResizing, setSidePanelResizing] = React.useState(false);
   const [collapsedOutlineNodeIds, setCollapsedOutlineNodeIds] = React.useState<Set<NodeId>>(() => new Set());
@@ -339,6 +332,9 @@ export function App() {
 
   const activeTab = tabs.find(tab => tab.id === activeTabId) || tabs[0];
   const doc = activeTab.history.present;
+  const taskTableExpanded = activeTab.taskTable.expanded;
+  const taskTableSort = activeTab.taskTable.sort;
+  const visibleTaskTableColumnKeys = activeTab.taskTable.visibleColumnKeys;
   const isLiveCanvasInteraction = Boolean(dragState || marquee || edgeBendDrag || connectDrag);
   const layoutDirection = activeTab.layoutDirection;
   const nodeOffsets = activeTab.nodeOffsetsByDirection[layoutDirection];
@@ -642,7 +638,8 @@ export function App() {
           nodeOffsetsByDirection: loaded.ui.nodeOffsetsByDirection,
           edgeBendsByDirection: loaded.ui.edgeBendsByDirection,
           edgeRoutesByDirection: loaded.ui.edgeRoutesByDirection,
-          toolbarVisible: loaded.ui.toolbarVisible
+          toolbarVisible: loaded.ui.toolbarVisible,
+          taskTable: loaded.ui.taskTable
         }
       ]);
       setActiveTabId(id);
@@ -666,7 +663,8 @@ export function App() {
             nodeOffsetsByDirection: activeTab.nodeOffsetsByDirection,
             edgeBendsByDirection: activeTab.edgeBendsByDirection,
             edgeRoutesByDirection: activeTab.edgeRoutesByDirection,
-            toolbarVisible: activeTab.toolbarVisible
+            toolbarVisible: activeTab.toolbarVisible,
+            taskTable: activeTab.taskTable
           }),
           saveAs
         });
@@ -1208,14 +1206,50 @@ export function App() {
     [commitDoc]
   );
 
-  const toggleTaskTableSort = React.useCallback((key: TaskTableSortKey) => {
-    setTaskTableSort(prev => getNextTaskTableSort(prev, key));
-  }, []);
+  const toggleTaskTableSort = React.useCallback(
+    (key: TaskTableSortKey) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        taskTable: {
+          ...tab.taskTable,
+          sort: getNextTaskTableSort(tab.taskTable.sort, key)
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
 
-  const toggleTaskTableColumn = React.useCallback((key: TaskTableColumnKey) => {
-    setVisibleTaskTableColumnKeys(prev => getNextVisibleTaskTableColumnKeys(prev, key));
-    setTaskTableSort(prev => (prev?.key === key && isTaskTableColumnHideable(key) ? undefined : prev));
-  }, []);
+  const toggleTaskTableColumn = React.useCallback(
+    (key: TaskTableColumnKey) => {
+      updateActiveTab(tab => {
+        const nextVisibleColumnKeys = getNextVisibleTaskTableColumnKeys(tab.taskTable.visibleColumnKeys, key);
+        const nextSort =
+          tab.taskTable.sort?.key === key && isTaskTableColumnHideable(key) ? undefined : tab.taskTable.sort;
+        return {
+          ...tab,
+          taskTable: {
+            ...tab.taskTable,
+            sort: nextSort,
+            visibleColumnKeys: nextVisibleColumnKeys
+          }
+        };
+      });
+    },
+    [updateActiveTab]
+  );
+
+  const setTaskTableExpanded = React.useCallback(
+    (expanded: boolean | ((current: boolean) => boolean)) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        taskTable: {
+          ...tab.taskTable,
+          expanded: typeof expanded === 'function' ? expanded(tab.taskTable.expanded) : expanded
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
 
   const applySelectedEdgeStyle = React.useCallback(
     (patch: EdgeStyle) => {
