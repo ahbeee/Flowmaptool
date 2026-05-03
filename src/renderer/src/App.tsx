@@ -76,8 +76,6 @@ import {
   emptyInteractionHistory,
   getEdgeUiSnapshot,
   pushInteractionPast,
-  translateEdgeBendsForMovedNodes,
-  translateEdgeRoutesForMovedNodes,
   type EdgeUiSnapshot
 } from './edge-ui-state';
 import {
@@ -131,6 +129,7 @@ import {
   NODE_TEXT_BASELINE_Y,
   ROOT_NODE_STYLE
 } from './node-style';
+import { applyNodeDragToHost } from './node-dragging';
 import {
   buildOutlineChecklistTargetsByNodeId,
   buildOutlineTree,
@@ -153,7 +152,6 @@ import {
   pointInsideBox,
   segmentIntersectsBox,
   segmentsIntersect,
-  type NodeBox,
   type Point
 } from './routing-geometry';
 import {
@@ -167,7 +165,6 @@ import {
   type TaskTableSortKey
 } from './task-table';
 import {
-  boxesOverlap,
   clampNodeLabel,
   edgeStrokeDasharray,
   effectiveEdgeStyle,
@@ -1580,11 +1577,7 @@ export function App() {
 
   React.useEffect(() => {
     if (!dragState) return;
-    const dragNodeSet = new Set(dragState.nodeIds);
-    const dragCollisionGap = 10;
-    const snapThreshold = 14;
     const dragThreshold = 3;
-    const baseById = new Map(layout.positions.map(pos => [pos.id, pos]));
     const onPointerMove = (event: PointerEvent) => {
       autoPanCanvas(event);
       const pointer = getCanvasContentPoint(event.clientX, event.clientY);
@@ -1594,113 +1587,15 @@ export function App() {
       if (!dragDidMoveRef.current && Math.hypot(deltaX, deltaY) < dragThreshold) return;
       dragDidMoveRef.current = true;
       updateActiveTab(tab => {
-        const direction = tab.layoutDirection;
-        const prev = tab.nodeOffsetsByDirection[direction];
-        let next = { ...prev };
-        let appliedDeltaX = deltaX;
-        let appliedDeltaY = deltaY;
-        for (const nodeId of dragState.nodeIds) {
-          const startOffset = dragState.startOffsets[nodeId] || { dx: 0, dy: 0 };
-          next[nodeId] = { dx: startOffset.dx + deltaX, dy: startOffset.dy + deltaY };
-        }
-        const anchorBase = baseById.get(dragState.anchorNodeId);
-        const anchorSize = nodeSizeMap[dragState.anchorNodeId] || DEFAULT_NODE_SIZE;
-        if (anchorBase) {
-          const anchorOffset = getNodeOffset(next, dragState.anchorNodeId);
-          const anchorCenter = getNodeCenter(anchorBase.x + anchorOffset.dx, anchorBase.y + anchorOffset.dy, anchorSize);
-          let snapDx = 0;
-          let snapDy = 0;
-          let bestX = Number.POSITIVE_INFINITY;
-          let bestY = Number.POSITIVE_INFINITY;
-          for (const rootId of rootNodeIds) {
-            if (dragNodeSet.has(rootId)) continue;
-            const rootBase = baseById.get(rootId);
-            if (!rootBase) continue;
-            const rootSize = nodeSizeMap[rootId] || DEFAULT_NODE_SIZE;
-            const rootOffset = getNodeOffset(prev, rootId);
-            const rootCenter = getNodeCenter(rootBase.x + rootOffset.dx, rootBase.y + rootOffset.dy, rootSize);
-            const dxToSnap = rootCenter.x - anchorCenter.x;
-            const dyToSnap = rootCenter.y - anchorCenter.y;
-            if (Math.abs(dxToSnap) <= snapThreshold && Math.abs(dxToSnap) < bestX) {
-              bestX = Math.abs(dxToSnap);
-              snapDx = dxToSnap;
-            }
-            if (Math.abs(dyToSnap) <= snapThreshold && Math.abs(dyToSnap) < bestY) {
-              bestY = Math.abs(dyToSnap);
-              snapDy = dyToSnap;
-            }
-          }
-          if (snapDx !== 0 || snapDy !== 0) {
-            const snapped = { ...next };
-            for (const nodeId of dragState.nodeIds) {
-              const current = getNodeOffset(snapped, nodeId);
-              snapped[nodeId] = { dx: current.dx + snapDx, dy: current.dy + snapDy };
-            }
-            appliedDeltaX += snapDx;
-            appliedDeltaY += snapDy;
-            next = snapped;
-          }
-        }
-
-        const staticBoxes: NodeBox[] = [];
-        for (const node of doc.nodes) {
-          if (dragNodeSet.has(node.id)) continue;
-          const base = baseById.get(node.id);
-          if (!base) continue;
-          const size = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
-          const offset = getNodeOffset(prev, node.id);
-          staticBoxes.push({
-            left: base.x + offset.dx,
-            right: base.x + offset.dx + size.width,
-            top: base.y + offset.dy,
-            bottom: base.y + offset.dy + size.height
-          });
-        }
-        for (const nodeId of dragState.nodeIds) {
-          const base = baseById.get(nodeId);
-          if (!base) continue;
-          const size = nodeSizeMap[nodeId] || DEFAULT_NODE_SIZE;
-          const offset = getNodeOffset(next, nodeId);
-          const movingBox: NodeBox = {
-            left: base.x + offset.dx,
-            right: base.x + offset.dx + size.width,
-            top: base.y + offset.dy,
-            bottom: base.y + offset.dy + size.height
-          };
-          if (staticBoxes.some(box => boxesOverlap(movingBox, box, dragCollisionGap))) {
-            return tab;
-          }
-        }
-        const nextBendsForDirection = translateEdgeBendsForMovedNodes(
+        return applyNodeDragToHost(tab, {
           doc,
-          dragState.startEdgeBends,
-          dragNodeSet,
-          appliedDeltaX,
-          appliedDeltaY
-        );
-        const nextRoutesForDirection = translateEdgeRoutesForMovedNodes(
-          doc,
-          dragState.startEdgeRoutes,
-          dragNodeSet,
-          appliedDeltaX,
-          appliedDeltaY
-        );
-
-        return {
-          ...tab,
-          nodeOffsetsByDirection: {
-            ...tab.nodeOffsetsByDirection,
-            [direction]: next
-          },
-          edgeBendsByDirection: {
-            ...tab.edgeBendsByDirection,
-            [direction]: nextBendsForDirection
-          },
-          edgeRoutesByDirection: {
-            ...tab.edgeRoutesByDirection,
-            [direction]: nextRoutesForDirection
-          }
-        };
+          dragState,
+          pointer,
+          basePositions: layout.positions,
+          rootNodeIds,
+          nodeSizeMap,
+          defaultNodeSize: DEFAULT_NODE_SIZE
+        });
       });
       if (dragState.nodeIds.length === 1) {
         const x = pointer.x;
