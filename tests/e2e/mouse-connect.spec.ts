@@ -35,3 +35,89 @@ test('left dragging connect handle creates a manual edge', async () => {
   await expect(edgePathLocator).toHaveCount(3);
   await app.close();
 });
+
+test('connect drag preview follows the pointer after zoom', async () => {
+  const { app, window } = await launchApp();
+  await addChild(window, 'n1');
+
+  await window.keyboard.down('Control');
+  await window.mouse.wheel(0, -900);
+  await window.keyboard.up('Control');
+
+  await expect
+    .poll(async () =>
+      window.getByTestId('canvas-surface').evaluate(element => Number((element as HTMLElement).style.zoom) || 1)
+    )
+    .toBeGreaterThan(1);
+
+  const sourceNode = window.getByTestId('node-n1');
+  await sourceNode.evaluate(element => element.classList.add('flow-node-connect-visible'));
+  const handle = sourceNode.locator('.node-connect-handle');
+  await expect(handle).toHaveCSS('pointer-events', 'auto');
+  const handleBox = await handle.boundingBox();
+  if (!handleBox) throw new Error('connect handle not found');
+
+  const end = { x: handleBox.x + handleBox.width + 170, y: handleBox.y + handleBox.height + 120 };
+  await handle.evaluate(
+    (element, point) => {
+      element.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          buttons: 1,
+          clientX: point.x,
+          clientY: point.y,
+          pointerId: 1,
+          pointerType: 'mouse'
+        })
+      );
+    },
+    { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 }
+  );
+  await window.evaluate(point => {
+    globalThis.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        clientX: point.x,
+        clientY: point.y,
+        pointerId: 1,
+        pointerType: 'mouse'
+      })
+    );
+  }, end);
+
+  const previewEnd = await window.locator('.edge-path-preview').evaluate(path => {
+    const svgPath = path as SVGPathElement;
+    const svg = svgPath.ownerSVGElement;
+    const segments = (svgPath.getAttribute('d') || '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+    if (!svg || segments.length < 6) return null;
+    const rect = svg.getBoundingClientRect();
+    const surface = document.querySelector('[data-testid="canvas-surface"]') as HTMLElement | null;
+    const zoom = Number(surface?.style.zoom) || 1;
+    return {
+      x: rect.left + segments[segments.length - 2] * zoom,
+      y: rect.top + segments[segments.length - 1] * zoom
+    };
+  });
+
+  expect(previewEnd).not.toBeNull();
+  expect(Math.abs((previewEnd?.x || 0) - end.x)).toBeLessThan(3);
+  expect(Math.abs((previewEnd?.y || 0) - end.y)).toBeLessThan(3);
+
+  await window.evaluate(point => {
+    globalThis.dispatchEvent(
+      new PointerEvent('pointerup', {
+        bubbles: true,
+        button: 0,
+        buttons: 0,
+        clientX: point.x,
+        clientY: point.y,
+        pointerId: 1,
+        pointerType: 'mouse'
+      })
+    );
+  }, end);
+  await app.close();
+});

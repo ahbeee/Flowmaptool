@@ -1040,8 +1040,8 @@ h2 {
   position: absolute;
   left: 0;
   top: 0;
-  pointer-events: auto;
-  z-index: 1;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .edge-path {
@@ -1112,7 +1112,7 @@ h2 {
 
 .flow-node {
   position: absolute;
-  z-index: 2;
+  z-index: 5;
   border: 1px solid #64748b;
   background: #ffffff;
   border-radius: 8px;
@@ -1205,7 +1205,7 @@ h2 {
 .node-connect-handle,
 .node-connect-handle-front {
   position: absolute;
-  z-index: 5;
+  z-index: 20;
   top: calc(50% - 7px);
   width: 14px;
   height: 14px;
