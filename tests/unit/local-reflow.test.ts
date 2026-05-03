@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildRenderedPositionMap,
   getLayerReorderPreview,
   hasAnyNodeOffset,
   mergeNodeOffsets,
@@ -99,5 +100,16 @@ describe('local reflow', () => {
       n3: { dx: 6, dy: 7 }
     });
     expect(mergeNodeOffsets(offsets, { missing: { dx: 0, dy: 0 } })).toBe(offsets);
+  });
+
+  it('builds rendered position maps with node offsets applied', () => {
+    const rendered = buildRenderedPositionMap(basePositions, {
+      n1: { dx: 5, dy: -10 },
+      n3: { dx: 0, dy: 12 }
+    });
+
+    expect(rendered.get('n1')).toEqual({ id: 'n1', x: 85, y: 70 });
+    expect(rendered.get('n2')).toEqual({ id: 'n2', x: 80, y: 180 });
+    expect(rendered.get('n3')).toEqual({ id: 'n3', x: 80, y: 292 });
   });
 });

@@ -44,7 +44,7 @@ import {
   type NodeSizeMap
 } from '@shared/layout';
 import {
-  applyNodeOffset,
+  buildRenderedPositionMap,
   getLayerReorderPreview,
   getNodeOffset,
   hasAnyNodeOffset,
@@ -794,14 +794,10 @@ export function App() {
     () => layoutFlow(layoutDoc, layoutDirection, nodeSizeMap, layoutSpacing),
     [layoutDoc, layoutDirection, layoutSpacing, nodeSizeMap]
   );
-  const renderedPositionMap = React.useMemo(() => {
-    const map = new Map<NodeId, LayoutPoint>();
-    for (const pos of layout.positions) {
-      const withOffset = applyNodeOffset(pos, getNodeOffset(nodeOffsets, pos.id));
-      map.set(pos.id, { x: withOffset.x, y: withOffset.y });
-    }
-    return map;
-  }, [layout.positions, nodeOffsets]);
+  const renderedPositionMap = React.useMemo(
+    () => buildRenderedPositionMap(layout.positions, nodeOffsets),
+    [layout.positions, nodeOffsets]
+  );
 
   const scrollNodeIntoCanvas = React.useCallback(
     (nodeId: NodeId) => {

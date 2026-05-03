@@ -120,6 +120,17 @@ export function applyNodeOffset(pos: NodePosition, offset: NodeOffset): NodePosi
   };
 }
 
+export function buildRenderedPositionMap(
+  positions: NodePosition[],
+  offsets: NodeOffsetMap
+): Map<NodeId, NodePosition> {
+  const map = new Map<NodeId, NodePosition>();
+  for (const pos of positions) {
+    map.set(pos.id, applyNodeOffset(pos, getNodeOffset(offsets, pos.id)));
+  }
+  return map;
+}
+
 export function reorderLayerOnDrop(
   basePositions: NodePosition[],
   offsets: NodeOffsetMap,
