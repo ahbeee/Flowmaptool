@@ -94,6 +94,13 @@ export function compareTaskTableRows(left: TaskTableRow, right: TaskTableRow, so
   );
 }
 
+export function getNextTaskTableSort(current: TaskTableSort | undefined, key: TaskTableSortKey): TaskTableSort {
+  return {
+    key,
+    direction: current?.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+  };
+}
+
 export function buildTaskTableRows(
   outlineTree: OutlineTreeNode[],
   tagById: Map<string, FlowTag>,

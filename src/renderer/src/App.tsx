@@ -147,6 +147,7 @@ import {
 } from './routing-geometry';
 import {
   buildTaskTableRows,
+  getNextTaskTableSort,
   getTaskNodeLabel,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
@@ -1734,10 +1735,7 @@ export function App() {
   );
 
   const toggleTaskTableSort = React.useCallback((key: TaskTableSortKey) => {
-    setTaskTableSort(prev => ({
-      key,
-      direction: prev?.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
+    setTaskTableSort(prev => getNextTaskTableSort(prev, key));
   }, []);
 
   const applySelectedEdgeStyle = React.useCallback(

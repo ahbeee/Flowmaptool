@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowTag } from '../../src/shared/graph';
 import type { OutlineTreeNode } from '../../src/renderer/src/outline';
-import { buildTaskTableRows, getTaskNodeLabel } from '../../src/renderer/src/task-table';
+import { buildTaskTableRows, getNextTaskTableSort, getTaskNodeLabel } from '../../src/renderer/src/task-table';
 
 const tags: FlowTag[] = [
   { id: 'tag-pending', name: 'Pending', color: '#ec4899' },
@@ -67,5 +67,21 @@ describe('task table helpers', () => {
 
   it('normalizes blank task labels', () => {
     expect(getTaskNodeLabel({ id: 'n1', label: '   ' })).toBe('Untitled Node');
+  });
+
+  it('toggles sort direction only when selecting the same ascending column', () => {
+    expect(getNextTaskTableSort(undefined, 'task')).toEqual({ key: 'task', direction: 'asc' });
+    expect(getNextTaskTableSort({ key: 'task', direction: 'asc' }, 'task')).toEqual({
+      key: 'task',
+      direction: 'desc'
+    });
+    expect(getNextTaskTableSort({ key: 'task', direction: 'desc' }, 'task')).toEqual({
+      key: 'task',
+      direction: 'asc'
+    });
+    expect(getNextTaskTableSort({ key: 'task', direction: 'asc' }, 'priority')).toEqual({
+      key: 'priority',
+      direction: 'asc'
+    });
   });
 });
