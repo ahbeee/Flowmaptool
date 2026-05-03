@@ -82,6 +82,7 @@ import {
   createTabDocument,
   ensureDocHasNode,
   NEW_NODE_LABEL,
+  pruneTabTransientUiState,
   ROOT_LABEL,
   type TabDocument
 } from './document-state';
@@ -1095,45 +1096,7 @@ export function App() {
   }, [doc.nodes, editingNodeId]);
 
   React.useEffect(() => {
-    const validIds = new Set(doc.nodes.map(node => node.id));
-    updateActiveTab(tab => {
-      const prune = (map: NodeOffsetMap) => {
-        const next: NodeOffsetMap = {};
-        for (const [id, offset] of Object.entries(map)) {
-          if (validIds.has(id)) next[id] = offset;
-        }
-        return next;
-      };
-      const nextHorizontal = prune(tab.nodeOffsetsByDirection.horizontal);
-      const nextVertical = prune(tab.nodeOffsetsByDirection.vertical);
-      const validEdgeIds = new Set(tab.history.present.edges.map(edge => edge.id));
-      const pruneBends = (map: EdgeBendMap) => {
-        const next: EdgeBendMap = {};
-        for (const [id, bend] of Object.entries(map)) {
-          if (validEdgeIds.has(id)) next[id] = bend;
-        }
-        return next;
-      };
-      const pruneRoutes = (map: EdgeRouteMap) => {
-        const next: EdgeRouteMap = {};
-        for (const [id, route] of Object.entries(map)) {
-          if (validEdgeIds.has(id) && route.points.length > 0) next[id] = route;
-        }
-        return next;
-      };
-      return {
-        ...tab,
-        nodeOffsetsByDirection: { horizontal: nextHorizontal, vertical: nextVertical },
-        edgeBendsByDirection: {
-          horizontal: pruneBends(tab.edgeBendsByDirection.horizontal),
-          vertical: pruneBends(tab.edgeBendsByDirection.vertical)
-        },
-        edgeRoutesByDirection: {
-          horizontal: pruneRoutes(tab.edgeRoutesByDirection.horizontal),
-          vertical: pruneRoutes(tab.edgeRoutesByDirection.vertical)
-        }
-      };
-    });
+    updateActiveTab(pruneTabTransientUiState);
   }, [doc.edges, doc.nodes, updateActiveTab]);
 
   const deleteSelectedEdge = React.useCallback(() => {
