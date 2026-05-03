@@ -59,9 +59,13 @@ import {
 } from './canvas-geometry';
 import {
   FRONT_HANDLE_CONNECT_ANCHORS,
-  HANDLE_CONNECT_ANCHORS,
-  resolveDraggedEdgeAnchors
+  HANDLE_CONNECT_ANCHORS
 } from './connect-anchors';
+import {
+  planConnectDragFinish,
+  updateConnectDragForPoint,
+  type ConnectDragState
+} from './connect-dragging';
 import { planEdgeConnection } from './edge-connection';
 import {
   applyEdgeUiSnapshot,
@@ -229,13 +233,6 @@ type MarqueeState = {
 type EdgeBendDragState = { edgeId: string; pointIndex: number };
 type EdgeRouteControlSelection = { edgeId: string; pointIndex: number };
 type SidePanelResizeState = { pointerId: number; startX: number; startWidth: number };
-type ConnectDragState = {
-  fromNodeId: NodeId;
-  anchors: EdgeAnchors;
-  start: Point;
-  current: Point;
-  hoverTargetNodeId: NodeId | null;
-};
 type DragPointerLikeEvent = {
   clientX: number;
   clientY: number;
@@ -1634,8 +1631,7 @@ export function App() {
     setConnectDrag(prev => {
       if (!prev) return prev;
       const hitId = findNodeAtCanvasPoint(x, y);
-      const hoverTargetNodeId = hitId && hitId !== prev.fromNodeId ? hitId : null;
-      const next = { ...prev, current: { x, y }, hoverTargetNodeId };
+      const next = updateConnectDragForPoint(prev, { x, y }, hitId);
       connectDragRef.current = next;
       return next;
     });
@@ -1658,15 +1654,16 @@ export function App() {
     setConnectDrag(null);
     if (!drag) return;
     const targetHandleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
-    const targetId = targetHandleHit?.nodeId || targetFromPoint || drag.hoverTargetNodeId || findNodeAtCanvasPoint(x, y) || targetFromEvent;
-    if (targetId && targetId !== drag.fromNodeId) {
-      const anchors = resolveDraggedEdgeAnchors(
-        drag.anchors,
-        targetHandleHit?.nodeId === targetId ? targetHandleHit.anchor : undefined
-      );
-      if (anchors && tryCreateEdge(drag.fromNodeId, targetId, anchors)) {
-        setSelectedNodeIds([targetId]);
-      }
+    const plan = planConnectDragFinish(drag, {
+      handleTargetNodeId: targetHandleHit?.nodeId,
+      viewportTargetNodeId: targetFromPoint,
+      hoverTargetNodeId: drag.hoverTargetNodeId,
+      canvasTargetNodeId: findNodeAtCanvasPoint(x, y),
+      eventTargetNodeId: targetFromEvent,
+      handleAnchor: targetHandleHit?.anchor
+    });
+    if (plan && tryCreateEdge(plan.fromNodeId, plan.targetNodeId, plan.anchors)) {
+      setSelectedNodeIds([plan.targetNodeId]);
     }
   }, [findNodeAtCanvasPoint, getCanvasContentPoint, layoutDirection, stopConnectDragListeners, tryCreateEdge]);
 
@@ -1894,9 +1891,12 @@ export function App() {
     connectDragRef.current = null;
     setConnectDrag(null);
     const targetHandleHit = getViewportConnectHandleHit(event.clientX, event.clientY, nodeId, layoutDirection);
-    const anchors = resolveDraggedEdgeAnchors(drag.anchors, targetHandleHit?.anchor);
-    if (fromId !== nodeId && anchors && tryCreateEdge(fromId, nodeId, anchors)) {
-      setSelectedNodeIds([nodeId]);
+    const plan = planConnectDragFinish(drag, {
+      handleTargetNodeId: nodeId,
+      handleAnchor: targetHandleHit?.anchor
+    });
+    if (plan && tryCreateEdge(plan.fromNodeId, plan.targetNodeId, plan.anchors)) {
+      setSelectedNodeIds([plan.targetNodeId]);
       return;
     }
     setSelectedNodeIds([fromId]);
@@ -2033,12 +2033,24 @@ export function App() {
     stopConnectDragListeners();
     setConnectDrag(null);
     const targetHandleHit = getConnectHandleHitFromViewportPoint(event.clientX, event.clientY, layoutDirection);
-    const resolvedAnchors = resolveDraggedEdgeAnchors(
-      anchors,
-      targetHandleHit?.nodeId === targetId ? targetHandleHit.anchor : undefined
-    );
-    if (targetId && targetId !== fromId && resolvedAnchors && tryCreateEdge(fromId, targetId, resolvedAnchors)) {
-      setSelectedNodeIds([targetId]);
+    const plan = targetId
+      ? planConnectDragFinish(
+          {
+            fromNodeId: fromId,
+            anchors,
+            start: pointer || { x: 0, y: 0 },
+            current: pointer || { x: 0, y: 0 },
+            hoverTargetNodeId: null
+          },
+          {
+            handleTargetNodeId: targetHandleHit?.nodeId,
+            viewportTargetNodeId: targetId,
+            handleAnchor: targetHandleHit?.anchor
+          }
+        )
+      : null;
+    if (plan && tryCreateEdge(plan.fromNodeId, plan.targetNodeId, plan.anchors)) {
+      setSelectedNodeIds([plan.targetNodeId]);
       return;
     }
     setSelectedNodeIds([fromId]);
