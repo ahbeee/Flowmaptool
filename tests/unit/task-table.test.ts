@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowTag } from '../../src/shared/graph';
 import type { OutlineTreeNode } from '../../src/renderer/src/outline';
-import { buildTaskTableRows, getNextTaskTableSort, getTaskNodeLabel } from '../../src/renderer/src/task-table';
+import {
+  buildTaskTableRows,
+  DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
+  getNextTaskTableSort,
+  getNextVisibleTaskTableColumnKeys,
+  getTaskNodeLabel,
+  getVisibleTaskTableColumns,
+  isTaskTableColumnHideable
+} from '../../src/renderer/src/task-table';
 
 const tags: FlowTag[] = [
   { id: 'tag-pending', name: 'Pending', color: '#ec4899' },
@@ -82,5 +90,29 @@ describe('task table helpers', () => {
       key: 'priority',
       direction: 'asc'
     });
+  });
+
+  it('keeps task table column visibility ordered with task always visible', () => {
+    expect(isTaskTableColumnHideable('task')).toBe(false);
+    expect(isTaskTableColumnHideable('priority')).toBe(true);
+
+    const withoutPriority = getNextVisibleTaskTableColumnKeys(DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS, 'priority');
+    expect(withoutPriority).not.toContain('priority');
+    expect(getVisibleTaskTableColumns(withoutPriority).map(column => column.key)).toEqual([
+      'task',
+      'category',
+      'progress',
+      'assignee',
+      'start',
+      'due',
+      'tag',
+      'notes'
+    ]);
+
+    expect(getNextVisibleTaskTableColumnKeys(withoutPriority, 'priority')).toEqual(
+      DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS
+    );
+    expect(getNextVisibleTaskTableColumnKeys(['priority'], 'task')).toEqual(['task', 'priority']);
+    expect(getVisibleTaskTableColumns([]).map(column => column.key)).toEqual(['task']);
   });
 });

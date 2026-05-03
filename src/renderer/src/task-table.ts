@@ -26,6 +26,7 @@ export const TASK_TABLE_COLUMNS = [
 ] as const;
 
 export type TaskTableSortKey = (typeof TASK_TABLE_COLUMNS)[number]['key'];
+export type TaskTableColumnKey = TaskTableSortKey;
 export type TaskTableSortDirection = 'asc' | 'desc';
 export type TaskTableSort = {
   key: TaskTableSortKey;
@@ -38,8 +39,40 @@ export type TaskTableRow = {
   originalIndex: number;
 };
 
+export const DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS: TaskTableColumnKey[] = TASK_TABLE_COLUMNS.map(
+  column => column.key
+);
+export const REQUIRED_TASK_TABLE_COLUMN_KEYS = ['task'] as const satisfies readonly TaskTableColumnKey[];
+
 export function getTaskNodeLabel(node: FlowNode): string {
   return node.label.trim() || 'Untitled Node';
+}
+
+export function isTaskTableColumnHideable(key: TaskTableColumnKey): boolean {
+  return !REQUIRED_TASK_TABLE_COLUMN_KEYS.includes(key as (typeof REQUIRED_TASK_TABLE_COLUMN_KEYS)[number]);
+}
+
+export function getVisibleTaskTableColumns(visibleKeys: Iterable<TaskTableColumnKey>) {
+  const visibleKeySet = new Set(visibleKeys);
+  REQUIRED_TASK_TABLE_COLUMN_KEYS.forEach(key => visibleKeySet.add(key));
+  return TASK_TABLE_COLUMNS.filter(column => visibleKeySet.has(column.key));
+}
+
+export function getNextVisibleTaskTableColumnKeys(
+  currentKeys: Iterable<TaskTableColumnKey>,
+  key: TaskTableColumnKey
+): TaskTableColumnKey[] {
+  const nextKeys = new Set(currentKeys);
+  REQUIRED_TASK_TABLE_COLUMN_KEYS.forEach(requiredKey => nextKeys.add(requiredKey));
+  if (isTaskTableColumnHideable(key)) {
+    if (nextKeys.has(key)) {
+      nextKeys.delete(key);
+    } else {
+      nextKeys.add(key);
+    }
+  }
+
+  return TASK_TABLE_COLUMNS.map(column => column.key).filter(columnKey => nextKeys.has(columnKey));
 }
 
 function normalizeTaskSortString(value: string | undefined): string {

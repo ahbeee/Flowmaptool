@@ -259,6 +259,57 @@ select {
   background: #f8fafc;
 }
 
+.task-column-menu {
+  position: relative;
+}
+
+.task-column-menu summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-column-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-column-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 12px 24px rgb(15 23 42 / 14%);
+}
+
+.task-column-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.task-column-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.task-column-option input:disabled + span {
+  color: #64748b;
+}
+
 .task-panel {
   min-width: 0;
 }
