@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppHeader, FileStatus } from './app-header';
+import { CanvasNodesLayer } from './canvas-nodes-layer';
 import {
   addEdge,
   deleteTag,
@@ -1057,6 +1058,13 @@ export function App() {
     const label = clampNodeLabel(value);
     editingLabelRef.current = label;
     setEditingLabel(label);
+  }, []);
+
+  const cancelEditingNode = React.useCallback(() => {
+    editingNodeIdRef.current = null;
+    editingLabelRef.current = '';
+    setEditingNodeId(null);
+    setEditingLabel('');
   }, []);
 
   const commitEditingNode = React.useCallback(() => {
@@ -2496,103 +2504,30 @@ export function App() {
                   />
                 ) : null}
 
-                {layout.positions.map(pos => {
-                  const node = doc.nodes.find(item => item.id === pos.id);
-                  if (!node) return null;
-                  const rendered = renderedPositionMap.get(node.id) || pos;
-                  const nodeSize = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
-                  const selected = selectedNodeIds.includes(node.id);
-                  const editing = editingNodeId === node.id;
-                  const connectHandleVisible = Boolean(connectDrag);
-                  const nodeTag = node.style?.tagId
-                    ? doc.settings.tags.find(tag => tag.id === node.style?.tagId)
-                    : undefined;
-                  return (
-                    <button
-                      key={node.id}
-                      className={[
-                        'flow-node',
-                        selected ? 'flow-node-selected' : '',
-                        connectHandleVisible ? 'flow-node-connect-visible' : ''
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      data-drop-target={
-                        dropParentTargetId === node.id || connectDrag?.hoverTargetNodeId === node.id
-                          ? 'true'
-                          : undefined
-                      }
-                      data-tag-name={nodeTag?.name || undefined}
-                      style={{
-                        left: rendered.x,
-                        top: rendered.y,
-                        width: nodeSize.width,
-                        height: nodeSize.height,
-                        ...getNodeVisualStyle(node.id, node.style)
-                      }}
-                      data-testid={`node-${node.id}`}
-                      type="button"
-                      onPointerDown={event => onNodePointerDown(event, node.id)}
-                      onMouseUp={event => onNodeMouseUp(event, node.id)}
-                      onContextMenu={onNodeContextMenu}
-                      onDoubleClick={() => startEditingNode(node.id)}
-                    >
-                      {editing ? (
-                        <input
-                          className="node-label-input"
-                          value={editingLabel}
-                          onInput={event => updateEditingLabel(event.currentTarget.value)}
-                          onCompositionUpdate={event => updateEditingLabel(event.currentTarget.value)}
-                          onCompositionEnd={event => updateEditingLabel(event.currentTarget.value)}
-                          onChange={event => updateEditingLabel(event.currentTarget.value)}
-                          onBlur={commitEditingNode}
-                          onKeyDown={event => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              commitEditingNode();
-                            } else if (event.key === 'Escape') {
-                              event.preventDefault();
-                              editingNodeIdRef.current = null;
-                              editingLabelRef.current = '';
-                              setEditingNodeId(null);
-                              setEditingLabel('');
-                            }
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <div className="node-label">{node.label}</div>
-                      )}
-                      {nodeTag ? (
-                        <span
-                          className="node-tag-marker"
-                          style={{ backgroundColor: nodeTag.color }}
-                          aria-label={nodeTag.name}
-                        />
-                      ) : null}
-                      <span
-                        className={
-                          layoutDirection === 'horizontal'
-                            ? 'node-connect-handle-front'
-                            : 'node-connect-handle-front node-connect-handle-front-vertical'
-                        }
-                        title="Drag from input side"
-                        onPointerDown={event => startConnectDrag(event, node.id, FRONT_HANDLE_CONNECT_ANCHORS)}
-                        onContextMenu={event => event.preventDefault()}
-                      />
-                      <span
-                        className={
-                          layoutDirection === 'horizontal'
-                            ? 'node-connect-handle'
-                            : 'node-connect-handle node-connect-handle-vertical'
-                        }
-                        title="Drag to connect"
-                        onPointerDown={event => startConnectDrag(event, node.id)}
-                        onContextMenu={event => event.preventDefault()}
-                      />
-                    </button>
-                  );
-                })}
+                <CanvasNodesLayer
+                  positions={layout.positions}
+                  nodeById={nodeById}
+                  tags={doc.settings.tags}
+                  renderedPositionMap={renderedPositionMap}
+                  nodeSizeMap={nodeSizeMap}
+                  defaultNodeSize={DEFAULT_NODE_SIZE}
+                  selectedNodeIds={selectedNodeIds}
+                  editingNodeId={editingNodeId}
+                  editingLabel={editingLabel}
+                  layoutDirection={layoutDirection}
+                  connectHandleVisible={Boolean(connectDrag)}
+                  dropParentTargetId={dropParentTargetId}
+                  hoverTargetNodeId={connectDrag?.hoverTargetNodeId}
+                  getNodeVisualStyle={getNodeVisualStyle}
+                  onNodePointerDown={onNodePointerDown}
+                  onNodeMouseUp={onNodeMouseUp}
+                  onNodeContextMenu={onNodeContextMenu}
+                  onStartEditingNode={startEditingNode}
+                  onUpdateEditingLabel={updateEditingLabel}
+                  onCommitEditingNode={commitEditingNode}
+                  onCancelEditingNode={cancelEditingNode}
+                  onStartConnectDrag={startConnectDrag}
+                />
               </div>
             </div>
           </div>
