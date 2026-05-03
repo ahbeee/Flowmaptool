@@ -19,7 +19,6 @@ import {
   type FlowTag,
   type FlowDoc,
   type EdgeLineType,
-  type EdgeAnchor,
   type EdgeAnchors,
   type EdgeId,
   type EdgeStyle,
@@ -164,6 +163,14 @@ import {
   nextCustomTagId,
   sameValues
 } from './ui-helpers';
+import {
+  getConnectHandleHitFromViewportPoint,
+  getNodeIdFromEventTarget,
+  getNodeIdFromViewportPoint,
+  getViewportConnectHandleHit,
+  isNodeLabelInputTarget,
+  isViewportPointOnConnectHandle
+} from './viewport-hit-testing';
 
 const SPACING_MIN = 0;
 const SPACING_MAX = 320;
@@ -316,67 +323,6 @@ function clampSidePanelWidth(width: number): number {
   const viewportMax =
     typeof window === 'undefined' ? SIDE_PANEL_MAX_WIDTH : Math.max(SIDE_PANEL_MIN_WIDTH, window.innerWidth - 520);
   return clamp(width, SIDE_PANEL_MIN_WIDTH, Math.min(SIDE_PANEL_MAX_WIDTH, viewportMax));
-}
-
-function getNodeIdFromEventTarget(target: EventTarget | null | undefined): NodeId | null {
-  if (!target || !(target instanceof Element)) return null;
-  const nodeEl = target.closest('[data-testid^="node-"]') as HTMLElement | null;
-  if (!nodeEl) return null;
-  const testId = nodeEl.dataset.testid || nodeEl.getAttribute('data-testid');
-  if (!testId || !testId.startsWith('node-')) return null;
-  const nodeId = testId.slice(5);
-  return nodeId.length > 0 ? nodeId : null;
-}
-
-function getNodeIdFromViewportPoint(clientX: number, clientY: number): NodeId | null {
-  const el = document.elementFromPoint(clientX, clientY);
-  return getNodeIdFromEventTarget(el);
-}
-
-function isNodeLabelInputTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && Boolean(target.closest('.node-label-input'));
-}
-
-type ConnectHandleHit = { nodeId: NodeId; anchor: EdgeAnchor };
-
-function getViewportConnectHandleHit(
-  clientX: number,
-  clientY: number,
-  nodeId: NodeId,
-  direction: LayoutDirection
-): ConnectHandleHit | null {
-  const nodeEl = document.querySelector(`[data-testid="node-${nodeId}"]`);
-  if (!(nodeEl instanceof HTMLElement)) return null;
-  const rect = nodeEl.getBoundingClientRect();
-  if (direction === 'horizontal') {
-    const withinY = clientY >= rect.top - 8 && clientY <= rect.bottom + 8;
-    if (Math.abs(clientX - rect.right) <= 14 && withinY) return { nodeId, anchor: 'back' };
-    if (Math.abs(clientX - rect.left) <= 14 && withinY) return { nodeId, anchor: 'front' };
-    return null;
-  }
-  const withinX = clientX >= rect.left - 8 && clientX <= rect.right + 8;
-  if (Math.abs(clientY - rect.bottom) <= 14 && withinX) return { nodeId, anchor: 'back' };
-  if (Math.abs(clientY - rect.top) <= 14 && withinX) return { nodeId, anchor: 'front' };
-  return null;
-}
-
-function isViewportPointOnConnectHandle(clientX: number, clientY: number, nodeId: NodeId, direction: LayoutDirection) {
-  return Boolean(getViewportConnectHandleHit(clientX, clientY, nodeId, direction));
-}
-
-function getConnectHandleHitFromViewportPoint(clientX: number, clientY: number, direction: LayoutDirection): ConnectHandleHit | null {
-  const nodeEls = Array.from(document.querySelectorAll('[data-testid^="node-"]'));
-  for (const nodeEl of nodeEls) {
-    if (!(nodeEl instanceof HTMLElement)) continue;
-    const testId = nodeEl.dataset.testid || nodeEl.getAttribute('data-testid');
-    const nodeId = testId?.replace(/^node-/, '') as NodeId | undefined;
-    if (!nodeId) continue;
-    const hit = getViewportConnectHandleHit(clientX, clientY, nodeId, direction);
-    if (hit) {
-      return hit;
-    }
-  }
-  return null;
 }
 
 export function App() {
