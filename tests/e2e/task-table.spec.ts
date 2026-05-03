@@ -101,6 +101,42 @@ test('task table column menu hides optional columns and keeps task visible', asy
   await app.close();
 });
 
+test('task table filters by tag and assignee', async () => {
+  const { app, window } = await launchApp();
+
+  await renameNode(window, 'n1', 'Root Task');
+  await addChild(window, 'n1');
+  await renameNode(window, 'n2', 'Pending Zoe Task');
+  await applyTag(window, 'n2', 'Pending');
+  await addChild(window, 'n1');
+  await renameNode(window, 'n3', 'Done Amy Task');
+  await applyTag(window, 'n3', 'Done');
+
+  await window.getByTestId('task-toggle').click();
+  const panel = window.getByTestId('task-panel');
+  const pendingRow = panel.locator('tbody tr').filter({ hasText: 'Pending Zoe Task' });
+  const doneRow = panel.locator('tbody tr').filter({ hasText: 'Done Amy Task' });
+  await pendingRow.locator('input').nth(1).fill('Zoe');
+  await doneRow.locator('input').nth(1).fill('Amy');
+
+  await window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(panel.locator('tbody tr').first()).toContainText('Pending Zoe Task');
+
+  await window.getByTestId('task-filter-assignee').selectOption('Zoe');
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(panel.locator('tbody tr').first()).toContainText('Pending Zoe Task');
+
+  await window.getByTestId('task-filter-assignee').selectOption('Amy');
+  await expect(panel).toContainText('No task table rows match the current filters.');
+
+  await window.getByTestId('task-filter-tag').selectOption('');
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(panel.locator('tbody tr').first()).toContainText('Done Amy Task');
+
+  await app.close();
+});
+
 test('task table preferences persist after save and reopen', async ({}, testInfo) => {
   const first = await launchAppWithFixture(testInfo, 'task-table-prefs.qflow', createDefaultDocFixture());
   const filePath = first.filePath;
@@ -109,6 +145,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   await first.window.getByTestId('task-toggle').click();
   await first.window.getByTestId('task-columns-toggle').click();
   await first.window.getByTestId('task-columns-menu').getByLabel('Category').uncheck();
+  await first.window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
   await first.window.getByTestId('task-sort-due').click();
   await first.window.getByTestId('task-sort-due').click();
   await first.window.getByTestId('task-expand-toggle').click();
@@ -121,6 +158,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   const saved = JSON.parse(await readFile(filePath, 'utf-8')) as PersistedQflowFile;
   expect(saved.ui?.taskTable).toEqual({
     sort: { key: 'due', direction: 'desc' },
+    filters: { tagId: 'tag-pink' },
     visibleColumnKeys: ['task', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
     expanded: true
   });
@@ -131,6 +169,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
 
   const reopenedPanel = second.window.getByTestId('task-panel');
   await expect(second.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
+  await expect(second.window.getByTestId('task-filter-tag')).toHaveValue('tag-pink');
   await expect(reopenedPanel.locator('th').filter({ hasText: 'Category' })).toHaveCount(0);
   await expect(second.window.getByTestId('task-sort-due').locator('xpath=ancestor::th')).toHaveAttribute(
     'aria-sort',

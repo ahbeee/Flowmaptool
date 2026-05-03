@@ -46,6 +46,7 @@ describe('document state helpers', () => {
       edgeRoutesByDirection: { horizontal: {}, vertical: {} },
       toolbarVisible: true,
       taskTable: {
+        filters: {},
         visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
         expanded: false
       },
@@ -110,6 +111,7 @@ describe('document state helpers', () => {
       isDirty: false,
       toolbarVisible: true,
       taskTable: {
+        filters: {},
         visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
         expanded: false
       },

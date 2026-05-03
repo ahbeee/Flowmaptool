@@ -55,6 +55,7 @@ describe('task table helpers', () => {
 
     expect(rows.map(row => row.node.id)).toEqual(['n2', 'n3']);
     expect(rows.map(row => row.category)).toEqual(['Root', 'Root']);
+    expect(rows.map(row => row.tagId)).toEqual(['tag-pending', 'tag-done']);
     expect(rows.map(row => row.tagName)).toEqual(['Pending', 'Done']);
   });
 
@@ -74,6 +75,16 @@ describe('task table helpers', () => {
 
   it('normalizes blank task labels', () => {
     expect(getTaskNodeLabel({ id: 'n1', label: '   ' })).toBe('Untitled Node');
+  });
+
+  it('filters task rows by tag and assignee', () => {
+    expect(buildTaskTableRows(tree(), tagById, undefined, { tagId: 'tag-pending' }).map(row => row.node.id)).toEqual([
+      'n2'
+    ]);
+    expect(buildTaskTableRows(tree(), tagById, undefined, { assignee: 'amy' }).map(row => row.node.id)).toEqual(['n3']);
+    expect(
+      buildTaskTableRows(tree(), tagById, undefined, { tagId: 'tag-pending', assignee: 'Amy' }).map(row => row.node.id)
+    ).toEqual([]);
   });
 
   it('toggles sort direction only when selecting the same ascending column', () => {

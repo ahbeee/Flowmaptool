@@ -7,6 +7,7 @@ import {
   getVisibleTaskTableColumns,
   TASK_TABLE_COLUMNS,
   type TaskTableColumnKey,
+  type TaskTableFilters,
   type TaskTableSort
 } from './task-table';
 
@@ -19,6 +20,7 @@ export type EdgeRouteMap = Record<string, EdgeRoute>;
 export type EdgeRoutesByDirection = Record<LayoutDirection, EdgeRouteMap>;
 export type PersistedTaskTableUiState = {
   sort?: TaskTableSort;
+  filters: TaskTableFilters;
   visibleColumnKeys: TaskTableColumnKey[];
   expanded: boolean;
 };
@@ -67,6 +69,7 @@ export function emptyEdgeRoutesByDirection(): EdgeRoutesByDirection {
 
 export function defaultTaskTableUiState(): PersistedTaskTableUiState {
   return {
+    filters: {},
     visibleColumnKeys: [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS],
     expanded: false
   };
@@ -158,8 +161,17 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
       ).map(column => column.key)
     : [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS];
 
+  const rawFilters = isRecord(value.filters) ? value.filters : {};
+  const tagId = typeof rawFilters.tagId === 'string' && rawFilters.tagId.trim() ? rawFilters.tagId.trim() : undefined;
+  const assignee =
+    typeof rawFilters.assignee === 'string' && rawFilters.assignee.trim() ? rawFilters.assignee.trim() : undefined;
+
   return {
     sort: sanitizeTaskTableSort(value.sort, visibleColumnKeys),
+    filters: {
+      ...(tagId ? { tagId } : {}),
+      ...(assignee ? { assignee } : {})
+    },
     visibleColumnKeys,
     expanded: value.expanded === true
   };

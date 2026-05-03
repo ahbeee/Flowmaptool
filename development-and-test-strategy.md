@@ -51,7 +51,7 @@ The project does not currently use Zustand or ELK.js. State management and layou
 - Horizontal and vertical automatic layout with configurable spacing, compact node sizing, multi-parent behavior, root merge behavior, and fixed-spacing local reflow.
 - Styling controls for themes, fonts, text style, text alignment, text color, background color, shape, tags, default node style, and edge style.
 - Outline panel with hierarchy mirroring, selection sync, collapsible nodes, checklist completion state, and tag-derived checklist targets.
-- Task Table derived from tagged outline nodes, including editable task fields, readonly tag/category columns, sortable headers, persisted table preferences, column visibility controls, and expanded workspace mode.
+- Task Table derived from tagged outline nodes, including tag/assignee filters, editable task fields, readonly tag/category columns, sortable headers, persisted table preferences, column visibility controls, and expanded workspace mode.
 - Export and output workflows for PNG export, PDF export, print, Windows portable builds, and Windows installer builds.
 
 ## 5. Test Strategy
@@ -82,7 +82,7 @@ pnpm test:all
 - Horizontal and vertical layout, spacing settings, root merge, root connection normalization, multi-parent layout, local reflow, and cycle edge layout.
 - Manual edge creation, front/back/body anchor behavior, edge selection, route control points, bend persistence, segment deletion, reset bend, and advanced manual routing cases.
 - Toolbar visibility, toolbar mode, node style changes, default node settings, tag creation/rename/delete, and edge style changes.
-- Outline hierarchy, checklist persistence, Task Table derivation, task field editing, task sorting, persisted table preferences, column visibility, and expanded task table mode.
+- Outline hierarchy, checklist persistence, Task Table derivation, task field editing, task filtering, task sorting, persisted table preferences, column visibility, and expanded task table mode.
 - Zoom-aware marquee selection and fit-to-graph behavior.
 - PNG export quality.
 - Bad file handling, malformed file errors, and old-file migration UX.

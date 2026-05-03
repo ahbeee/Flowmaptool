@@ -32,9 +32,14 @@ export type TaskTableSort = {
   key: TaskTableSortKey;
   direction: TaskTableSortDirection;
 };
+export type TaskTableFilters = {
+  tagId?: string;
+  assignee?: string;
+};
 export type TaskTableRow = {
   node: FlowNode;
   category: string;
+  tagId: string;
   tagName: string;
   originalIndex: number;
 };
@@ -136,10 +141,30 @@ export function getNextTaskTableSort(current: TaskTableSort | undefined, key: Ta
   };
 }
 
+export function normalizeTaskTableFilters(filters: TaskTableFilters | undefined): TaskTableFilters {
+  const tagId = filters?.tagId?.trim();
+  const assignee = filters?.assignee?.trim();
+  return {
+    ...(tagId ? { tagId } : {}),
+    ...(assignee ? { assignee } : {})
+  };
+}
+
+export function doesTaskTableRowMatchFilters(row: TaskTableRow, filters: TaskTableFilters | undefined): boolean {
+  const normalized = normalizeTaskTableFilters(filters);
+  if (normalized.tagId && row.tagId !== normalized.tagId) return false;
+  if (normalized.assignee) {
+    const rowAssignee = normalizeTaskSortString(row.node.task?.assignee);
+    if (rowAssignee !== normalizeTaskSortString(normalized.assignee)) return false;
+  }
+  return true;
+}
+
 export function buildTaskTableRows(
   outlineTree: OutlineTreeNode[],
   tagById: Map<string, FlowTag>,
-  sort?: TaskTableSort
+  sort?: TaskTableSort,
+  filters?: TaskTableFilters
 ): TaskTableRow[] {
   const rows: TaskTableRow[] = [];
 
@@ -149,6 +174,7 @@ export function buildTaskTableRows(
       rows.push({
         node: item.node,
         category: parents.map(getTaskNodeLabel).join(' > '),
+        tagId: tag.id,
         tagName: tag.name,
         originalIndex: rows.length
       });
@@ -157,5 +183,6 @@ export function buildTaskTableRows(
   };
 
   outlineTree.forEach(item => visit(item, []));
-  return sort ? [...rows].sort((left, right) => compareTaskTableRows(left, right, sort)) : rows;
+  const filteredRows = filters ? rows.filter(row => doesTaskTableRowMatchFilters(row, filters)) : rows;
+  return sort ? [...filteredRows].sort((left, right) => compareTaskTableRows(left, right, sort)) : filteredRows;
 }
