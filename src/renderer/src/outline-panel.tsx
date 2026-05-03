@@ -1,0 +1,156 @@
+import React from 'react';
+import type { FlowTag, NodeId } from '@shared/graph';
+import type { OutlineTreeNode } from './outline';
+
+type OutlinePanelProps = {
+  outlineTree: OutlineTreeNode[];
+  collapsedNodeIds: Set<NodeId>;
+  selectedNodeIds: Set<NodeId>;
+  tagById: Map<string, FlowTag>;
+  checklistTargetsByNodeId: Map<NodeId, NodeId[]>;
+  isChecklistNodeChecked: (nodeId: NodeId) => boolean;
+  onToggleNode: (nodeId: NodeId) => void;
+  onToggleChecklistNodes: (nodeIds: NodeId[], checked: boolean) => void;
+  onSelectNode: (nodeId: NodeId) => void;
+  onHide: () => void;
+};
+
+export function OutlinePanel({
+  outlineTree,
+  collapsedNodeIds,
+  selectedNodeIds,
+  tagById,
+  checklistTargetsByNodeId,
+  isChecklistNodeChecked,
+  onToggleNode,
+  onToggleChecklistNodes,
+  onSelectNode,
+  onHide
+}: OutlinePanelProps) {
+  return (
+    <aside className="outline-panel" data-testid="outline-panel">
+      <div className="outline-panel-header">
+        <span>Outline</span>
+        <button type="button" data-testid="outline-hide" onClick={onHide} title="Hide outline">
+          x
+        </button>
+      </div>
+      <div className="outline-tree">
+        {outlineTree.length > 0 ? (
+          <OutlineNodes
+            items={outlineTree}
+            collapsedNodeIds={collapsedNodeIds}
+            selectedNodeIds={selectedNodeIds}
+            tagById={tagById}
+            checklistTargetsByNodeId={checklistTargetsByNodeId}
+            isChecklistNodeChecked={isChecklistNodeChecked}
+            onToggleNode={onToggleNode}
+            onToggleChecklistNodes={onToggleChecklistNodes}
+            onSelectNode={onSelectNode}
+          />
+        ) : (
+          <p className="outline-empty">No nodes</p>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+type OutlineNodesProps = Omit<OutlinePanelProps, 'outlineTree' | 'onHide'> & {
+  items: OutlineTreeNode[];
+  depth?: number;
+};
+
+function OutlineNodes({
+  items,
+  depth = 0,
+  collapsedNodeIds,
+  selectedNodeIds,
+  tagById,
+  checklistTargetsByNodeId,
+  isChecklistNodeChecked,
+  onToggleNode,
+  onToggleChecklistNodes,
+  onSelectNode
+}: OutlineNodesProps): React.ReactNode {
+  return items.map(item => {
+    const hasChildren = item.children.length > 0;
+    const collapsed = collapsedNodeIds.has(item.node.id);
+    const selected = selectedNodeIds.has(item.node.id);
+    const label = item.node.label.trim() || 'Untitled Node';
+    const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
+    const displayLabel = `${label}${tag ? ` [${tag.name}]` : ''}`;
+    const checklistTargets = checklistTargetsByNodeId.get(item.node.id) || [];
+    const checkedTargetCount = checklistTargets.filter(isChecklistNodeChecked).length;
+    const canCheck = checklistTargets.length > 0;
+    const checked = canCheck && checkedTargetCount === checklistTargets.length;
+    const indeterminate = canCheck && checkedTargetCount > 0 && checkedTargetCount < checklistTargets.length;
+    const nodeButtonClassName = [
+      'outline-node-button',
+      selected ? 'outline-node-selected' : '',
+      checked ? 'outline-node-complete' : ''
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return (
+      <React.Fragment key={item.node.id}>
+        <div
+          className={selected ? 'outline-row outline-row-selected' : 'outline-row'}
+          style={{ paddingLeft: 8 + depth * 16 }}
+        >
+          <button
+            type="button"
+            className="outline-disclosure"
+            data-testid={`outline-toggle-${item.node.id}`}
+            disabled={!hasChildren}
+            onClick={() => onToggleNode(item.node.id)}
+            title={collapsed ? 'Expand' : 'Collapse'}
+          >
+            {hasChildren ? (collapsed ? '▸' : '▾') : ''}
+          </button>
+          {canCheck ? (
+            <input
+              ref={input => {
+                if (input) input.indeterminate = indeterminate;
+              }}
+              type="checkbox"
+              className="outline-check"
+              data-testid={`outline-check-${item.node.id}`}
+              checked={checked}
+              onChange={event => onToggleChecklistNodes(checklistTargets, event.currentTarget.checked)}
+              onClick={event => event.stopPropagation()}
+              title={checked ? 'Mark related tasks not done' : 'Mark related tasks done'}
+              aria-label={`${checked ? 'Mark related tasks not done' : 'Mark related tasks done'}: ${displayLabel}`}
+            />
+          ) : (
+            <span className="outline-check-placeholder" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            className={nodeButtonClassName}
+            data-testid={`outline-node-${item.node.id}`}
+            onClick={() => onSelectNode(item.node.id)}
+            title={displayLabel}
+          >
+            {displayLabel}
+          </button>
+        </div>
+        {hasChildren && !collapsed ? (
+          <OutlineNodes
+            items={item.children}
+            depth={depth + 1}
+            collapsedNodeIds={collapsedNodeIds}
+            selectedNodeIds={selectedNodeIds}
+            tagById={tagById}
+            checklistTargetsByNodeId={checklistTargetsByNodeId}
+            isChecklistNodeChecked={isChecklistNodeChecked}
+            onToggleNode={onToggleNode}
+            onToggleChecklistNodes={onToggleChecklistNodes}
+            onSelectNode={onSelectNode}
+          />
+        ) : null}
+      </React.Fragment>
+    );
+  });
+}

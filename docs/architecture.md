@@ -44,6 +44,7 @@ Core graph behavior lives in `src/shared` and is covered by unit or integration 
 Renderer-only pure helpers live under `src/renderer/src`:
 
 - `outline.ts`: outline tree construction and checklist completion target derivation.
+- `outline-panel.tsx`: Outline tree rendering, checklist controls, collapsed state display, and node selection entry points. It receives tree data and callbacks from `App.tsx`.
 - `task-table.ts`: Task Table row derivation from tagged outline nodes, labels, columns, visibility, filtering, sorting, density options, and due-date status helpers.
 - `task-table-panel.tsx`: Task Table rendering and table-specific controls. It receives rows, UI preferences, and callbacks from `App.tsx`; document mutation and tab state ownership stay in `App.tsx`.
 

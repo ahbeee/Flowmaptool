@@ -131,12 +131,8 @@ import {
   restoreDetachedNodeDragToHost,
   type NodeDragStateSnapshot
 } from './node-dragging';
-import {
-  buildOutlineChecklistTargetsByNodeId,
-  buildOutlineTree,
-  toggleCollapsedOutlineNodeIds,
-  type OutlineTreeNode
-} from './outline';
+import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree, toggleCollapsedOutlineNodeIds } from './outline';
+import { OutlinePanel } from './outline-panel';
 import {
   parsePersistedQflow,
   serializePersistedQflow,
@@ -2617,75 +2613,6 @@ export function App() {
     </>
   );
 
-  const renderOutlineNodes = (items: OutlineTreeNode[], depth = 0): React.ReactNode =>
-    items.map(item => {
-      const hasChildren = item.children.length > 0;
-      const collapsed = collapsedOutlineNodeIds.has(item.node.id);
-      const selected = selectedNodeIdSet.has(item.node.id);
-      const label = item.node.label.trim() || 'Untitled Node';
-      const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
-      const displayLabel = `${label}${tag ? ` [${tag.name}]` : ''}`;
-      const checklistTargets = outlineChecklistTargetsByNodeId.get(item.node.id) || [];
-      const checkedTargetCount = checklistTargets.filter(isChecklistNodeChecked).length;
-      const canCheck = checklistTargets.length > 0;
-      const checked = canCheck && checkedTargetCount === checklistTargets.length;
-      const indeterminate = canCheck && checkedTargetCount > 0 && checkedTargetCount < checklistTargets.length;
-      const nodeButtonClassName = [
-        'outline-node-button',
-        selected ? 'outline-node-selected' : '',
-        checked ? 'outline-node-complete' : ''
-      ]
-        .filter(Boolean)
-        .join(' ');
-
-      return (
-        <React.Fragment key={item.node.id}>
-          <div
-            className={selected ? 'outline-row outline-row-selected' : 'outline-row'}
-            style={{ paddingLeft: 8 + depth * 16 }}
-          >
-            <button
-              type="button"
-              className="outline-disclosure"
-              data-testid={`outline-toggle-${item.node.id}`}
-              disabled={!hasChildren}
-              onClick={() => toggleOutlineNode(item.node.id)}
-              title={collapsed ? 'Expand' : 'Collapse'}
-            >
-              {hasChildren ? (collapsed ? '▸' : '▾') : ''}
-            </button>
-            {canCheck ? (
-              <input
-                ref={input => {
-                  if (input) input.indeterminate = indeterminate;
-                }}
-                type="checkbox"
-                className="outline-check"
-                data-testid={`outline-check-${item.node.id}`}
-                checked={checked}
-                onChange={event => toggleChecklistNodes(checklistTargets, event.currentTarget.checked)}
-                onClick={event => event.stopPropagation()}
-                title={checked ? 'Mark related tasks not done' : 'Mark related tasks done'}
-                aria-label={`${checked ? 'Mark related tasks not done' : 'Mark related tasks done'}: ${displayLabel}`}
-              />
-            ) : (
-              <span className="outline-check-placeholder" aria-hidden="true" />
-            )}
-            <button
-              type="button"
-              className={nodeButtonClassName}
-              data-testid={`outline-node-${item.node.id}`}
-              onClick={() => selectOutlineNode(item.node.id)}
-              title={displayLabel}
-            >
-              {displayLabel}
-            </button>
-          </div>
-          {hasChildren && !collapsed ? renderOutlineNodes(item.children, depth + 1) : null}
-        </React.Fragment>
-      );
-    });
-
   const sidePanelVisible = outlineVisible || taskTableVisible;
   const workspaceClassName = [
     'canvas-workspace',
@@ -2810,22 +2737,18 @@ export function App() {
                 onUpdateTaskField={updateTaskTableField}
               />
             ) : (
-              <aside className="outline-panel" data-testid="outline-panel">
-                <div className="outline-panel-header">
-                  <span>Outline</span>
-                  <button
-                    type="button"
-                    data-testid="outline-hide"
-                    onClick={() => setOutlineVisible(false)}
-                    title="Hide outline"
-                  >
-                    x
-                  </button>
-                </div>
-                <div className="outline-tree">
-                  {outlineTree.length > 0 ? renderOutlineNodes(outlineTree) : <p className="outline-empty">No nodes</p>}
-                </div>
-              </aside>
+              <OutlinePanel
+                outlineTree={outlineTree}
+                collapsedNodeIds={collapsedOutlineNodeIds}
+                selectedNodeIds={selectedNodeIdSet}
+                tagById={tagById}
+                checklistTargetsByNodeId={outlineChecklistTargetsByNodeId}
+                isChecklistNodeChecked={isChecklistNodeChecked}
+                onToggleNode={toggleOutlineNode}
+                onToggleChecklistNodes={toggleChecklistNodes}
+                onSelectNode={selectOutlineNode}
+                onHide={() => setOutlineVisible(false)}
+              />
             )
           ) : null}
           {sidePanelVisible ? (
