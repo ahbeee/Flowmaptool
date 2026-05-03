@@ -168,3 +168,27 @@ export function getMarqueeSelectedNodeIds(
   }
   return hits;
 }
+
+export function getNodeIdAtCanvasPoint(
+  point: { x: number; y: number },
+  orderedPositions: NodePosition[],
+  renderedPositionMap: Map<NodeId, NodePosition>,
+  nodeSizeMap: NodeSizeMap,
+  defaultNodeSize: NodeSize,
+  excludedNodeIds: Iterable<NodeId> = []
+): NodeId | null {
+  const excluded = new Set(excludedNodeIds);
+  for (const pos of [...orderedPositions].reverse()) {
+    if (excluded.has(pos.id)) continue;
+    const rendered = renderedPositionMap.get(pos.id);
+    const nodeSize = nodeSizeMap[pos.id] || defaultNodeSize;
+    if (!rendered) continue;
+    const hit =
+      point.x >= rendered.x &&
+      point.x <= rendered.x + nodeSize.width &&
+      point.y >= rendered.y &&
+      point.y <= rendered.y + nodeSize.height;
+    if (hit) return pos.id;
+  }
+  return null;
+}

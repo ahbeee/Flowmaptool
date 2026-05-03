@@ -7,6 +7,7 @@ import {
   buildRouteScopeNodeIdsByNodeId,
   getCanvasSize,
   getMarqueeSelectedNodeIds,
+  getNodeIdAtCanvasPoint,
   getScopedRouteNodeBoxes
 } from '../../src/renderer/src/canvas-geometry';
 
@@ -121,5 +122,24 @@ describe('canvas geometry helpers', () => {
         defaultSize
       )
     ).toEqual(['n1', 'n2']);
+  });
+
+  it('finds the topmost node at a canvas point and supports exclusions', () => {
+    const orderedPositions = [
+      { id: 'n1', x: 10, y: 20 },
+      { id: 'n2', x: 40, y: 30 },
+      { id: 'n3', x: 400, y: 80 }
+    ];
+    const rendered = new Map([
+      ['n1', { id: 'n1', x: 10, y: 20 }],
+      ['n2', { id: 'n2', x: 40, y: 30 }],
+      ['n3', { id: 'n3', x: 400, y: 80 }]
+    ]);
+
+    expect(getNodeIdAtCanvasPoint({ x: 50, y: 40 }, orderedPositions, rendered, nodeSizes, defaultSize)).toBe('n2');
+    expect(getNodeIdAtCanvasPoint({ x: 50, y: 40 }, orderedPositions, rendered, nodeSizes, defaultSize, ['n2'])).toBe(
+      'n1'
+    );
+    expect(getNodeIdAtCanvasPoint({ x: 350, y: 40 }, orderedPositions, rendered, nodeSizes, defaultSize)).toBeNull();
   });
 });

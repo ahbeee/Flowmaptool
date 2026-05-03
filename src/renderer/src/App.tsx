@@ -58,6 +58,7 @@ import {
   buildRouteScopeNodeIdsByNodeId,
   getCanvasSize,
   getMarqueeSelectedNodeIds,
+  getNodeIdAtCanvasPoint,
   getScopedRouteNodeBoxes
 } from './canvas-geometry';
 import {
@@ -1742,19 +1743,14 @@ export function App() {
       if (dragState.nodeIds.length === 1) {
         const x = pointer.x;
         const y = pointer.y;
-        const ordered = [...layout.positions].reverse();
-        let candidate: NodeId | null = null;
-        for (const pos of ordered) {
-          if (pos.id === dragState.anchorNodeId) continue;
-          const rendered = renderedPositionMap.get(pos.id);
-          const nodeSize = nodeSizeMap[pos.id] || DEFAULT_NODE_SIZE;
-          if (!rendered) continue;
-          const hit = x >= rendered.x && x <= rendered.x + nodeSize.width && y >= rendered.y && y <= rendered.y + nodeSize.height;
-          if (hit) {
-            candidate = pos.id;
-            break;
-          }
-        }
+        const candidate = getNodeIdAtCanvasPoint(
+          { x, y },
+          layout.positions,
+          renderedPositionMap,
+          nodeSizeMap,
+          DEFAULT_NODE_SIZE,
+          [dragState.anchorNodeId]
+        );
         setDropParentTargetId(candidate);
       }
     };
@@ -1770,22 +1766,14 @@ export function App() {
         finalDropParentTargetId = null;
         const pointer = getCanvasContentPoint(event.clientX, event.clientY);
         if (pointer) {
-          const ordered = [...layout.positions].reverse();
-          for (const pos of ordered) {
-            if (pos.id === dragState.anchorNodeId) continue;
-            const rendered = renderedPositionMap.get(pos.id);
-            const nodeSize = nodeSizeMap[pos.id] || DEFAULT_NODE_SIZE;
-            if (!rendered) continue;
-            const hit =
-              pointer.x >= rendered.x &&
-              pointer.x <= rendered.x + nodeSize.width &&
-              pointer.y >= rendered.y &&
-              pointer.y <= rendered.y + nodeSize.height;
-            if (hit) {
-              finalDropParentTargetId = pos.id;
-              break;
-            }
-          }
+          finalDropParentTargetId = getNodeIdAtCanvasPoint(
+            pointer,
+            layout.positions,
+            renderedPositionMap,
+            nodeSizeMap,
+            DEFAULT_NODE_SIZE,
+            [dragState.anchorNodeId]
+          );
         }
       }
       if (dragState.nodeIds.length === 1 && finalDropParentTargetId && !isRootDrag) {
@@ -1866,19 +1854,7 @@ export function App() {
   }, [autoPanCanvas, commitDoc, doc, dragState, dropParentTargetId, getCanvasContentPoint, layout.positions, layoutDirection, layoutSpacing, nodeSizeMap, primaryRootNodeId, renderedPositionMap, restoreCurrentNodeOffsets, rootNodeIds, setCurrentNodeOffsets, updateActiveTab]);
 
   const findNodeAtCanvasPoint = React.useCallback((x: number, y: number): NodeId | null => {
-    const ordered = [...layout.positions].reverse();
-    for (const pos of ordered) {
-      const rendered = renderedPositionMap.get(pos.id);
-      const nodeSize = nodeSizeMap[pos.id] || DEFAULT_NODE_SIZE;
-      if (!rendered) continue;
-      const hit =
-        x >= rendered.x &&
-        x <= rendered.x + nodeSize.width &&
-        y >= rendered.y &&
-        y <= rendered.y + nodeSize.height;
-      if (hit) return pos.id;
-    }
-    return null;
+    return getNodeIdAtCanvasPoint({ x, y }, layout.positions, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE);
   }, [layout.positions, nodeSizeMap, renderedPositionMap]);
 
   const updateConnectDragFromPointer = React.useCallback((event: DragPointerLikeEvent) => {
