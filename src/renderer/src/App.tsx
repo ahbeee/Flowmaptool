@@ -90,12 +90,12 @@ import {
   type TabDocument
 } from './document-state';
 import {
-  distanceToPathSquared,
   edgeMidpoint,
   edgePath,
   routeControlPoint,
   routeFromBend
 } from './edge-path';
+import { findEdgeHitAtPoint as findEdgeHitAtPointFromState } from './edge-hit-testing';
 import {
   buildAutoEdgeRouteMap,
   buildEdgeForceBendMap,
@@ -153,7 +153,6 @@ import {
 import {
   distanceSquared,
   pointInsideBox,
-  routeLength,
   segmentIntersectsBox,
   segmentsIntersect,
   type NodeBox,
@@ -2035,76 +2034,22 @@ export function App() {
   };
 
   const findEdgeHitAtPoint = (point: Point, preferredEdgeId?: string) => {
-    type EdgeHitCandidate = {
-      edgeId: string;
-      endpoints: { from: Point; to: Point };
-      route: EdgeRoute | undefined;
-      distance: number;
-      score: number;
-    };
-    let best: EdgeHitCandidate | null = null;
-    let bestNearbyLayoutEdge: EdgeHitCandidate | null = null;
-    let preferred: EdgeHitCandidate | null = null;
-    for (const edge of doc.edges) {
-      const fromPos = renderedPositionMap.get(edge.from);
-      const toPos = renderedPositionMap.get(edge.to);
-      if (!fromPos || !toPos) continue;
-      const fromSize = nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE;
-      const toSize = nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE;
-      const endpoints = getRenderedEdgeEndpoints(edge, fromPos, toPos, fromSize, toSize);
-      const route = edgeRoutes[edge.id] || routeFromBend(edgeBends[edge.id]) || autoEdgeRouteMap.get(edge.id);
-      const lane = edgeLaneMap.get(edge.id) || 0;
-      const forceBend = edgeForceBendMap.get(edge.id) || false;
-      const path = edgePath(endpoints.from, endpoints.to, lane, layoutDirection, fromSize, toSize, forceBend, route);
-      const distance = distanceToPathSquared(point, path);
-      const linearDistance = Math.sqrt(distance);
-      const isLayoutEdge = layoutEdgeAnalysis.layoutEdgeIds.has(edge.id);
-      const isRoutedEdge = Boolean(edgeRoutes[edge.id] || edgeBends[edge.id] || (route && route.points.length > 1));
-      const routeDistance = route ? routeLength([endpoints.from, ...route.points, endpoints.to]) : 0;
-      const routeLengthPenalty = isRoutedEdge && !isLayoutEdge
-        ? Math.min(18, Math.max(0, (routeDistance - 240) / 70))
-        : 0;
-      const routePenalty = linearDistance <= 3
-        ? 0
-        : (isLayoutEdge ? 0 : 8) + (isRoutedEdge ? 6 + routeLengthPenalty : 0);
-      const preferredBonus = preferredEdgeId === edge.id && distance <= 18 * 18 ? 16 : 0;
-      const score = linearDistance + routePenalty - preferredBonus;
-      if (preferredEdgeId === edge.id && distance <= 18 * 18) {
-        preferred = { edgeId: edge.id, endpoints, route, distance, score };
-      }
-      if (!best || score < best.score || (score === best.score && distance < best.distance)) {
-        best = { edgeId: edge.id, endpoints, route, distance, score };
-      }
-      if (isLayoutEdge && distance <= 12 * 12) {
-        const layoutScore = linearDistance;
-        if (
-          !bestNearbyLayoutEdge ||
-          layoutScore < bestNearbyLayoutEdge.score ||
-          (layoutScore === bestNearbyLayoutEdge.score && distance < bestNearbyLayoutEdge.distance)
-        ) {
-          bestNearbyLayoutEdge = { edgeId: edge.id, endpoints, route, distance, score: layoutScore };
-        }
-      }
-    }
-    if (
-      bestNearbyLayoutEdge &&
-      preferred &&
-      !layoutEdgeAnalysis.layoutEdgeIds.has(preferred.edgeId)
-    ) {
-      return bestNearbyLayoutEdge;
-    }
-    if (preferred) {
-      return preferred;
-    }
-    if (
-      bestNearbyLayoutEdge &&
-      best &&
-      best.edgeId !== bestNearbyLayoutEdge.edgeId &&
-      !layoutEdgeAnalysis.layoutEdgeIds.has(best.edgeId)
-    ) {
-      return bestNearbyLayoutEdge;
-    }
-    return best && best.distance <= 18 * 18 ? best : null;
+    return findEdgeHitAtPointFromState({
+      edges: doc.edges,
+      point,
+      preferredEdgeId,
+      renderedPositionMap,
+      nodeSizeMap,
+      defaultNodeSize: DEFAULT_NODE_SIZE,
+      layoutDirection,
+      layoutEdgeIds: layoutEdgeAnalysis.layoutEdgeIds,
+      edgeRoutes,
+      edgeBends,
+      autoEdgeRouteMap,
+      edgeLaneMap,
+      edgeForceBendMap,
+      getRenderedEdgeEndpoints
+    });
   };
 
   const onCanvasPointerDown = (event: React.PointerEvent<Element>) => {
