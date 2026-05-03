@@ -4,6 +4,7 @@ import {
   clampNodeLabel,
   edgeStrokeDasharray,
   effectiveEdgeStyle,
+  getSelectedStyleEdges,
   hasMixedValues,
   nextCustomTagId,
   sameValues
@@ -45,5 +46,18 @@ describe('UI helpers', () => {
     expect(edgeStrokeDasharray('solid', 2)).toBeUndefined();
     expect(edgeStrokeDasharray('dashed', 2)).toBe('8 6');
     expect(edgeStrokeDasharray('dotted', 2)).toBe('1 6');
+  });
+
+  it('selects style target edges with explicit edge selection taking priority', () => {
+    const edges = [
+      { id: 'e1', from: 'n1', to: 'n2' },
+      { id: 'e2', from: 'n2', to: 'n3' },
+      { id: 'e3', from: 'n4', to: 'n5' }
+    ];
+
+    expect(getSelectedStyleEdges(edges, '', [])).toEqual([]);
+    expect(getSelectedStyleEdges(edges, '', ['n2']).map(edge => edge.id)).toEqual(['e1', 'e2']);
+    expect(getSelectedStyleEdges(edges, 'e3', ['n2']).map(edge => edge.id)).toEqual(['e3']);
+    expect(getSelectedStyleEdges(edges, 'missing', ['n2'])).toEqual([]);
   });
 });

@@ -165,6 +165,7 @@ import {
   clampNodeLabel,
   edgeStrokeDasharray,
   effectiveEdgeStyle,
+  getSelectedStyleEdges,
   hasMixedValues,
   nextCustomTagId,
   sameValues
@@ -398,12 +399,10 @@ export function App() {
     () => buildTaskTableRows(outlineTree, tagById, taskTableSort),
     [outlineTree, tagById, taskTableSort]
   );
-  const selectedStyleEdges = React.useMemo(() => {
-    if (selectedEdgeId) return doc.edges.filter(edge => edge.id === selectedEdgeId);
-    if (selectedNodeIds.length === 0) return [];
-    const selected = new Set(selectedNodeIds);
-    return doc.edges.filter(edge => selected.has(edge.from) || selected.has(edge.to));
-  }, [doc.edges, selectedEdgeId, selectedNodeIds]);
+  const selectedStyleEdges = React.useMemo(
+    () => getSelectedStyleEdges(doc.edges, selectedEdgeId, selectedNodeIds),
+    [doc.edges, selectedEdgeId, selectedNodeIds]
+  );
 
   const updateActiveTab = React.useCallback((recipe: (tab: TabDocument) => TabDocument) => {
     setTabs(prev => prev.map(tab => (tab.id === activeTabId ? recipe(tab) : tab)));

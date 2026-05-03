@@ -1,4 +1,4 @@
-import type { EdgeLineType, EdgeStyle, FlowEdge, FlowTag } from '@shared/graph';
+import type { EdgeLineType, EdgeStyle, FlowEdge, FlowTag, NodeId } from '@shared/graph';
 import type { NodeBox } from './routing-geometry';
 
 export const NODE_TEXT_MAX_LEN = 80;
@@ -39,6 +39,17 @@ export function effectiveEdgeStyle(edge: FlowEdge, defaultStyle: EdgeStyle): Req
     lineType: edge.style?.lineType || defaultStyle.lineType || 'solid',
     color: edge.style?.color || defaultStyle.color || '#64748b'
   };
+}
+
+export function getSelectedStyleEdges(
+  edges: FlowEdge[],
+  selectedEdgeId: string,
+  selectedNodeIds: NodeId[]
+): FlowEdge[] {
+  if (selectedEdgeId) return edges.filter(edge => edge.id === selectedEdgeId);
+  if (selectedNodeIds.length === 0) return [];
+  const selected = new Set(selectedNodeIds);
+  return edges.filter(edge => selected.has(edge.from) || selected.has(edge.to));
 }
 
 export function edgeStrokeDasharray(lineType: EdgeLineType, width: number): string | undefined {
