@@ -388,6 +388,7 @@ select {
   border-collapse: collapse;
   width: max-content;
   min-width: 100%;
+  table-layout: fixed;
   font-size: 12px;
 }
 
@@ -398,6 +399,8 @@ select {
   text-align: left;
   vertical-align: middle;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .task-table th {
@@ -420,7 +423,7 @@ select {
   cursor: pointer;
   font: inherit;
   font-weight: inherit;
-  padding: 0;
+  padding: 0 10px 0 0;
   text-align: left;
 }
 
@@ -439,10 +442,35 @@ select {
   color: #0f172a;
 }
 
+.task-column-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 10px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.task-column-resizer::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+}
+
+.task-column-resizer:hover::after {
+  background: #2563eb;
+}
+
 .task-table input,
 .task-table select {
   width: 100%;
-  min-width: 86px;
+  min-width: 0;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #ffffff;
@@ -491,9 +519,11 @@ select {
 }
 
 .canvas-workspace-task-expanded .task-table {
-  width: 100%;
   min-width: 0;
-  table-layout: fixed;
+}
+
+.canvas-workspace-task-expanded .task-table:not(:has(col[style])) {
+  width: 100%;
 }
 
 .canvas-workspace-task-expanded .task-table th,
@@ -541,6 +571,14 @@ select {
 
 .task-col-notes {
   width: 10%;
+}
+
+.task-table:has(col[style]) {
+  width: max-content;
+}
+
+.canvas-workspace-task-expanded .task-table-scroll:has(.task-table col[style]) {
+  overflow-x: auto;
 }
 
 .task-node-link {

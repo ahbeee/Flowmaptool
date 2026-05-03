@@ -3,13 +3,16 @@ import type { FlowTag } from '../../src/shared/graph';
 import type { OutlineTreeNode } from '../../src/renderer/src/outline';
 import {
   buildTaskTableRows,
+  clampTaskTableColumnWidth,
   DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
+  getTaskTableColumnWidth,
   getNextTaskTableSort,
   getNextVisibleTaskTableColumnKeys,
   getTaskNodeLabel,
   getTaskTableDueStatus,
   getVisibleTaskTableColumns,
-  isTaskTableColumnHideable
+  isTaskTableColumnHideable,
+  sanitizeTaskTableColumnWidths
 } from '../../src/renderer/src/task-table';
 
 const tags: FlowTag[] = [
@@ -146,5 +149,16 @@ describe('task table helpers', () => {
     );
     expect(getNextVisibleTaskTableColumnKeys(['priority'], 'task')).toEqual(['task', 'priority']);
     expect(getVisibleTaskTableColumns([]).map(column => column.key)).toEqual(['task']);
+  });
+
+  it('normalizes task table column widths', () => {
+    expect(clampTaskTableColumnWidth(40)).toBe(72);
+    expect(clampTaskTableColumnWidth(900)).toBe(520);
+    expect(getTaskTableColumnWidth({ task: 240 }, 'task')).toBe(240);
+    expect(getTaskTableColumnWidth({}, 'due')).toBe(142);
+    expect(sanitizeTaskTableColumnWidths({ task: 40, due: 160.4, bad: 120, notes: 'wide' })).toEqual({
+      task: 72,
+      due: 160
+    });
   });
 });

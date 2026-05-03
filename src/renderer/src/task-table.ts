@@ -41,6 +41,7 @@ export type TaskTableFilters = {
   assignee?: string;
   due?: TaskTableDueFilter;
 };
+export type TaskTableColumnWidthMap = Partial<Record<TaskTableColumnKey, number>>;
 export type TaskTableRow = {
   node: FlowNode;
   category: string;
@@ -63,6 +64,19 @@ export const TASK_TABLE_DENSITY_OPTIONS: Array<{ key: TaskTableDensity; label: s
   { key: 'comfortable', label: 'Comfortable' },
   { key: 'compact', label: 'Compact' }
 ];
+export const TASK_TABLE_COLUMN_MIN_WIDTH = 72;
+export const TASK_TABLE_COLUMN_MAX_WIDTH = 520;
+export const DEFAULT_TASK_TABLE_COLUMN_WIDTHS: Record<TaskTableColumnKey, number> = {
+  task: 210,
+  category: 300,
+  priority: 128,
+  progress: 112,
+  assignee: 148,
+  start: 142,
+  due: 142,
+  tag: 104,
+  notes: 180
+};
 
 export function getTaskNodeLabel(node: FlowNode): string {
   return node.label.trim() || 'Untitled Node';
@@ -76,6 +90,29 @@ export function getVisibleTaskTableColumns(visibleKeys: Iterable<TaskTableColumn
   const visibleKeySet = new Set(visibleKeys);
   REQUIRED_TASK_TABLE_COLUMN_KEYS.forEach(key => visibleKeySet.add(key));
   return TASK_TABLE_COLUMNS.filter(column => visibleKeySet.has(column.key));
+}
+
+export function clampTaskTableColumnWidth(width: number): number {
+  if (!Number.isFinite(width)) return TASK_TABLE_COLUMN_MIN_WIDTH;
+  return Math.round(Math.max(TASK_TABLE_COLUMN_MIN_WIDTH, Math.min(TASK_TABLE_COLUMN_MAX_WIDTH, width)));
+}
+
+export function getTaskTableColumnWidth(widths: TaskTableColumnWidthMap | undefined, key: TaskTableColumnKey): number {
+  const width = widths?.[key] ?? DEFAULT_TASK_TABLE_COLUMN_WIDTHS[key];
+  return clampTaskTableColumnWidth(width);
+}
+
+export function sanitizeTaskTableColumnWidths(value: unknown): TaskTableColumnWidthMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const validKeys = new Set(TASK_TABLE_COLUMNS.map(column => column.key));
+  const widths: TaskTableColumnWidthMap = {};
+  for (const [key, rawWidth] of Object.entries(value as Record<string, unknown>)) {
+    if (!validKeys.has(key as TaskTableColumnKey) || typeof rawWidth !== 'number' || !Number.isFinite(rawWidth)) {
+      continue;
+    }
+    widths[key as TaskTableColumnKey] = clampTaskTableColumnWidth(rawWidth);
+  }
+  return widths;
 }
 
 export function getNextVisibleTaskTableColumnKeys(

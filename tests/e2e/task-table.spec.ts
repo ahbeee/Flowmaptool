@@ -20,6 +20,18 @@ function dateKeyFromToday(offsetDays: number) {
   return `${year}-${month}-${day}`;
 }
 
+async function resizeTaskColumn(window: Awaited<ReturnType<typeof launchApp>>['window'], key: string, deltaX: number) {
+  const handle = window.getByTestId(`task-resize-${key}`);
+  const box = await handle.boundingBox();
+  if (!box) throw new Error(`Missing resize handle for ${key}`);
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await window.mouse.move(startX, startY);
+  await window.mouse.down();
+  await window.mouse.move(startX + deltaX, startY);
+  await window.mouse.up();
+}
+
 test('task table derives tagged nodes only and keeps tag read-only', async () => {
   const { app, window } = await launchApp();
 
@@ -176,6 +188,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   const filePath = first.filePath;
 
   await triggerMenuAction(first.app, 'file:open');
+  await expect(first.window.getByTestId('file-status')).toContainText('Opened');
   await first.window.getByTestId('task-toggle').click();
   await first.window.getByTestId('task-columns-toggle').click();
   await first.window.getByTestId('task-columns-menu').getByLabel('Category').uncheck();
@@ -197,6 +210,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
     sort: { key: 'due', direction: 'desc' },
     filters: { tagId: 'tag-pink', due: 'none' },
     visibleColumnKeys: ['task', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
+    columnWidths: {},
     expanded: true,
     density: 'compact'
   });
@@ -216,6 +230,47 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
     'aria-sort',
     'descending'
   );
+
+  await second.app.close();
+});
+
+test('task table columns can be resized and persist after reopen', async ({}, testInfo) => {
+  const first = await launchAppWithFixture(testInfo, 'task-table-column-widths.qflow', createDefaultDocFixture());
+  const filePath = first.filePath;
+
+  await triggerMenuAction(first.app, 'file:open');
+  await expect(first.window.getByTestId('file-status')).toContainText('Opened');
+  await first.window.getByTestId('task-toggle').click();
+  const taskHeader = first.window.getByTestId('task-sort-task').locator('xpath=ancestor::th');
+  const categoryHeader = first.window.getByTestId('task-sort-category').locator('xpath=ancestor::th');
+  const initialTaskWidth = Math.round((await taskHeader.boundingBox())?.width ?? 0);
+  const initialCategoryWidth = Math.round((await categoryHeader.boundingBox())?.width ?? 0);
+  expect(initialTaskWidth).toBeGreaterThan(0);
+  expect(initialCategoryWidth).toBeGreaterThan(0);
+
+  await resizeTaskColumn(first.window, 'task', 48);
+  await expect
+    .poll(() => first.window.locator('col.task-col-task').evaluate(col => (col as HTMLTableColElement).style.width))
+    .toBe(`${initialTaskWidth + 48}px`);
+  await expect
+    .poll(() => first.window.locator('col.task-col-category').evaluate(col => (col as HTMLTableColElement).style.width))
+    .toBe(`${initialCategoryWidth}px`);
+
+  await triggerMenuAction(first.app, 'file:save');
+  await expect(first.window.getByTestId('file-status')).toContainText('Saved');
+  await first.app.close();
+
+  const saved = JSON.parse(await readFile(filePath, 'utf-8')) as PersistedQflowFile;
+  expect(saved.ui?.taskTable?.columnWidths.task).toBe(initialTaskWidth + 48);
+  expect(saved.ui?.taskTable?.columnWidths.category).toBe(initialCategoryWidth);
+
+  const second = await launchAppWithFixture(testInfo, 'task-table-column-widths-reopen.qflow', saved);
+  await triggerMenuAction(second.app, 'file:open');
+  await expect(second.window.getByTestId('file-status')).toContainText('Opened');
+  await second.window.getByTestId('task-toggle').click();
+  await expect
+    .poll(() => second.window.locator('col.task-col-task').evaluate(col => (col as HTMLTableColElement).style.width))
+    .toBe(`${initialTaskWidth + 48}px`);
 
   await second.app.close();
 });

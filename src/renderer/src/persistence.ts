@@ -8,7 +8,9 @@ import {
   TASK_TABLE_COLUMNS,
   TASK_TABLE_DENSITY_OPTIONS,
   TASK_TABLE_DUE_FILTERS,
+  sanitizeTaskTableColumnWidths,
   type TaskTableColumnKey,
+  type TaskTableColumnWidthMap,
   type TaskTableDensity,
   type TaskTableFilters,
   type TaskTableSort
@@ -25,6 +27,7 @@ export type PersistedTaskTableUiState = {
   sort?: TaskTableSort;
   filters: TaskTableFilters;
   visibleColumnKeys: TaskTableColumnKey[];
+  columnWidths: TaskTableColumnWidthMap;
   expanded: boolean;
   density: TaskTableDensity;
 };
@@ -75,6 +78,7 @@ export function defaultTaskTableUiState(): PersistedTaskTableUiState {
   return {
     filters: {},
     visibleColumnKeys: [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS],
+    columnWidths: {},
     expanded: false,
     density: 'comfortable'
   };
@@ -181,6 +185,7 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
       ...(due ? { due } : {})
     },
     visibleColumnKeys,
+    columnWidths: sanitizeTaskTableColumnWidths(value.columnWidths),
     expanded: value.expanded === true,
     density
   };

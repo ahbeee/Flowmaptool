@@ -48,6 +48,7 @@ describe('qflow persistence helpers', () => {
         sort: { key: 'due', direction: 'desc' },
         filters: { tagId: 'tag-pending', assignee: 'Amy', due: 'overdue' },
         visibleColumnKeys: ['task', 'priority', 'due'],
+        columnWidths: { task: 240, due: 160 },
         expanded: true,
         density: 'compact'
       }
@@ -67,6 +68,7 @@ describe('qflow persistence helpers', () => {
       sort: { key: 'due', direction: 'desc' },
       filters: { tagId: 'tag-pending', assignee: 'Amy', due: 'overdue' },
       visibleColumnKeys: ['task', 'priority', 'due'],
+      columnWidths: { task: 240, due: 160 },
       expanded: true,
       density: 'compact'
     });
@@ -82,6 +84,7 @@ describe('qflow persistence helpers', () => {
             sort: { key: 'assignee', direction: 'asc' },
             filters: { tagId: '  tag-done  ', assignee: '  Amy  ', due: 'bad', ignored: 1 },
             visibleColumnKeys: ['notes', 'bad', 'task'],
+            columnWidths: { task: 40, notes: 900, bad: 120, category: 'wide' },
             expanded: 'yes',
             density: 'tight'
           }
@@ -94,6 +97,7 @@ describe('qflow persistence helpers', () => {
       sort: undefined,
       filters: { tagId: 'tag-done', assignee: 'Amy' },
       visibleColumnKeys: ['task', 'notes'],
+      columnWidths: { task: 72, notes: 520 },
       expanded: false,
       density: 'comfortable'
     });

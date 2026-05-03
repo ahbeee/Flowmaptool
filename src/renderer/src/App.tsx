@@ -150,7 +150,9 @@ import {
   getTaskTableTodayKey,
   getVisibleTaskTableColumns,
   isTaskTableColumnHideable,
+  clampTaskTableColumnWidth,
   type TaskTableColumnKey,
+  type TaskTableColumnWidthMap,
   type TaskTableDensity,
   type TaskTableSortKey
 } from './task-table';
@@ -1266,6 +1268,24 @@ export function App() {
     [updateActiveTab]
   );
 
+  const setTaskTableColumnWidths = React.useCallback(
+    (widths: TaskTableColumnWidthMap) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        taskTable: {
+          ...tab.taskTable,
+          columnWidths: {
+            ...tab.taskTable.columnWidths,
+            ...Object.fromEntries(
+              Object.entries(widths).map(([key, width]) => [key, clampTaskTableColumnWidth(width || 0)])
+            )
+          }
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
+
   const setTaskTableFilter = React.useCallback(
     (key: 'tagId' | 'assignee' | 'due', value: string) => {
       updateActiveTab(tab => {
@@ -2219,12 +2239,14 @@ export function App() {
                 filterAssigneeOptions={taskTableFilterAssigneeOptions}
                 visibleColumns={visibleTaskTableColumns}
                 visibleColumnKeySet={visibleTaskTableColumnKeySet}
+                columnWidths={activeTab.taskTable.columnWidths}
                 todayKey={taskTableTodayKey}
                 hasQueryState={hasTaskTableQueryState}
                 onSetFilter={setTaskTableFilter}
                 onClearQueryState={clearTaskTableQueryState}
                 onToggleSort={toggleTaskTableSort}
                 onToggleColumn={toggleTaskTableColumn}
+                onSetColumnWidths={setTaskTableColumnWidths}
                 onSetDensity={setTaskTableDensity}
                 onToggleExpanded={() => setTaskTableExpanded(prev => !prev)}
                 onHide={() => {

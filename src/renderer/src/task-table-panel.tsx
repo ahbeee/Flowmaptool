@@ -3,6 +3,7 @@ import type { FlowTag, NodeId, NodeTask, TaskPriority } from '@shared/graph';
 import {
   getTaskNodeLabel,
   getTaskTableDueStatus,
+  getTaskTableColumnWidth,
   isTaskTableColumnHideable,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
@@ -11,6 +12,7 @@ import {
   TASK_TABLE_DUE_FILTERS,
   type TaskTableColumn,
   type TaskTableColumnKey,
+  type TaskTableColumnWidthMap,
   type TaskTableDensity,
   type TaskTableFilters,
   type TaskTableRow,
@@ -29,12 +31,14 @@ type TaskTablePanelProps = {
   filterAssigneeOptions: string[];
   visibleColumns: TaskTableColumn[];
   visibleColumnKeySet: Set<TaskTableColumnKey>;
+  columnWidths: TaskTableColumnWidthMap;
   todayKey: string;
   hasQueryState: boolean;
   onSetFilter: (key: 'tagId' | 'assignee' | 'due', value: string) => void;
   onClearQueryState: () => void;
   onToggleSort: (key: TaskTableSortKey) => void;
   onToggleColumn: (key: TaskTableColumnKey) => void;
+  onSetColumnWidths: (widths: TaskTableColumnWidthMap) => void;
   onSetDensity: (density: TaskTableDensity) => void;
   onToggleExpanded: () => void;
   onHide: () => void;
@@ -53,12 +57,14 @@ export function TaskTablePanel({
   filterAssigneeOptions,
   visibleColumns,
   visibleColumnKeySet,
+  columnWidths,
   todayKey,
   hasQueryState,
   onSetFilter,
   onClearQueryState,
   onToggleSort,
   onToggleColumn,
+  onSetColumnWidths,
   onSetDensity,
   onToggleExpanded,
   onHide,
@@ -133,11 +139,13 @@ export function TaskTablePanel({
         filterAssigneeOptions={filterAssigneeOptions}
         visibleColumns={visibleColumns}
         visibleColumnKeySet={visibleColumnKeySet}
+        columnWidths={columnWidths}
         todayKey={todayKey}
         hasQueryState={hasQueryState}
         onSetFilter={onSetFilter}
         onClearQueryState={onClearQueryState}
         onToggleSort={onToggleSort}
+        onSetColumnWidths={onSetColumnWidths}
         onSelectNode={onSelectNode}
         onUpdateTaskField={onUpdateTaskField}
       />
@@ -155,14 +163,94 @@ function TaskTableBody({
   filterAssigneeOptions,
   visibleColumns,
   visibleColumnKeySet,
+  columnWidths,
   todayKey,
   hasQueryState,
   onSetFilter,
   onClearQueryState,
   onToggleSort,
+  onSetColumnWidths,
   onSelectNode,
   onUpdateTaskField
 }: Omit<TaskTablePanelProps, 'expanded' | 'onToggleColumn' | 'onSetDensity' | 'onToggleExpanded' | 'onHide'>) {
+  const tableRef = React.useRef<HTMLTableElement | null>(null);
+  const hasCustomColumnWidths = visibleColumns.some(column => columnWidths[column.key] !== undefined);
+  const tableWidth = hasCustomColumnWidths
+    ? visibleColumns.reduce((total, column) => total + getTaskTableColumnWidth(columnWidths, column.key), 0)
+    : undefined;
+
+  const getMaterializedColumnWidths = () => {
+    const widths: TaskTableColumnWidthMap = {};
+    for (const column of visibleColumns) {
+      const headerCell = tableRef.current?.querySelector<HTMLTableCellElement>(`th[data-column-key="${column.key}"]`);
+      widths[column.key] = Math.round(
+        headerCell?.getBoundingClientRect().width || getTaskTableColumnWidth(columnWidths, column.key)
+      );
+    }
+    return widths;
+  };
+
+  const startColumnResize = (
+    event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>,
+    column: TaskTableColumn
+  ) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidths = getMaterializedColumnWidths();
+    const startWidth = getTaskTableColumnWidth(startWidths, column.key);
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    onSetColumnWidths(startWidths);
+
+    const moveColumn = (clientX: number) => {
+      onSetColumnWidths({
+        ...startWidths,
+        [column.key]: startWidth + clientX - startX
+      });
+    };
+    const onPointerMove = (nativeEvent: PointerEvent) => moveColumn(nativeEvent.clientX);
+    const onMouseMove = (nativeEvent: MouseEvent) => moveColumn(nativeEvent.clientX);
+    const finishResize = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finishResize);
+      window.removeEventListener('pointercancel', finishResize);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', finishResize);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', finishResize);
+      document.removeEventListener('pointercancel', finishResize);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', finishResize);
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finishResize);
+    window.addEventListener('pointercancel', finishResize);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', finishResize);
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', finishResize);
+    document.addEventListener('pointercancel', finishResize);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', finishResize);
+  };
+
+  const startColumnResizeFromHeaderEdge = (
+    event: React.MouseEvent<HTMLTableCellElement> | React.PointerEvent<HTMLTableCellElement>,
+    column: TaskTableColumn
+  ) => {
+    if (event.button !== 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.classList.contains('task-column-resizer') && event.clientX < rect.right - 10) return;
+    startColumnResize(event, column);
+  };
+
   return (
     <>
       <div className="task-table-filter-row">
@@ -229,10 +317,22 @@ function TaskTableBody({
         ) : rows.length === 0 ? (
           <p className="outline-empty">No task table rows match the current filters.</p>
         ) : (
-          <table className={`task-table task-table-${density}`}>
+          <table
+            ref={tableRef}
+            className={`task-table task-table-${density}`}
+            style={tableWidth ? { width: tableWidth, minWidth: tableWidth } : undefined}
+          >
             <colgroup>
               {visibleColumns.map(column => (
-                <col key={column.key} className={`task-col-${column.key}`} />
+                <col
+                  key={column.key}
+                  className={`task-col-${column.key}`}
+                  style={
+                    columnWidths[column.key] !== undefined
+                      ? { width: getTaskTableColumnWidth(columnWidths, column.key) }
+                      : undefined
+                  }
+                />
               ))}
             </colgroup>
             <thead>
@@ -243,7 +343,12 @@ function TaskTableBody({
                   return (
                     <th
                       key={column.key}
+                      data-column-key={column.key}
                       aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      onMouseDownCapture={event => startColumnResizeFromHeaderEdge(event, column)}
+                      onPointerDownCapture={event => {
+                        if (event.pointerType !== 'mouse') startColumnResizeFromHeaderEdge(event, column);
+                      }}
                     >
                       <button
                         type="button"
@@ -258,6 +363,21 @@ function TaskTableBody({
                           {active ? (direction === 'asc' ? '^' : 'v') : ''}
                         </span>
                       </button>
+                      <span
+                        className="task-column-resizer"
+                        data-testid={`task-resize-${column.key}`}
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label={`Resize ${column.label} column`}
+                        onPointerDown={event => {
+                          if (event.pointerType !== 'mouse') startColumnResize(event, column);
+                        }}
+                        onMouseDown={event => startColumnResize(event, column)}
+                        onClick={event => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                      />
                     </th>
                   );
                 })}
