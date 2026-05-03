@@ -55,6 +55,13 @@ import {
 } from '@shared/local-reflow';
 import { extractSelection, pasteDetached, type CopiedSelection } from '@shared/subflow';
 import {
+  FRONT_HANDLE_CONNECT_ANCHORS,
+  HANDLE_CONNECT_ANCHORS,
+  isNodeSideAnchor,
+  resolveDraggedEdgeAnchors,
+  reverseEdgeAnchors
+} from './connect-anchors';
+import {
   applyEdgeUiSnapshot,
   cloneEdgeBendMap,
   cloneEdgeBendsByDirection,
@@ -158,8 +165,6 @@ import {
 
 const ROOT_LABEL = '';
 const NEW_NODE_LABEL = '';
-const HANDLE_CONNECT_ANCHORS: EdgeAnchors = { from: 'back', to: 'body' };
-const FRONT_HANDLE_CONNECT_ANCHORS: EdgeAnchors = { from: 'front', to: 'body' };
 const SPACING_MIN = 0;
 const SPACING_MAX = 320;
 const SIDE_PANEL_MIN_WIDTH = 220;
@@ -313,22 +318,6 @@ type TabDocument = {
 
 const PNG_FILTER = [{ name: 'PNG Image', extensions: ['png'] }];
 
-function reverseEdgeAnchors(anchors: EdgeAnchors | undefined): EdgeAnchors | undefined {
-  if (!anchors) return undefined;
-  return {
-    ...(anchors.to ? { from: anchors.to } : {}),
-    ...(anchors.from ? { to: anchors.from } : {})
-  };
-}
-
-function isNodeSideAnchor(anchor: EdgeAnchors['from'] | undefined): anchor is 'front' | 'back' {
-  return anchor === 'front' || anchor === 'back';
-}
-
-function oppositeNodeSideAnchor(anchor: 'front' | 'back'): 'front' | 'back' {
-  return anchor === 'front' ? 'back' : 'front';
-}
-
 function createSeedDoc(): FlowDoc {
   return addNode(createEmptyDoc(), ROOT_LABEL, ROOT_NODE_STYLE);
 }
@@ -387,16 +376,6 @@ function isNodeLabelInputTarget(target: EventTarget | null): boolean {
 }
 
 type ConnectHandleHit = { nodeId: NodeId; anchor: EdgeAnchor };
-
-function resolveDraggedEdgeAnchors(sourceAnchors: EdgeAnchors, targetAnchor?: EdgeAnchor): EdgeAnchors | null {
-  const sourceAnchor = sourceAnchors.from === 'front' ? 'front' : 'back';
-  const resolvedTargetAnchor =
-    targetAnchor && targetAnchor !== 'body' && targetAnchor !== 'auto'
-      ? targetAnchor
-      : oppositeNodeSideAnchor(sourceAnchor);
-  if (sourceAnchor === resolvedTargetAnchor) return null;
-  return { ...sourceAnchors, to: resolvedTargetAnchor };
-}
 
 function getViewportConnectHandleHit(
   clientX: number,
