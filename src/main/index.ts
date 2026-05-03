@@ -10,6 +10,7 @@ import {
 } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createSvgPreviewHtml, shouldAllowPreviewRequest } from './preview-security';
 
 const isDev = !app.isPackaged;
 const QFLOW_FILTER = [{ name: 'Flowmaptool Files', extensions: ['qflow'] }];
@@ -50,29 +51,33 @@ function inferExtension(defaultPath: string, filters?: FileFilter[]) {
   return '.png';
 }
 
-function createSvgPreviewHtml(svg: string) {
-  return [
-    '<!doctype html>',
-    '<html>',
-    '<head><meta charset="utf-8"><title>Flowmaptool export</title></head>',
-    '<body style="margin:0;background:#fff;display:flex;align-items:center;justify-content:center;">',
-    svg,
-    '</body>',
-    '</html>'
-  ].join('');
-}
-
 async function createPrintWindowWithSvg(svg: string) {
+  const html = createSvgPreviewHtml(svg);
+  const previewUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
   const printWindow = new BrowserWindow({
     width: 1400,
     height: 1000,
     show: false,
     webPreferences: {
-      sandbox: true
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      partition: `preview-${Date.now()}-${Math.random().toString(36).slice(2)}`
     }
   });
-  const html = createSvgPreviewHtml(svg);
-  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  printWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  printWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== previewUrl) {
+      event.preventDefault();
+    }
+  });
+  printWindow.webContents.session.webRequest.onBeforeRequest((details, callback) => {
+    callback({
+      cancel: !shouldAllowPreviewRequest(details.url, previewUrl, details.resourceType)
+    });
+  });
+  await printWindow.loadURL(previewUrl);
   return printWindow;
 }
 
