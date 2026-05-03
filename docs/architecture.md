@@ -45,6 +45,7 @@ Renderer-only pure helpers live under `src/renderer/src`:
 
 - `outline.ts`: outline tree construction and checklist completion target derivation.
 - `task-table.ts`: Task Table row derivation from tagged outline nodes, labels, columns, visibility, filtering, sorting, density options, and due-date status helpers.
+- `task-table-panel.tsx`: Task Table rendering and table-specific controls. It receives rows, UI preferences, and callbacks from `App.tsx`; document mutation and tab state ownership stay in `App.tsx`.
 
 Task Table UI preferences are persisted in the `.qflow` wrapper `ui.taskTable` object, not in the core `FlowDoc`. This currently includes sort, filters, visible columns, expanded mode, and density. Keep future table-only preferences in that wrapper unless they become durable task metadata.
 

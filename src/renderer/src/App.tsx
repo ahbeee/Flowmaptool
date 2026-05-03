@@ -22,7 +22,6 @@ import {
   type NodeShape,
   type NodeStyle,
   type NodeTask,
-  type TaskPriority,
   type TextAlign
 } from '@shared/graph';
 import { commitHistory } from '@shared/history';
@@ -151,20 +150,14 @@ import {
   buildTaskTableRows,
   getNextVisibleTaskTableColumnKeys,
   getNextTaskTableSort,
-  getTaskNodeLabel,
-  getTaskTableDueStatus,
   getTaskTableTodayKey,
   getVisibleTaskTableColumns,
   isTaskTableColumnHideable,
-  TASK_TABLE_DENSITY_OPTIONS,
-  TASK_TABLE_DUE_FILTERS,
-  TASK_PRIORITIES,
-  TASK_PRIORITY_LABELS,
-  TASK_TABLE_COLUMNS,
   type TaskTableColumnKey,
   type TaskTableDensity,
   type TaskTableSortKey
 } from './task-table';
+import { TaskTablePanel } from './task-table-panel';
 import {
   clampNodeLabel,
   edgeStrokeDasharray,
@@ -2693,226 +2686,6 @@ export function App() {
       );
     });
 
-  const renderTaskTable = () => (
-    <>
-      <div className="task-table-filter-row">
-        <label>
-          <span>Tag</span>
-          <select
-            data-testid="task-filter-tag"
-            value={activeTab.taskTable.filters.tagId || ''}
-            onChange={event => setTaskTableFilter('tagId', event.currentTarget.value)}
-          >
-            <option value="">All tags</option>
-            {taskTableFilterTagOptions.map(tag => (
-              <option key={tag.id} value={tag.id}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Assignee</span>
-          <select
-            data-testid="task-filter-assignee"
-            value={activeTab.taskTable.filters.assignee || ''}
-            onChange={event => setTaskTableFilter('assignee', event.currentTarget.value)}
-          >
-            <option value="">All assignees</option>
-            {taskTableFilterAssigneeOptions.map(assignee => (
-              <option key={assignee} value={assignee}>
-                {assignee}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Due</span>
-          <select
-            data-testid="task-filter-due"
-            value={activeTab.taskTable.filters.due || ''}
-            onChange={event => setTaskTableFilter('due', event.currentTarget.value)}
-          >
-            <option value="">All due dates</option>
-            {TASK_TABLE_DUE_FILTERS.map(option => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="task-table-filter-actions">
-          <button
-            type="button"
-            data-testid="task-clear-query"
-            onClick={clearTaskTableQueryState}
-            disabled={!hasTaskTableQueryState}
-            title="Clear task filters and sort"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-      <div className="task-table-scroll">
-        {taskTableSourceRows.length === 0 ? (
-          <p className="outline-empty">Tag outline nodes to create task table rows.</p>
-        ) : taskTableRows.length === 0 ? (
-          <p className="outline-empty">No task table rows match the current filters.</p>
-        ) : (
-          <table className={`task-table task-table-${activeTab.taskTable.density}`}>
-            <colgroup>
-              {visibleTaskTableColumns.map(column => (
-                <col key={column.key} className={`task-col-${column.key}`} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr>
-                {visibleTaskTableColumns.map(column => {
-                  const active = taskTableSort?.key === column.key;
-                  const direction = active ? taskTableSort.direction : undefined;
-                  return (
-                    <th
-                      key={column.key}
-                      aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    >
-                      <button
-                        type="button"
-                        className="task-sort-button"
-                        data-testid={`task-sort-${column.key}`}
-                        onClick={() => toggleTaskTableSort(column.key)}
-                      >
-                        <span>{column.label}</span>
-                        <span
-                          className={active ? 'task-sort-indicator task-sort-indicator-active' : 'task-sort-indicator'}
-                        >
-                          {active ? (direction === 'asc' ? '^' : 'v') : ''}
-                        </span>
-                      </button>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {taskTableRows.map(row => {
-                const task = row.node.task;
-                const label = getTaskNodeLabel(row.node);
-                const dueStatus = getTaskTableDueStatus(task?.dueDate, taskTableTodayKey);
-
-                return (
-                  <tr key={row.node.id}>
-                    {visibleTaskTableColumnKeySet.has('task') ? (
-                      <td>
-                        <button type="button" className="task-node-link" onClick={() => selectOutlineNode(row.node.id)}>
-                          {label}
-                        </button>
-                      </td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('category') ? (
-                      <td className="task-readonly-cell">{row.category || '-'}</td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('priority') ? (
-                      <td>
-                        <select
-                          value={task?.priority || ''}
-                          onKeyDown={event => event.stopPropagation()}
-                          onChange={event =>
-                            updateTaskTableField(row.node.id, {
-                              priority: (event.currentTarget.value || 'normal') as TaskPriority
-                            })
-                          }
-                        >
-                          <option value="">-</option>
-                          {TASK_PRIORITIES.map(priority => (
-                            <option key={priority} value={priority}>
-                              {TASK_PRIORITY_LABELS[priority]}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('progress') ? (
-                      <td>
-                        <input
-                          className="task-progress-input"
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={task?.progress ?? ''}
-                          onKeyDown={event => event.stopPropagation()}
-                          onChange={event =>
-                            updateTaskTableField(row.node.id, {
-                              progress:
-                                event.currentTarget.value === ''
-                                  ? 0
-                                  : Math.max(0, Math.min(100, Number(event.currentTarget.value)))
-                            })
-                          }
-                        />
-                      </td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('assignee') ? (
-                      <td>
-                        <input
-                          value={task?.assignee || ''}
-                          onKeyDown={event => event.stopPropagation()}
-                          onChange={event =>
-                            updateTaskTableField(row.node.id, { assignee: event.currentTarget.value || undefined })
-                          }
-                        />
-                      </td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('start') ? (
-                      <td>
-                        <input
-                          type="date"
-                          value={task?.startDate || ''}
-                          onKeyDown={event => event.stopPropagation()}
-                          onChange={event =>
-                            updateTaskTableField(row.node.id, { startDate: event.currentTarget.value || undefined })
-                          }
-                        />
-                      </td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('due') ? (
-                      <td className={dueStatus === 'none' ? undefined : `task-due-cell task-due-cell-${dueStatus}`}>
-                        <input
-                          aria-label={`Due date for ${label}`}
-                          title={dueStatus === 'overdue' ? 'Overdue' : dueStatus === 'today' ? 'Due today' : 'Due date'}
-                          type="date"
-                          value={task?.dueDate || ''}
-                          onKeyDown={event => event.stopPropagation()}
-                          onChange={event =>
-                            updateTaskTableField(row.node.id, { dueDate: event.currentTarget.value || undefined })
-                          }
-                        />
-                      </td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('tag') ? (
-                      <td className="task-readonly-cell">{row.tagName || '-'}</td>
-                    ) : null}
-                    {visibleTaskTableColumnKeySet.has('notes') ? (
-                      <td>
-                        <input
-                          className="task-notes-input"
-                          value={task?.note || ''}
-                          onKeyDown={event => event.stopPropagation()}
-                          onChange={event =>
-                            updateTaskTableField(row.node.id, { note: event.currentTarget.value || undefined })
-                          }
-                        />
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </>
-  );
-
   const sidePanelVisible = outlineVisible || taskTableVisible;
   const workspaceClassName = [
     'canvas-workspace',
@@ -3010,75 +2783,32 @@ export function App() {
         <div className={workspaceClassName} style={workspaceStyle}>
           {sidePanelVisible ? (
             taskTableVisible ? (
-              <aside
-                className={
-                  taskTableExpanded ? 'outline-panel task-panel task-panel-expanded' : 'outline-panel task-panel'
-                }
-                data-testid="task-panel"
-              >
-                <div className="outline-panel-header">
-                  <span>Task Table</span>
-                  <div className="outline-panel-actions">
-                    <details className="task-column-menu">
-                      <summary className="outline-panel-action" data-testid="task-columns-toggle">
-                        Columns
-                      </summary>
-                      <div className="task-column-menu-panel" data-testid="task-columns-menu">
-                        {TASK_TABLE_COLUMNS.map(column => {
-                          const hideable = isTaskTableColumnHideable(column.key);
-                          return (
-                            <label key={column.key} className="task-column-option">
-                              <input
-                                type="checkbox"
-                                checked={visibleTaskTableColumnKeySet.has(column.key)}
-                                disabled={!hideable}
-                                onChange={() => toggleTaskTableColumn(column.key)}
-                              />
-                              <span>{column.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </details>
-                    <select
-                      className="outline-panel-action task-density-select"
-                      data-testid="task-density"
-                      value={activeTab.taskTable.density}
-                      onChange={event => setTaskTableDensity(event.currentTarget.value as TaskTableDensity)}
-                      aria-label="Task table density"
-                      title="Task table density"
-                    >
-                      {TASK_TABLE_DENSITY_OPTIONS.map(option => (
-                        <option key={option.key} value={option.key}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="outline-panel-action"
-                      data-testid="task-expand-toggle"
-                      onClick={() => setTaskTableExpanded(prev => !prev)}
-                      title={taskTableExpanded ? 'Collapse task table' : 'Expand task table'}
-                      aria-label={taskTableExpanded ? 'Collapse task table' : 'Expand task table'}
-                    >
-                      {taskTableExpanded ? 'Collapse' : 'Expand'}
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="task-hide"
-                      onClick={() => {
-                        setTaskTableExpanded(false);
-                        setTaskTableVisible(false);
-                      }}
-                      title="Hide task table"
-                    >
-                      x
-                    </button>
-                  </div>
-                </div>
-                {renderTaskTable()}
-              </aside>
+              <TaskTablePanel
+                expanded={taskTableExpanded}
+                density={activeTab.taskTable.density}
+                filters={activeTab.taskTable.filters}
+                sort={taskTableSort}
+                rows={taskTableRows}
+                sourceRows={taskTableSourceRows}
+                filterTagOptions={taskTableFilterTagOptions}
+                filterAssigneeOptions={taskTableFilterAssigneeOptions}
+                visibleColumns={visibleTaskTableColumns}
+                visibleColumnKeySet={visibleTaskTableColumnKeySet}
+                todayKey={taskTableTodayKey}
+                hasQueryState={hasTaskTableQueryState}
+                onSetFilter={setTaskTableFilter}
+                onClearQueryState={clearTaskTableQueryState}
+                onToggleSort={toggleTaskTableSort}
+                onToggleColumn={toggleTaskTableColumn}
+                onSetDensity={setTaskTableDensity}
+                onToggleExpanded={() => setTaskTableExpanded(prev => !prev)}
+                onHide={() => {
+                  setTaskTableExpanded(false);
+                  setTaskTableVisible(false);
+                }}
+                onSelectNode={selectOutlineNode}
+                onUpdateTaskField={updateTaskTableField}
+              />
             ) : (
               <aside className="outline-panel" data-testid="outline-panel">
                 <div className="outline-panel-header">

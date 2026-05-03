@@ -25,6 +25,7 @@ export const TASK_TABLE_COLUMNS = [
   { key: 'notes', label: 'Notes' }
 ] as const;
 
+export type TaskTableColumn = (typeof TASK_TABLE_COLUMNS)[number];
 export type TaskTableSortKey = (typeof TASK_TABLE_COLUMNS)[number]['key'];
 export type TaskTableColumnKey = TaskTableSortKey;
 export type TaskTableSortDirection = 'asc' | 'desc';
