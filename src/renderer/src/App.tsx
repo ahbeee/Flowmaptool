@@ -58,6 +58,12 @@ import {
   getScopedRouteNodeBoxes
 } from './canvas-geometry';
 import {
+  getCenteredScrollTarget,
+  getNodeScrollTarget,
+  planCanvasFitToView,
+  planCanvasWheelZoom
+} from './canvas-viewport';
+import {
   FRONT_HANDLE_CONNECT_ANCHORS,
   HANDLE_CONNECT_ANCHORS
 } from './connect-anchors';
@@ -789,8 +795,10 @@ export function App() {
       if (!canvas || !rendered) return;
       const size = nodeSizeMap[nodeId] || DEFAULT_NODE_SIZE;
       canvas.scrollTo({
-        left: Math.max(0, (rendered.x + size.width / 2) * canvasZoom - canvas.clientWidth / 2),
-        top: Math.max(0, (rendered.y + size.height / 2) * canvasZoom - canvas.clientHeight / 2),
+        ...getNodeScrollTarget(rendered, size, canvasZoom, {
+          clientWidth: canvas.clientWidth,
+          clientHeight: canvas.clientHeight
+        }),
         behavior: 'auto'
       });
     },
@@ -975,38 +983,24 @@ export function App() {
 
   const fitCanvasToView = React.useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || doc.nodes.length === 0) return;
-    const padding = 96;
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-    for (const node of doc.nodes) {
-      const pos = renderedPositionMap.get(node.id);
-      if (!pos) continue;
-      const size = nodeSizeMap[node.id] || DEFAULT_NODE_SIZE;
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + size.width);
-      maxY = Math.max(maxY, pos.y + size.height);
-    }
-    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
-    const boundsWidth = Math.max(1, maxX - minX + padding * 2);
-    const boundsHeight = Math.max(1, maxY - minY + padding * 2);
-    const nextZoom = clamp(
-      Number(Math.min(canvas.clientWidth / boundsWidth, canvas.clientHeight / boundsHeight, 1.25).toFixed(2)),
-      0.5,
-      2.5
+    if (!canvas) return;
+    const fitPlan = planCanvasFitToView(
+      doc.nodes,
+      renderedPositionMap,
+      nodeSizeMap,
+      DEFAULT_NODE_SIZE,
+      { clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight }
     );
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    setCanvasZoom(nextZoom);
+    if (!fitPlan) return;
+    setCanvasZoom(fitPlan.zoom);
     requestAnimationFrame(() => {
-      const maxScrollLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
-      const maxScrollTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
       canvas.scrollTo({
-        left: clamp(centerX * nextZoom - canvas.clientWidth / 2, 0, maxScrollLeft),
-        top: clamp(centerY * nextZoom - canvas.clientHeight / 2, 0, maxScrollTop),
+        ...getCenteredScrollTarget(
+          fitPlan.center,
+          fitPlan.zoom,
+          { clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight },
+          { scrollWidth: canvas.scrollWidth, scrollHeight: canvas.scrollHeight }
+        ),
         behavior: 'auto'
       });
     });
@@ -1482,21 +1476,19 @@ export function App() {
       event.preventDefault();
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const oldZoom = canvasZoom;
-      const delta = event.deltaY < 0 ? 0.1 : -0.1;
-      const nextZoom = clamp(Number((oldZoom + delta).toFixed(2)), 0.5, 2.5);
-      if (nextZoom === oldZoom) return;
       const rect = canvas.getBoundingClientRect();
       const pointerX = event.clientX - rect.left;
       const pointerY = event.clientY - rect.top;
-      const worldX = (canvas.scrollLeft + pointerX) / oldZoom;
-      const worldY = (canvas.scrollTop + pointerY) / oldZoom;
-      setCanvasZoom(nextZoom);
+      const zoomPlan = planCanvasWheelZoom(
+        canvasZoom,
+        event.deltaY,
+        { x: pointerX, y: pointerY },
+        { left: canvas.scrollLeft, top: canvas.scrollTop }
+      );
+      if (!zoomPlan) return;
+      setCanvasZoom(zoomPlan.zoom);
       requestAnimationFrame(() => {
-        canvas.scrollTo({
-          left: Math.max(0, worldX * nextZoom - pointerX),
-          top: Math.max(0, worldY * nextZoom - pointerY)
-        });
+        canvas.scrollTo(zoomPlan.scroll);
       });
     },
     [canvasZoom]
