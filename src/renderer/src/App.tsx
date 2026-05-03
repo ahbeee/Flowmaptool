@@ -2,6 +2,7 @@ import React from 'react';
 import { AppHeader, FileStatus } from './app-header';
 import { CanvasEdgesLayer } from './canvas-edges-layer';
 import { CanvasNodesLayer } from './canvas-nodes-layer';
+import { CanvasOverlaysLayer } from './canvas-overlays-layer';
 import {
   addEdge,
   deleteTag,
@@ -132,6 +133,7 @@ import {
 } from './node-dragging';
 import { buildOutlineChecklistTargetsByNodeId, buildOutlineTree, toggleCollapsedOutlineNodeIds } from './outline';
 import { OutlinePanel } from './outline-panel';
+import { PanelResizer } from './panel-resizer';
 import {
   parsePersistedQflow,
   serializePersistedQflow,
@@ -168,8 +170,6 @@ import {
   COLOR_SWATCHES,
   getTheme,
   SIDE_PANEL_DEFAULT_WIDTH,
-  SIDE_PANEL_MAX_WIDTH,
-  SIDE_PANEL_MIN_WIDTH,
   SPACING_MAX,
   SPACING_MIN
 } from './ui-config';
@@ -2250,20 +2250,13 @@ export function App() {
             )
           ) : null}
           {sidePanelVisible ? (
-            <div
-              className={sidePanelResizing ? 'panel-resizer panel-resizer-active' : 'panel-resizer'}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={taskTableVisible ? 'Resize task table panel' : 'Resize outline panel'}
-              aria-valuemin={SIDE_PANEL_MIN_WIDTH}
-              aria-valuemax={SIDE_PANEL_MAX_WIDTH}
-              aria-valuenow={sidePanelWidth}
-              tabIndex={0}
-              data-testid="side-panel-resizer"
+            <PanelResizer
+              active={sidePanelResizing}
+              label={taskTableVisible ? 'Resize task table panel' : 'Resize outline panel'}
+              value={sidePanelWidth}
               onPointerDown={onSidePanelResizePointerDown}
               onPointerMove={onSidePanelResizePointerMove}
               onPointerUp={finishSidePanelResize}
-              onPointerCancel={finishSidePanelResize}
               onKeyDown={onSidePanelResizeKeyDown}
             />
           ) : null}
@@ -2312,28 +2305,7 @@ export function App() {
                   onStartEdgeBendDrag={startEdgeBendDrag}
                 />
 
-                {marquee ? (
-                  <div
-                    className="marquee-selection"
-                    style={{
-                      left: Math.min(marquee.startX, marquee.currentX),
-                      top: Math.min(marquee.startY, marquee.currentY),
-                      width: Math.abs(marquee.currentX - marquee.startX),
-                      height: Math.abs(marquee.currentY - marquee.startY)
-                    }}
-                  />
-                ) : null}
-                {dragInsertPreview ? (
-                  <div
-                    className="drag-insert-preview"
-                    style={{
-                      left: dragInsertPreview.left,
-                      top: dragInsertPreview.top,
-                      width: dragInsertPreview.width,
-                      height: dragInsertPreview.height
-                    }}
-                  />
-                ) : null}
+                <CanvasOverlaysLayer marquee={marquee} dragInsertPreview={dragInsertPreview} />
 
                 <CanvasNodesLayer
                   positions={layout.positions}
