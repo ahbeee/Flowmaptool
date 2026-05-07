@@ -93,6 +93,35 @@ test('outline search filters matches and expands collapsed parents', async ({}, 
   await app.close();
 });
 
+test('outline can focus checklist branches separately from the full hierarchy', async ({}, testInfo) => {
+  const { app, window } = await launchAppWithFixture(
+    testInfo,
+    'outline-checklist-mode.qflow',
+    createChecklistFixture()
+  );
+
+  await triggerMenuAction(app, 'file:open');
+  await expect(window.getByTestId('outline-mode-outline')).toHaveAttribute('aria-selected', 'true');
+  await expect(window.getByTestId('outline-node-n4')).toBeVisible();
+
+  await window.getByTestId('outline-mode-checklist').click();
+  await expect(window.getByTestId('outline-mode-checklist')).toHaveAttribute('aria-selected', 'true');
+  await expect(window.getByTestId('outline-node-n1')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n2')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n4')).toHaveCount(0);
+  await expect(window.getByTestId('outline-check-n2')).toBeVisible();
+
+  await window.getByTestId('outline-search').fill('second');
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toHaveClass(/outline-node-match/);
+  await window.getByTestId('outline-mode-outline').click();
+  await expect(window.getByTestId('outline-search')).toHaveValue('second');
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+
+  await app.close();
+});
+
 test('outline checklist state persists after save and reopen', async ({}, testInfo) => {
   const first = await launchAppWithFixture(testInfo, 'checklist-persist.qflow', createChecklistFixture());
   const filePath = first.filePath;

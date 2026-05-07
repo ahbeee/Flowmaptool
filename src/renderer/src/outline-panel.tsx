@@ -1,6 +1,11 @@
 import React from 'react';
 import type { FlowTag, NodeId } from '@shared/graph';
-import { filterOutlineTree, type OutlineTreeNode } from './outline';
+import {
+  filterOutlineTree,
+  filterOutlineTreeByChecklistTargets,
+  type OutlineMode,
+  type OutlineTreeNode
+} from './outline';
 
 type OutlinePanelProps = {
   outlineTree: OutlineTreeNode[];
@@ -28,18 +33,45 @@ export function OutlinePanel({
   onHide
 }: OutlinePanelProps) {
   const [query, setQuery] = React.useState('');
-  const filteredOutline = React.useMemo(
-    () => filterOutlineTree(outlineTree, query, tagById),
-    [outlineTree, query, tagById]
+  const [mode, setMode] = React.useState<OutlineMode>('outline');
+  const modeTree = React.useMemo(
+    () =>
+      mode === 'checklist' ? filterOutlineTreeByChecklistTargets(outlineTree, checklistTargetsByNodeId) : outlineTree,
+    [checklistTargetsByNodeId, mode, outlineTree]
   );
+  const filteredOutline = React.useMemo(() => filterOutlineTree(modeTree, query, tagById), [modeTree, query, tagById]);
   const hasQuery = query.trim().length > 0;
   const visibleTree = filteredOutline.tree;
+  const emptyMessage =
+    mode === 'checklist' ? 'No checklist items. Apply tags to outline nodes to create checklist targets.' : 'No nodes';
   return (
     <aside className="outline-panel" data-testid="outline-panel">
       <div className="outline-panel-header">
-        <span>Outline</span>
+        <span>{mode === 'checklist' ? 'Checklist' : 'Outline'}</span>
         <button type="button" data-testid="outline-hide" onClick={onHide} title="Hide outline">
           x
+        </button>
+      </div>
+      <div className="outline-mode-tabs" role="tablist" aria-label="Outline mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'outline'}
+          className={mode === 'outline' ? 'outline-mode-tab outline-mode-tab-active' : 'outline-mode-tab'}
+          data-testid="outline-mode-outline"
+          onClick={() => setMode('outline')}
+        >
+          Outline
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'checklist'}
+          className={mode === 'checklist' ? 'outline-mode-tab outline-mode-tab-active' : 'outline-mode-tab'}
+          data-testid="outline-mode-checklist"
+          onClick={() => setMode('checklist')}
+        >
+          Checklist
         </button>
       </div>
       <div className="outline-search">
@@ -75,7 +107,7 @@ export function OutlinePanel({
             No outline nodes match the search.
           </p>
         ) : (
-          <p className="outline-empty">No nodes</p>
+          <p className="outline-empty">{emptyMessage}</p>
         )}
       </div>
     </aside>

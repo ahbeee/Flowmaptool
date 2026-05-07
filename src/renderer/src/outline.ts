@@ -11,6 +11,8 @@ export type FilterOutlineTreeResult = {
   matchedNodeIds: Set<NodeId>;
 };
 
+export type OutlineMode = 'outline' | 'checklist';
+
 function nodeSeq(nodeId: NodeId): number {
   const match = /^n(\d+)$/.exec(String(nodeId));
   if (!match) return Number.MAX_SAFE_INTEGER;
@@ -114,6 +116,23 @@ export function buildOutlineChecklistTargetsByNodeId(
 
   outlineTree.forEach(visit);
   return targetsByNodeId;
+}
+
+export function filterOutlineTreeByChecklistTargets(
+  outlineTree: OutlineTreeNode[],
+  checklistTargetsByNodeId: Map<NodeId, NodeId[]>
+): OutlineTreeNode[] {
+  const visit = (item: OutlineTreeNode): OutlineTreeNode | null => {
+    const children = item.children.map(visit).filter((child): child is OutlineTreeNode => Boolean(child));
+    const hasChecklistTargets = (checklistTargetsByNodeId.get(item.node.id) || []).length > 0;
+    if (!hasChecklistTargets && children.length === 0) return null;
+    return {
+      node: item.node,
+      children
+    };
+  };
+
+  return outlineTree.map(visit).filter((item): item is OutlineTreeNode => Boolean(item));
 }
 
 export function toggleCollapsedOutlineNodeIds(collapsedNodeIds: Set<NodeId>, nodeId: NodeId): Set<NodeId> {

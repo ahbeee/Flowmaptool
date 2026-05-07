@@ -4,6 +4,7 @@ import {
   buildOutlineChecklistTargetsByNodeId,
   buildOutlineTree,
   filterOutlineTree,
+  filterOutlineTreeByChecklistTargets,
   toggleCollapsedOutlineNodeIds
 } from '../../src/renderer/src/outline';
 
@@ -68,6 +69,20 @@ describe('outline helpers', () => {
     expect(targets.get('n1')).toEqual(['n3', 'n2']);
     expect(targets.get('n3')).toEqual(['n3']);
     expect(targets.get('n4')).toEqual(['n4']);
+  });
+
+  it('filters outline tree to checklist-capable branches', () => {
+    const doc = fixtureDoc();
+    const tree = buildOutlineTree({
+      ...doc,
+      edges: doc.edges.filter(edge => edge.id !== 'e4')
+    });
+    const targets = buildOutlineChecklistTargetsByNodeId(tree, new Set(['tag-task']));
+    const checklistTree = filterOutlineTreeByChecklistTargets(tree, targets);
+
+    expect(checklistTree.map(item => item.node.id)).toEqual(['n1', 'n4']);
+    expect(checklistTree[0].children.map(item => item.node.id)).toEqual(['n3', 'n2']);
+    expect(checklistTree[0].children[0].children).toEqual([]);
   });
 
   it('filters outline nodes by label, tag, and task metadata while preserving context', () => {
