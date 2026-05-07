@@ -252,6 +252,13 @@ test('task table filters by tag and assignee', async () => {
   await expect(pendingRow.locator('td.task-due-cell-overdue')).toHaveCount(1);
   await expect(pendingRow.locator('input').nth(4)).toHaveAttribute('title', 'Overdue');
 
+  await window.getByTestId('task-view-overdue').click();
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(panel.locator('tbody tr').first()).toContainText('Pending Zoe Task');
+  await window.getByTestId('task-view-today').click();
+  await expect(panel).toContainText('No task table rows match the current filters.');
+  await window.getByTestId('task-view-all').click();
+
   await window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
   await expect(panel.locator('tbody tr')).toHaveCount(1);
   await expect(panel.locator('tbody tr').first()).toContainText('Pending Zoe Task');

@@ -139,7 +139,13 @@ describe('task table helpers', () => {
     const rows = buildTaskTableRows(tree(), tagById, undefined, undefined, '2026-05-04', 'all');
 
     expect(getTaskStatus(rows[0].node)).toBe('next');
-    expect(rows.filter(row => doesTaskTableRowMatchView(row, 'today', '2026-05-04')).map(row => row.node.id)).toEqual([
+    expect(rows.filter(row => doesTaskTableRowMatchView(row, 'overdue', '2026-05-04')).map(row => row.node.id)).toEqual(
+      ['n2']
+    );
+    expect(rows.filter(row => doesTaskTableRowMatchView(row, 'today', '2026-05-04')).map(row => row.node.id)).toEqual(
+      []
+    );
+    expect(rows.filter(row => doesTaskTableRowMatchView(row, 'today', '2026-05-03')).map(row => row.node.id)).toEqual([
       'n2'
     ]);
     expect(

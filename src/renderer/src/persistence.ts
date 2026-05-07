@@ -182,6 +182,7 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
   const density = TASK_TABLE_DENSITY_OPTIONS.find(option => option.key === value.density)?.key || 'comfortable';
   const view =
     value.view === 'all' ||
+    value.view === 'overdue' ||
     value.view === 'today' ||
     value.view === 'upcoming' ||
     value.view === 'backlog' ||

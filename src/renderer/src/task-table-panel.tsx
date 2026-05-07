@@ -27,6 +27,7 @@ import {
 } from './task-table';
 
 const TASK_TABLE_VIEWS: Array<{ key: TaskTableView; label: string }> = [
+  { key: 'overdue', label: 'Overdue' },
   { key: 'today', label: 'Today' },
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'backlog', label: 'Backlog' },

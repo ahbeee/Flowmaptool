@@ -45,7 +45,7 @@ export type TaskTableSort = {
 export type TaskTableDueFilter = 'overdue' | 'today' | 'next7' | 'none';
 export type TaskTableDueStatus = 'overdue' | 'today' | 'soon' | 'none';
 export type TaskTableDensity = 'comfortable' | 'compact';
-export type TaskTableView = 'all' | 'today' | 'upcoming' | 'backlog' | 'done';
+export type TaskTableView = 'all' | 'overdue' | 'today' | 'upcoming' | 'backlog' | 'done';
 export type TaskTableFilters = {
   query?: string;
   tagId?: string;
@@ -306,10 +306,12 @@ export function doesTaskTableRowMatchView(
   if (view === 'all') return true;
   if (view === 'done') return status === 'done';
   if (status === 'done') return false;
+  if (view === 'overdue') return dueDate !== undefined && dueDate < todayKey;
+  if (dueDate !== undefined && dueDate < todayKey) return false;
   if (view === 'today') {
     return (
       status === 'next' ||
-      (dueDate !== undefined && dueDate <= todayKey) ||
+      (dueDate !== undefined && dueDate === todayKey) ||
       (!dueDate && (task?.priority === 'high' || task?.priority === 'critical'))
     );
   }
