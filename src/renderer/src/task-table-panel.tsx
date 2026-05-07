@@ -889,6 +889,9 @@ function TaskDetailPanel({ row, todayKey, onSelectNode, onUpdateTaskField, onUpd
   const task = row.node.task;
   const status = getTaskStatus(row.node);
   const dueStatus = getTaskTableDueStatus(task?.dueDate, todayKey);
+  const setStatus = (nextStatus: TaskStatus) => {
+    onUpdateTaskStatus(row.node.id, nextStatus);
+  };
   const setDuePreset = (offsetDays: number | undefined) => {
     onUpdateTaskField(row.node.id, {
       dueDate: offsetDays === undefined ? undefined : addDaysToTaskDateKey(todayKey, offsetDays)
@@ -909,6 +912,33 @@ function TaskDetailPanel({ row, todayKey, onSelectNode, onUpdateTaskField, onUpd
                 ? 'Soon'
                 : 'No due'}
         </span>
+      </div>
+      <div className="task-detail-actions" aria-label="Task status shortcuts">
+        <button
+          type="button"
+          data-testid="task-detail-next"
+          onClick={() => setStatus('next')}
+          disabled={status === 'next'}
+        >
+          Next
+        </button>
+        <button
+          type="button"
+          data-testid="task-detail-waiting"
+          onClick={() => setStatus('waiting')}
+          disabled={status === 'waiting'}
+        >
+          Waiting
+        </button>
+        {status === 'done' ? (
+          <button type="button" data-testid="task-detail-reopen" onClick={() => setStatus('inbox')}>
+            Reopen
+          </button>
+        ) : (
+          <button type="button" data-testid="task-detail-done" onClick={() => setStatus('done')}>
+            Mark done
+          </button>
+        )}
       </div>
       <div className="task-detail-grid">
         <label>

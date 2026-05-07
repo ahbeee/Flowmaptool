@@ -460,6 +460,7 @@ select {
 }
 
 .task-due-presets,
+.task-detail-actions,
 .task-detail-presets {
   display: flex;
   flex-wrap: wrap;
@@ -471,6 +472,7 @@ select {
 }
 
 .task-due-presets button,
+.task-detail-actions button,
 .task-detail-presets button {
   min-height: 24px;
   border: 1px solid #cbd5e1;
@@ -482,12 +484,14 @@ select {
   font-size: 12px;
 }
 
-.task-due-presets button:disabled {
+.task-due-presets button:disabled,
+.task-detail-actions button:disabled {
   color: #94a3b8;
   cursor: default;
 }
 
 .task-due-presets button:not(:disabled):hover,
+.task-detail-actions button:not(:disabled):hover,
 .task-detail-presets button:hover {
   background: #f8fafc;
 }

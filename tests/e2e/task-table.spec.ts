@@ -78,9 +78,19 @@ test('task workbench captures inbox tasks and promotes next tasks into today', a
   await expect(capturedRow.locator('select').first()).toHaveValue('inbox');
   await expect(panel.locator('.task-detail-panel')).toContainText('Review inbox');
 
-  await capturedRow.locator('select').first().selectOption('next');
+  await window.getByTestId('task-detail-next').click();
   await window.getByTestId('task-view-today').click();
   await expect(panel.locator('tbody tr').filter({ hasText: 'Review inbox' })).toHaveCount(1);
+  await expect(panel.locator('tbody tr').filter({ hasText: 'Review inbox' }).locator('select').first()).toHaveValue(
+    'next'
+  );
+  await window.getByTestId('task-detail-waiting').click();
+  await expect(panel.locator('tbody tr').filter({ hasText: 'Review inbox' })).toHaveCount(0);
+  await window.getByTestId('task-view-backlog').click();
+  await expect(panel.locator('tbody tr').filter({ hasText: 'Review inbox' })).toHaveCount(1);
+  await expect(panel.locator('tbody tr').filter({ hasText: 'Review inbox' }).locator('select').first()).toHaveValue(
+    'waiting'
+  );
 
   await app.close();
 });
@@ -149,6 +159,13 @@ test('task workbench bulk updates selected visible tasks', async () => {
   await window.getByTestId('task-view-done').click();
   await expect(panel.locator('tbody tr')).toHaveCount(1);
   await expect(panel.locator('tbody tr').first()).toContainText('Review contract');
+  await window.getByTestId('task-detail-reopen').click();
+  await expect(panel.locator('tbody tr')).toHaveCount(0);
+  await window.getByTestId('task-view-all').click();
+  await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('inbox');
+  await window.getByTestId('task-detail-done').click();
+  await window.getByTestId('task-view-done').click();
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
 
   await app.close();
 });
