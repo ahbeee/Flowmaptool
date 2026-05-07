@@ -5,6 +5,7 @@ import { CanvasNodesLayer } from './canvas-nodes-layer';
 import { CanvasOverlaysLayer } from './canvas-overlays-layer';
 import {
   addEdge,
+  addNode,
   deleteTag,
   removeEdge,
   removeNodes,
@@ -23,7 +24,8 @@ import {
   type FlowNode,
   type NodeId,
   type NodeStyle,
-  type NodeTask
+  type NodeTask,
+  type TaskStatus
 } from '@shared/graph';
 import { commitHistory } from '@shared/history';
 import {
@@ -155,7 +157,8 @@ import {
   type TaskTableColumnKey,
   type TaskTableColumnWidthMap,
   type TaskTableDensity,
-  type TaskTableSortKey
+  type TaskTableSortKey,
+  type TaskTableView
 } from './task-table';
 import { TaskTablePanel } from './task-table-panel';
 import { ToolbarPanel } from './toolbar-panel';
@@ -317,6 +320,7 @@ export function App() {
   const doc = activeTab.history.present;
   const taskTableExpanded = activeTab.taskTable.expanded;
   const taskTableSort = activeTab.taskTable.sort;
+  const taskTableView = activeTab.taskTable.view;
   const taskTableTodayKey = React.useMemo(() => getTaskTableTodayKey(), []);
   const visibleTaskTableColumnKeys = activeTab.taskTable.visibleColumnKeys;
   const isLiveCanvasInteraction = Boolean(dragState || marquee || edgeBendDrag || connectDrag);
@@ -355,8 +359,16 @@ export function App() {
   );
   const taskTableSourceRows = React.useMemo(() => buildTaskTableRows(outlineTree, tagById), [outlineTree, tagById]);
   const taskTableRows = React.useMemo(
-    () => buildTaskTableRows(outlineTree, tagById, taskTableSort, activeTab.taskTable.filters, taskTableTodayKey),
-    [outlineTree, tagById, taskTableSort, activeTab.taskTable.filters, taskTableTodayKey]
+    () =>
+      buildTaskTableRows(
+        outlineTree,
+        tagById,
+        taskTableSort,
+        activeTab.taskTable.filters,
+        taskTableTodayKey,
+        taskTableView
+      ),
+    [outlineTree, tagById, taskTableSort, activeTab.taskTable.filters, taskTableTodayKey, taskTableView]
   );
   const taskTableFilterTagOptions = React.useMemo(
     () => doc.settings.tags.filter(tag => taskTableSourceRows.some(row => row.tagId === tag.id)),
@@ -1211,6 +1223,62 @@ export function App() {
     [commitDoc]
   );
 
+  const updateTaskTableStatus = React.useCallback(
+    (nodeId: NodeId, status: TaskStatus) => {
+      updateTaskTableField(
+        nodeId,
+        status === 'done'
+          ? {
+              status,
+              done: true,
+              progress: 100
+            }
+          : {
+              status,
+              done: false
+            }
+      );
+    },
+    [updateTaskTableField]
+  );
+
+  const quickCaptureTask = React.useCallback(
+    (label: string) => {
+      const trimmed = label.trim();
+      if (!trimmed) return;
+      const parentId = selectedNodeIdsRef.current[0] || primaryRootNodeId || doc.nodes[0]?.id;
+      let newNodeId = '';
+      commitDoc(prev => {
+        newNodeId = `n${prev.meta.nextNodeSeq}`;
+        const withNode = addNode(prev, trimmed);
+        const withEdge =
+          parentId && withNode.nodes.some(node => node.id === parentId)
+            ? addEdge(withNode, parentId, newNodeId)
+            : withNode;
+        return updateNodeTask(withEdge, [newNodeId], {
+          enabled: true,
+          status: 'inbox',
+          priority: 'normal',
+          progress: 0
+        });
+      });
+      updateActiveTab(tab => ({
+        ...tab,
+        taskTable: {
+          ...tab.taskTable,
+          view: 'backlog'
+        }
+      }));
+      if (newNodeId) {
+        setSelectedNodeIds([newNodeId]);
+        selectedNodeIdsRef.current = [newNodeId];
+        setSelectedEdgeId('');
+        requestAnimationFrame(() => scrollNodeIntoCanvas(newNodeId));
+      }
+    },
+    [commitDoc, doc.nodes, primaryRootNodeId, scrollNodeIntoCanvas, updateActiveTab]
+  );
+
   const toggleTaskTableSort = React.useCallback(
     (key: TaskTableSortKey) => {
       updateActiveTab(tab => ({
@@ -1263,6 +1331,19 @@ export function App() {
         taskTable: {
           ...tab.taskTable,
           density
+        }
+      }));
+    },
+    [updateActiveTab]
+  );
+
+  const setTaskTableView = React.useCallback(
+    (view: TaskTableView) => {
+      updateActiveTab(tab => ({
+        ...tab,
+        taskTable: {
+          ...tab.taskTable,
+          view
         }
       }));
     },
@@ -2231,6 +2312,7 @@ export function App() {
             taskTableVisible ? (
               <TaskTablePanel
                 expanded={taskTableExpanded}
+                view={taskTableView}
                 density={activeTab.taskTable.density}
                 filters={activeTab.taskTable.filters}
                 sort={taskTableSort}
@@ -2249,6 +2331,7 @@ export function App() {
                 onToggleColumn={toggleTaskTableColumn}
                 onSetColumnWidths={setTaskTableColumnWidths}
                 onSetDensity={setTaskTableDensity}
+                onSetView={setTaskTableView}
                 onToggleExpanded={() => setTaskTableExpanded(prev => !prev)}
                 onHide={() => {
                   setTaskTableExpanded(false);
@@ -2256,6 +2339,9 @@ export function App() {
                 }}
                 onSelectNode={selectOutlineNode}
                 onUpdateTaskField={updateTaskTableField}
+                onUpdateTaskStatus={updateTaskTableStatus}
+                onQuickCapture={quickCaptureTask}
+                selectedNodeId={selectedNodeIds[0] || ''}
               />
             ) : (
               <OutlinePanel

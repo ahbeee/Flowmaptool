@@ -1,4 +1,4 @@
-import type { FlowNode, FlowTag, TaskPriority } from '@shared/graph';
+import type { FlowNode, FlowTag, TaskPriority, TaskStatus } from '@shared/graph';
 import type { OutlineTreeNode } from './outline';
 
 export const TASK_PRIORITIES: TaskPriority[] = ['low', 'normal', 'high', 'critical'];
@@ -8,6 +8,14 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: 'High',
   critical: 'Critical'
 };
+export const TASK_STATUSES: TaskStatus[] = ['inbox', 'next', 'waiting', 'scheduled', 'done'];
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  inbox: 'Inbox',
+  next: 'Next',
+  waiting: 'Waiting',
+  scheduled: 'Scheduled',
+  done: 'Done'
+};
 
 const TASK_PRIORITY_SORT_ORDER = new Map<TaskPriority, number>(
   TASK_PRIORITIES.map((priority, index) => [priority, index])
@@ -15,6 +23,7 @@ const TASK_PRIORITY_SORT_ORDER = new Map<TaskPriority, number>(
 
 export const TASK_TABLE_COLUMNS = [
   { key: 'task', label: 'Task' },
+  { key: 'status', label: 'Status' },
   { key: 'category', label: 'Category' },
   { key: 'priority', label: 'Priority' },
   { key: 'progress', label: 'Progress' },
@@ -34,8 +43,9 @@ export type TaskTableSort = {
   direction: TaskTableSortDirection;
 };
 export type TaskTableDueFilter = 'overdue' | 'today' | 'next7' | 'none';
-export type TaskTableDueStatus = 'overdue' | 'today' | 'none';
+export type TaskTableDueStatus = 'overdue' | 'today' | 'soon' | 'none';
 export type TaskTableDensity = 'comfortable' | 'compact';
+export type TaskTableView = 'all' | 'today' | 'upcoming' | 'backlog' | 'done';
 export type TaskTableFilters = {
   tagId?: string;
   assignee?: string;
@@ -68,6 +78,7 @@ export const TASK_TABLE_COLUMN_MIN_WIDTH = 72;
 export const TASK_TABLE_COLUMN_MAX_WIDTH = 520;
 export const DEFAULT_TASK_TABLE_COLUMN_WIDTHS: Record<TaskTableColumnKey, number> = {
   task: 210,
+  status: 128,
   category: 300,
   priority: 128,
   progress: 112,
@@ -162,6 +173,8 @@ function getTaskSortValue(row: TaskTableRow, key: TaskTableSortKey): string | nu
       return normalizeTaskSortString(getTaskNodeLabel(row.node));
     case 'category':
       return normalizeTaskSortString(row.category);
+    case 'status':
+      return row.node.task?.status ? TASK_STATUSES.indexOf(row.node.task.status) : undefined;
     case 'priority':
       return task?.priority ? TASK_PRIORITY_SORT_ORDER.get(task.priority) : undefined;
     case 'progress':
@@ -230,6 +243,7 @@ export function getTaskTableDueStatus(
   if (!normalizedDueDate) return 'none';
   if (normalizedDueDate < todayKey) return 'overdue';
   if (normalizedDueDate === todayKey) return 'today';
+  if (normalizedDueDate <= addDaysToDateKey(todayKey, 7)) return 'soon';
   return 'none';
 }
 
@@ -256,23 +270,53 @@ export function doesTaskTableRowMatchFilters(
   return true;
 }
 
+export function getTaskStatus(node: FlowNode): TaskStatus {
+  if (node.task?.done) return 'done';
+  return node.task?.status || 'inbox';
+}
+
+export function doesTaskTableRowMatchView(
+  row: TaskTableRow,
+  view: TaskTableView,
+  todayKey = getTaskTableTodayKey()
+): boolean {
+  const task = row.node.task;
+  const status = getTaskStatus(row.node);
+  const dueDate = normalizeDateKey(task?.dueDate);
+  if (view === 'all') return true;
+  if (view === 'done') return status === 'done';
+  if (status === 'done') return false;
+  if (view === 'today') {
+    return (
+      status === 'next' ||
+      (dueDate !== undefined && dueDate <= todayKey) ||
+      (!dueDate && (task?.priority === 'high' || task?.priority === 'critical'))
+    );
+  }
+  if (view === 'upcoming') {
+    return dueDate !== undefined && dueDate > todayKey && dueDate <= addDaysToDateKey(todayKey, 7);
+  }
+  return !dueDate && (status === 'inbox' || status === 'waiting');
+}
+
 export function buildTaskTableRows(
   outlineTree: OutlineTreeNode[],
   tagById: Map<string, FlowTag>,
   sort?: TaskTableSort,
   filters?: TaskTableFilters,
-  todayKey?: string
+  todayKey?: string,
+  view: TaskTableView = 'all'
 ): TaskTableRow[] {
   const rows: TaskTableRow[] = [];
 
   const visit = (item: OutlineTreeNode, parents: FlowNode[]) => {
     const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
-    if (tag) {
+    if (tag || item.node.task?.enabled) {
       rows.push({
         node: item.node,
         category: parents.map(getTaskNodeLabel).join(' > '),
-        tagId: tag.id,
-        tagName: tag.name,
+        tagId: tag?.id || '',
+        tagName: tag?.name || '',
         originalIndex: rows.length
       });
     }
@@ -280,6 +324,9 @@ export function buildTaskTableRows(
   };
 
   outlineTree.forEach(item => visit(item, []));
-  const filteredRows = filters ? rows.filter(row => doesTaskTableRowMatchFilters(row, filters, todayKey)) : rows;
+  const viewRows = rows.filter(row => doesTaskTableRowMatchView(row, view, todayKey));
+  const filteredRows = filters
+    ? viewRows.filter(row => doesTaskTableRowMatchFilters(row, filters, todayKey))
+    : viewRows;
   return sort ? [...filteredRows].sort((left, right) => compareTaskTableRows(left, right, sort)) : filteredRows;
 }

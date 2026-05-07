@@ -5,10 +5,12 @@ import {
   buildTaskTableRows,
   clampTaskTableColumnWidth,
   DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
+  doesTaskTableRowMatchView,
   getTaskTableColumnWidth,
   getNextTaskTableSort,
   getNextVisibleTaskTableColumnKeys,
   getTaskNodeLabel,
+  getTaskStatus,
   getTaskTableDueStatus,
   getVisibleTaskTableColumns,
   isTaskTableColumnHideable,
@@ -31,7 +33,15 @@ function tree(): OutlineTreeNode[] {
             id: 'n2',
             label: 'Bravo',
             style: { tagId: 'tag-pending' },
-            task: { enabled: true, done: false, priority: 'high', progress: 20, assignee: 'Zoe', dueDate: '2026-05-03' }
+            task: {
+              enabled: true,
+              done: false,
+              status: 'next',
+              priority: 'high',
+              progress: 20,
+              assignee: 'Zoe',
+              dueDate: '2026-05-03'
+            }
           },
           children: []
         },
@@ -40,7 +50,15 @@ function tree(): OutlineTreeNode[] {
             id: 'n3',
             label: ' Alpha ',
             style: { tagId: 'tag-done' },
-            task: { enabled: true, done: false, priority: 'low', progress: 90, assignee: 'Amy', dueDate: '2026-05-10' }
+            task: {
+              enabled: true,
+              done: false,
+              status: 'scheduled',
+              priority: 'low',
+              progress: 90,
+              assignee: 'Amy',
+              dueDate: '2026-05-10'
+            }
           },
           children: []
         },
@@ -107,8 +125,20 @@ describe('task table helpers', () => {
   it('classifies due dates for task table status styling', () => {
     expect(getTaskTableDueStatus('2026-05-03', '2026-05-04')).toBe('overdue');
     expect(getTaskTableDueStatus('2026-05-04', '2026-05-04')).toBe('today');
-    expect(getTaskTableDueStatus('2026-05-05', '2026-05-04')).toBe('none');
+    expect(getTaskTableDueStatus('2026-05-05', '2026-05-04')).toBe('soon');
     expect(getTaskTableDueStatus(undefined, '2026-05-04')).toBe('none');
+  });
+
+  it('filters task rows by personal workbench views', () => {
+    const rows = buildTaskTableRows(tree(), tagById, undefined, undefined, '2026-05-04', 'all');
+
+    expect(getTaskStatus(rows[0].node)).toBe('next');
+    expect(rows.filter(row => doesTaskTableRowMatchView(row, 'today', '2026-05-04')).map(row => row.node.id)).toEqual([
+      'n2'
+    ]);
+    expect(
+      rows.filter(row => doesTaskTableRowMatchView(row, 'upcoming', '2026-05-04')).map(row => row.node.id)
+    ).toEqual(['n3']);
   });
 
   it('toggles sort direction only when selecting the same ascending column', () => {
@@ -135,6 +165,7 @@ describe('task table helpers', () => {
     expect(withoutPriority).not.toContain('priority');
     expect(getVisibleTaskTableColumns(withoutPriority).map(column => column.key)).toEqual([
       'task',
+      'status',
       'category',
       'progress',
       'assignee',

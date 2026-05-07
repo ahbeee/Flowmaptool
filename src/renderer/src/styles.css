@@ -326,6 +326,58 @@ select {
   padding-left: 0;
 }
 
+.task-quick-capture {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 0 2px 8px;
+}
+
+.task-quick-capture input,
+.task-quick-capture button {
+  min-height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.task-quick-capture button {
+  cursor: pointer;
+}
+
+.task-quick-capture button:hover {
+  background: #f8fafc;
+}
+
+.task-view-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 2px 8px;
+  overflow-x: auto;
+}
+
+.task-view-tab {
+  min-height: 26px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  padding: 3px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.task-view-tab-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
 .task-table-filter-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
@@ -495,6 +547,30 @@ select {
   color: #92400e;
 }
 
+.task-due-cell-soon input {
+  border-color: #38bdf8;
+  background: #f0f9ff;
+  color: #075985;
+}
+
+.task-row-due-overdue {
+  background: #fff7f7;
+}
+
+.task-row-due-today {
+  background: #fffbeb;
+}
+
+.task-row-status-done {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.task-row-status-done .task-node-link {
+  color: #64748b;
+  text-decoration: line-through;
+}
+
 .task-table-compact {
   font-size: 11px;
 }
@@ -541,11 +617,15 @@ select {
 }
 
 .task-col-task {
-  width: 15%;
+  width: 14%;
+}
+
+.task-col-status {
+  width: 9%;
 }
 
 .task-col-category {
-  width: 21%;
+  width: 19%;
 }
 
 .task-col-priority {
@@ -601,6 +681,96 @@ select {
 
 .task-notes-input {
   min-width: 130px;
+}
+
+.task-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 2px 0;
+  padding: 10px 0 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.task-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-detail-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+
+.task-detail-due {
+  flex: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #475569;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.task-detail-due-overdue {
+  border-color: #f87171;
+  color: #991b1b;
+  background: #fff1f2;
+}
+
+.task-detail-due-today {
+  border-color: #f59e0b;
+  color: #92400e;
+  background: #fffbeb;
+}
+
+.task-detail-due-soon {
+  border-color: #38bdf8;
+  color: #075985;
+  background: #f0f9ff;
+}
+
+.task-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.task-detail-grid label,
+.task-detail-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.task-detail-grid input,
+.task-detail-grid select,
+.task-detail-notes textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.task-detail-notes textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.task-detail-path {
+  color: #64748b;
+  font-size: 11px;
 }
 
 .outline-tree {

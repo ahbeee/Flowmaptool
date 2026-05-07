@@ -91,6 +91,25 @@ export function createDefaultDocFixture(overrides: DefaultDocFixtureOverrides = 
       edgeBendsByDirection: { horizontal: {}, vertical: {} },
       edgeRoutesByDirection: { horizontal: {}, vertical: {} },
       toolbarVisible: true,
+      taskTable: {
+        filters: {},
+        visibleColumnKeys: [
+          'task',
+          'status',
+          'category',
+          'priority',
+          'progress',
+          'assignee',
+          'start',
+          'due',
+          'tag',
+          'notes'
+        ],
+        columnWidths: {},
+        expanded: false,
+        density: 'comfortable',
+        view: 'all'
+      },
       ...ui
     }
   };

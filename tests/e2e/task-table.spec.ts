@@ -51,13 +51,36 @@ test('task table derives tagged nodes only and keeps tag read-only', async () =>
   const childRow = panel.locator('tbody tr').filter({ hasText: 'Child Task' });
   await expect(childRow).toContainText('Root Task');
   await expect(childRow).toContainText('Pending');
-  await expect(childRow.locator('select')).toHaveCount(1);
+  await expect(childRow.locator('select')).toHaveCount(2);
 
-  await childRow.locator('select').selectOption('high');
-  await expect(childRow.locator('select')).toHaveValue('high');
+  await childRow.locator('select').nth(1).selectOption('high');
+  await expect(childRow.locator('select').nth(1)).toHaveValue('high');
   await childRow.locator('input').nth(1).fill('Amy');
   await childRow.locator('input').nth(4).fill('Follow up');
   await expect(childRow).toContainText('Pending');
+
+  await app.close();
+});
+
+test('task workbench captures inbox tasks and promotes next tasks into today', async () => {
+  const { app, window } = await launchApp();
+
+  await renameNode(window, 'n1', 'Root Task');
+  await window.getByTestId('task-toggle').click();
+
+  await window.getByTestId('task-quick-capture-input').fill('Review inbox');
+  await window.getByTestId('task-quick-capture-submit').click();
+  await expect(window.getByTestId('task-view-backlog')).toHaveAttribute('aria-selected', 'true');
+
+  const panel = window.getByTestId('task-panel');
+  const capturedRow = panel.locator('tbody tr').filter({ hasText: 'Review inbox' });
+  await expect(capturedRow).toHaveCount(1);
+  await expect(capturedRow.locator('select').first()).toHaveValue('inbox');
+  await expect(panel.locator('.task-detail-panel')).toContainText('Review inbox');
+
+  await capturedRow.locator('select').first().selectOption('next');
+  await window.getByTestId('task-view-today').click();
+  await expect(panel.locator('tbody tr').filter({ hasText: 'Review inbox' })).toHaveCount(1);
 
   await app.close();
 });
@@ -209,10 +232,11 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   expect(saved.ui?.taskTable).toEqual({
     sort: { key: 'due', direction: 'desc' },
     filters: { tagId: 'tag-pink', due: 'none' },
-    visibleColumnKeys: ['task', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
+    visibleColumnKeys: ['task', 'status', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
     columnWidths: {},
     expanded: true,
-    density: 'compact'
+    density: 'compact',
+    view: 'all'
   });
 
   const second = await launchAppWithFixture(testInfo, 'task-table-prefs-reopen.qflow', saved);
@@ -224,6 +248,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   await expect(second.window.getByTestId('task-filter-tag')).toHaveValue('tag-pink');
   await expect(second.window.getByTestId('task-filter-due')).toHaveValue('none');
   await expect(second.window.getByTestId('task-density')).toHaveValue('compact');
+  await expect(second.window.getByTestId('task-view-all')).toHaveAttribute('aria-selected', 'true');
   await expect(reopenedPanel.locator('.task-table')).toHaveClass(/task-table-compact/);
   await expect(reopenedPanel.locator('th').filter({ hasText: 'Category' })).toHaveCount(0);
   await expect(second.window.getByTestId('task-sort-due').locator('xpath=ancestor::th')).toHaveAttribute(

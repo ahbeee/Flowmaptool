@@ -1,12 +1,15 @@
 import React from 'react';
-import type { FlowTag, NodeId, NodeTask, TaskPriority } from '@shared/graph';
+import type { FlowTag, NodeId, NodeTask, TaskPriority, TaskStatus } from '@shared/graph';
 import {
   getTaskNodeLabel,
+  getTaskStatus,
   getTaskTableDueStatus,
   getTaskTableColumnWidth,
   isTaskTableColumnHideable,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
+  TASK_STATUSES,
+  TASK_STATUS_LABELS,
   TASK_TABLE_COLUMNS,
   TASK_TABLE_DENSITY_OPTIONS,
   TASK_TABLE_DUE_FILTERS,
@@ -17,11 +20,21 @@ import {
   type TaskTableFilters,
   type TaskTableRow,
   type TaskTableSort,
-  type TaskTableSortKey
+  type TaskTableSortKey,
+  type TaskTableView
 } from './task-table';
+
+const TASK_TABLE_VIEWS: Array<{ key: TaskTableView; label: string }> = [
+  { key: 'today', label: 'Today' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'backlog', label: 'Backlog' },
+  { key: 'done', label: 'Done' },
+  { key: 'all', label: 'All' }
+];
 
 type TaskTablePanelProps = {
   expanded: boolean;
+  view: TaskTableView;
   density: TaskTableDensity;
   filters: TaskTableFilters;
   sort: TaskTableSort | undefined;
@@ -40,14 +53,19 @@ type TaskTablePanelProps = {
   onToggleColumn: (key: TaskTableColumnKey) => void;
   onSetColumnWidths: (widths: TaskTableColumnWidthMap) => void;
   onSetDensity: (density: TaskTableDensity) => void;
+  onSetView: (view: TaskTableView) => void;
   onToggleExpanded: () => void;
   onHide: () => void;
   onSelectNode: (nodeId: NodeId) => void;
   onUpdateTaskField: (nodeId: NodeId, patch: Partial<NodeTask>) => void;
+  onUpdateTaskStatus: (nodeId: NodeId, status: TaskStatus) => void;
+  onQuickCapture: (label: string) => void;
+  selectedNodeId: NodeId;
 };
 
 export function TaskTablePanel({
   expanded,
+  view,
   density,
   filters,
   sort,
@@ -66,18 +84,32 @@ export function TaskTablePanel({
   onToggleColumn,
   onSetColumnWidths,
   onSetDensity,
+  onSetView,
   onToggleExpanded,
   onHide,
   onSelectNode,
-  onUpdateTaskField
+  onUpdateTaskField,
+  onUpdateTaskStatus,
+  onQuickCapture,
+  selectedNodeId
 }: TaskTablePanelProps) {
+  const [quickCaptureLabel, setQuickCaptureLabel] = React.useState('');
+  const selectedRow = sourceRows.find(row => row.node.id === selectedNodeId) || rows[0];
+  const submitQuickCapture = (event: React.FormEvent) => {
+    event.preventDefault();
+    const label = quickCaptureLabel.trim();
+    if (!label) return;
+    onQuickCapture(label);
+    setQuickCaptureLabel('');
+  };
+
   return (
     <aside
       className={expanded ? 'outline-panel task-panel task-panel-expanded' : 'outline-panel task-panel'}
       data-testid="task-panel"
     >
       <div className="outline-panel-header">
-        <span>Task Table</span>
+        <span>Task Workbench</span>
         <div className="outline-panel-actions">
           <details className="task-column-menu">
             <summary className="outline-panel-action" data-testid="task-columns-toggle">
@@ -129,6 +161,33 @@ export function TaskTablePanel({
           </button>
         </div>
       </div>
+      <form className="task-quick-capture" onSubmit={submitQuickCapture}>
+        <input
+          data-testid="task-quick-capture-input"
+          value={quickCaptureLabel}
+          onChange={event => setQuickCaptureLabel(event.currentTarget.value)}
+          placeholder="Capture a task"
+          aria-label="Capture a task"
+        />
+        <button type="submit" data-testid="task-quick-capture-submit">
+          Add
+        </button>
+      </form>
+      <div className="task-view-tabs" role="tablist" aria-label="Task views">
+        {TASK_TABLE_VIEWS.map(option => (
+          <button
+            key={option.key}
+            type="button"
+            role="tab"
+            aria-selected={view === option.key}
+            className={view === option.key ? 'task-view-tab task-view-tab-active' : 'task-view-tab'}
+            data-testid={`task-view-${option.key}`}
+            onClick={() => onSetView(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
       <TaskTableBody
         density={density}
         filters={filters}
@@ -148,7 +207,17 @@ export function TaskTablePanel({
         onSetColumnWidths={onSetColumnWidths}
         onSelectNode={onSelectNode}
         onUpdateTaskField={onUpdateTaskField}
+        onUpdateTaskStatus={onUpdateTaskStatus}
       />
+      {selectedRow ? (
+        <TaskDetailPanel
+          row={selectedRow}
+          todayKey={todayKey}
+          onSelectNode={onSelectNode}
+          onUpdateTaskField={onUpdateTaskField}
+          onUpdateTaskStatus={onUpdateTaskStatus}
+        />
+      ) : null}
     </aside>
   );
 }
@@ -171,8 +240,20 @@ function TaskTableBody({
   onToggleSort,
   onSetColumnWidths,
   onSelectNode,
-  onUpdateTaskField
-}: Omit<TaskTablePanelProps, 'expanded' | 'onToggleColumn' | 'onSetDensity' | 'onToggleExpanded' | 'onHide'>) {
+  onUpdateTaskField,
+  onUpdateTaskStatus
+}: Omit<
+  TaskTablePanelProps,
+  | 'expanded'
+  | 'view'
+  | 'onToggleColumn'
+  | 'onSetDensity'
+  | 'onSetView'
+  | 'onToggleExpanded'
+  | 'onHide'
+  | 'onQuickCapture'
+  | 'selectedNodeId'
+>) {
   const tableRef = React.useRef<HTMLTableElement | null>(null);
   const hasCustomColumnWidths = visibleColumns.some(column => columnWidths[column.key] !== undefined);
   const tableWidth = hasCustomColumnWidths
@@ -388,14 +469,34 @@ function TaskTableBody({
                 const task = row.node.task;
                 const label = getTaskNodeLabel(row.node);
                 const dueStatus = getTaskTableDueStatus(task?.dueDate, todayKey);
+                const status = getTaskStatus(row.node);
 
                 return (
-                  <tr key={row.node.id}>
+                  <tr
+                    key={row.node.id}
+                    className={`task-row task-row-status-${status} task-row-due-${dueStatus}`}
+                    data-testid={`task-row-${row.node.id}`}
+                  >
                     {visibleColumnKeySet.has('task') ? (
                       <td>
                         <button type="button" className="task-node-link" onClick={() => onSelectNode(row.node.id)}>
                           {label}
                         </button>
+                      </td>
+                    ) : null}
+                    {visibleColumnKeySet.has('status') ? (
+                      <td>
+                        <select
+                          value={status}
+                          onKeyDown={event => event.stopPropagation()}
+                          onChange={event => onUpdateTaskStatus(row.node.id, event.currentTarget.value as TaskStatus)}
+                        >
+                          {TASK_STATUSES.map(option => (
+                            <option key={option} value={option}>
+                              {TASK_STATUS_LABELS[option]}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                     ) : null}
                     {visibleColumnKeySet.has('category') ? (
@@ -501,5 +602,89 @@ function TaskTableBody({
         )}
       </div>
     </>
+  );
+}
+
+type TaskDetailPanelProps = {
+  row: TaskTableRow;
+  todayKey: string;
+  onSelectNode: (nodeId: NodeId) => void;
+  onUpdateTaskField: (nodeId: NodeId, patch: Partial<NodeTask>) => void;
+  onUpdateTaskStatus: (nodeId: NodeId, status: TaskStatus) => void;
+};
+
+function TaskDetailPanel({ row, todayKey, onSelectNode, onUpdateTaskField, onUpdateTaskStatus }: TaskDetailPanelProps) {
+  const task = row.node.task;
+  const status = getTaskStatus(row.node);
+  const dueStatus = getTaskTableDueStatus(task?.dueDate, todayKey);
+  return (
+    <section className="task-detail-panel" data-testid="task-detail-panel">
+      <div className="task-detail-header">
+        <button type="button" className="task-node-link task-detail-title" onClick={() => onSelectNode(row.node.id)}>
+          {getTaskNodeLabel(row.node)}
+        </button>
+        <span className={`task-detail-due task-detail-due-${dueStatus}`}>
+          {dueStatus === 'overdue'
+            ? 'Overdue'
+            : dueStatus === 'today'
+              ? 'Today'
+              : dueStatus === 'soon'
+                ? 'Soon'
+                : 'No due'}
+        </span>
+      </div>
+      <div className="task-detail-grid">
+        <label>
+          <span>Status</span>
+          <select
+            value={status}
+            onChange={event => onUpdateTaskStatus(row.node.id, event.currentTarget.value as TaskStatus)}
+          >
+            {TASK_STATUSES.map(option => (
+              <option key={option} value={option}>
+                {TASK_STATUS_LABELS[option]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Priority</span>
+          <select
+            value={task?.priority || 'normal'}
+            onChange={event => onUpdateTaskField(row.node.id, { priority: event.currentTarget.value as TaskPriority })}
+          >
+            {TASK_PRIORITIES.map(priority => (
+              <option key={priority} value={priority}>
+                {TASK_PRIORITY_LABELS[priority]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Start</span>
+          <input
+            type="date"
+            value={task?.startDate || ''}
+            onChange={event => onUpdateTaskField(row.node.id, { startDate: event.currentTarget.value || undefined })}
+          />
+        </label>
+        <label>
+          <span>Due</span>
+          <input
+            type="date"
+            value={task?.dueDate || ''}
+            onChange={event => onUpdateTaskField(row.node.id, { dueDate: event.currentTarget.value || undefined })}
+          />
+        </label>
+      </div>
+      <label className="task-detail-notes">
+        <span>Notes</span>
+        <textarea
+          value={task?.note || ''}
+          onChange={event => onUpdateTaskField(row.node.id, { note: event.currentTarget.value || undefined })}
+        />
+      </label>
+      <div className="task-detail-path">{row.category || 'Root level'}</div>
+    </section>
   );
 }

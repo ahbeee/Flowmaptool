@@ -30,6 +30,7 @@ export type FlowChecklist = {
 };
 
 export type TaskPriority = 'low' | 'normal' | 'high' | 'critical';
+export type TaskStatus = 'inbox' | 'next' | 'waiting' | 'scheduled' | 'done';
 export type NodeShape = 'plain' | 'rounded' | 'pill' | 'underline' | 'square';
 export type TextAlign = 'left' | 'center' | 'right';
 export type EdgeLineType = 'solid' | 'dashed' | 'dotted';
@@ -63,6 +64,7 @@ export type NodeStyle = {
 export type NodeTask = {
   enabled: boolean;
   done: boolean;
+  status: TaskStatus;
   priority: TaskPriority;
   progress: number;
   assignee?: string;
@@ -332,6 +334,12 @@ function sanitizeTaskPriority(value: unknown): TaskPriority {
   return 'normal';
 }
 
+function sanitizeTaskStatus(value: unknown, done: boolean): TaskStatus {
+  if (done) return 'done';
+  if (value === 'next' || value === 'waiting' || value === 'scheduled' || value === 'done') return value;
+  return 'inbox';
+}
+
 function sanitizeTaskProgress(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -341,10 +349,12 @@ function sanitizeNodeTask(input: unknown): NodeTask | undefined {
   if (!input || typeof input !== 'object') return undefined;
   const raw = input as Partial<NodeTask>;
   if (raw.enabled !== true) return undefined;
+  const status = sanitizeTaskStatus(raw.status, raw.done === true);
 
   const task: NodeTask = {
     enabled: true,
-    done: raw.done === true,
+    done: raw.done === true || status === 'done',
+    status,
     priority: sanitizeTaskPriority(raw.priority),
     progress: sanitizeTaskProgress(raw.progress)
   };
@@ -512,6 +522,7 @@ export function updateNodeTask(doc: FlowDoc, nodeIds: NodeId[], patch: Partial<N
       const nextTask = sanitizeNodeTask({
         enabled: true,
         done: false,
+        status: 'inbox',
         priority: 'normal',
         progress: 0,
         ...(node.task || {}),

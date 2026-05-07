@@ -106,7 +106,9 @@ describe('edge UI state helpers', () => {
       clearEdgeUiForLayoutMutation(host, doc, {
         ...doc,
         nodes: doc.nodes.map(node =>
-          node.id === 'n2' ? { ...node, task: { enabled: true, done: false, priority: 'normal', progress: 50 } } : node
+          node.id === 'n2'
+            ? { ...node, task: { enabled: true, done: false, status: 'inbox', priority: 'normal', progress: 50 } }
+            : node
         )
       })
     ).toBe(host);

@@ -47,9 +47,21 @@ describe('document state helpers', () => {
       toolbarVisible: true,
       taskTable: {
         filters: {},
-        visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
+        visibleColumnKeys: [
+          'task',
+          'status',
+          'category',
+          'priority',
+          'progress',
+          'assignee',
+          'start',
+          'due',
+          'tag',
+          'notes'
+        ],
         expanded: false,
-        density: 'comfortable'
+        density: 'comfortable',
+        view: 'all'
       },
       interactionHistory: { past: [], future: [] }
     });
@@ -113,9 +125,21 @@ describe('document state helpers', () => {
       toolbarVisible: true,
       taskTable: {
         filters: {},
-        visibleColumnKeys: ['task', 'category', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
+        visibleColumnKeys: [
+          'task',
+          'status',
+          'category',
+          'priority',
+          'progress',
+          'assignee',
+          'start',
+          'due',
+          'tag',
+          'notes'
+        ],
         expanded: false,
-        density: 'comfortable'
+        density: 'comfortable',
+        view: 'all'
       },
       nodeOffsetsByDirection: { horizontal: {}, vertical: {} },
       edgeBendsByDirection: { horizontal: {}, vertical: {} },

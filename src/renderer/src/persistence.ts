@@ -8,6 +8,7 @@ import {
   TASK_TABLE_COLUMNS,
   TASK_TABLE_DENSITY_OPTIONS,
   TASK_TABLE_DUE_FILTERS,
+  type TaskTableView,
   sanitizeTaskTableColumnWidths,
   type TaskTableColumnKey,
   type TaskTableColumnWidthMap,
@@ -30,6 +31,7 @@ export type PersistedTaskTableUiState = {
   columnWidths: TaskTableColumnWidthMap;
   expanded: boolean;
   density: TaskTableDensity;
+  view: TaskTableView;
 };
 
 export type PersistedUiState = {
@@ -80,7 +82,8 @@ export function defaultTaskTableUiState(): PersistedTaskTableUiState {
     visibleColumnKeys: [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS],
     columnWidths: {},
     expanded: false,
-    density: 'comfortable'
+    density: 'comfortable',
+    view: 'all'
   };
 }
 
@@ -176,6 +179,14 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
     typeof rawFilters.assignee === 'string' && rawFilters.assignee.trim() ? rawFilters.assignee.trim() : undefined;
   const due = TASK_TABLE_DUE_FILTERS.find(option => option.key === rawFilters.due)?.key;
   const density = TASK_TABLE_DENSITY_OPTIONS.find(option => option.key === value.density)?.key || 'comfortable';
+  const view =
+    value.view === 'all' ||
+    value.view === 'today' ||
+    value.view === 'upcoming' ||
+    value.view === 'backlog' ||
+    value.view === 'done'
+      ? value.view
+      : 'all';
 
   return {
     sort: sanitizeTaskTableSort(value.sort, visibleColumnKeys),
@@ -187,7 +198,8 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
     visibleColumnKeys,
     columnWidths: sanitizeTaskTableColumnWidths(value.columnWidths),
     expanded: value.expanded === true,
-    density
+    density,
+    view
   };
 }
 
