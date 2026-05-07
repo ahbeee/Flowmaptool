@@ -3,6 +3,7 @@ import type { FlowDoc } from '../../src/shared/graph';
 import {
   buildOutlineChecklistTargetsByNodeId,
   buildOutlineTree,
+  collectCollapsibleOutlineNodeIds,
   filterOutlineTree,
   filterOutlineTreeByChecklistTargets,
   toggleCollapsedOutlineNodeIds
@@ -130,5 +131,15 @@ describe('outline helpers', () => {
     expect([...current]).toEqual(['n1', 'n2']);
     expect([...expanded]).toEqual(['n2']);
     expect([...collapsed]).toEqual(['n1', 'n2', 'n3']);
+  });
+
+  it('collects outline nodes that can be collapsed', () => {
+    const doc = fixtureDoc();
+    const tree = buildOutlineTree({
+      ...doc,
+      edges: doc.edges.filter(edge => edge.id !== 'e4')
+    });
+
+    expect(collectCollapsibleOutlineNodeIds(tree)).toEqual(['n1', 'n3']);
   });
 });

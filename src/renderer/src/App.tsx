@@ -1102,6 +1102,14 @@ export function App() {
     setCollapsedOutlineNodeIds(prev => toggleCollapsedOutlineNodeIds(prev, nodeId));
   }, []);
 
+  const collapseOutlineNodes = React.useCallback((nodeIds: NodeId[]) => {
+    setCollapsedOutlineNodeIds(prev => new Set([...prev, ...nodeIds]));
+  }, []);
+
+  const expandAllOutlineNodes = React.useCallback(() => {
+    setCollapsedOutlineNodeIds(new Set());
+  }, []);
+
   const createLinkedNodeFromSelection = React.useCallback(() => {
     const currentSelection = selectedNodeIdsRef.current;
     const result = buildInsertNodeFromSelectionResult(doc, currentSelection, nodeOffsets, 'child');
@@ -2377,6 +2385,8 @@ export function App() {
                 checklistTargetsByNodeId={outlineChecklistTargetsByNodeId}
                 isChecklistNodeChecked={isChecklistNodeChecked}
                 onToggleNode={toggleOutlineNode}
+                onCollapseNodes={collapseOutlineNodes}
+                onExpandAll={expandAllOutlineNodes}
                 onToggleChecklistNodes={toggleChecklistNodes}
                 onSelectNode={selectOutlineNode}
                 onHide={() => setOutlineVisible(false)}

@@ -145,6 +145,17 @@ export function toggleCollapsedOutlineNodeIds(collapsedNodeIds: Set<NodeId>, nod
   return next;
 }
 
+export function collectCollapsibleOutlineNodeIds(tree: OutlineTreeNode[]): NodeId[] {
+  const nodeIds: NodeId[] = [];
+  const visit = (item: OutlineTreeNode) => {
+    if (item.children.length === 0) return;
+    nodeIds.push(item.node.id);
+    item.children.forEach(visit);
+  };
+  tree.forEach(visit);
+  return nodeIds;
+}
+
 function normalizeOutlineSearchText(value: string | undefined): string {
   return (value || '').trim().toLocaleLowerCase();
 }

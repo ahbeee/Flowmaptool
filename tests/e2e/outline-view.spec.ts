@@ -135,6 +135,38 @@ test('outline can focus checklist branches separately from the full hierarchy', 
   await app.close();
 });
 
+test('outline can expand and collapse all visible branches', async ({}, testInfo) => {
+  const { app, window } = await launchAppWithFixture(
+    testInfo,
+    'outline-expand-collapse.qflow',
+    createChecklistFixture()
+  );
+
+  await triggerMenuAction(app, 'file:open');
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-expand-all')).toBeDisabled();
+
+  await window.getByTestId('outline-collapse-all').click();
+  await expect(window.getByTestId('outline-node-n2')).toHaveCount(0);
+  await expect(window.getByTestId('outline-node-n4')).toHaveCount(0);
+  await expect(window.getByTestId('outline-expand-all')).toBeEnabled();
+
+  await window.getByTestId('outline-expand-all').click();
+  await expect(window.getByTestId('outline-node-n2')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n4')).toBeVisible();
+  await expect(window.getByTestId('outline-expand-all')).toBeDisabled();
+
+  await window.getByTestId('outline-mode-checklist').click();
+  await window.getByTestId('outline-collapse-all').click();
+  await expect(window.getByTestId('outline-node-n2')).toHaveCount(0);
+  await window.getByTestId('outline-expand-all').click();
+  await expect(window.getByTestId('outline-node-n2')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+
+  await app.close();
+});
+
 test('outline checklist state persists after save and reopen', async ({}, testInfo) => {
   const first = await launchAppWithFixture(testInfo, 'checklist-persist.qflow', createChecklistFixture());
   const filePath = first.filePath;

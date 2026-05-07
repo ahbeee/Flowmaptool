@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FlowTag, NodeId } from '@shared/graph';
 import {
+  collectCollapsibleOutlineNodeIds,
   filterOutlineTree,
   filterOutlineTreeByChecklistTargets,
   type OutlineMode,
@@ -16,6 +17,8 @@ type OutlinePanelProps = {
   checklistTargetsByNodeId: Map<NodeId, NodeId[]>;
   isChecklistNodeChecked: (nodeId: NodeId) => boolean;
   onToggleNode: (nodeId: NodeId) => void;
+  onCollapseNodes: (nodeIds: NodeId[]) => void;
+  onExpandAll: () => void;
   onToggleChecklistNodes: (nodeIds: NodeId[], checked: boolean) => void;
   onSelectNode: (nodeId: NodeId) => void;
   onHide: () => void;
@@ -29,6 +32,8 @@ export function OutlinePanel({
   checklistTargetsByNodeId,
   isChecklistNodeChecked,
   onToggleNode,
+  onCollapseNodes,
+  onExpandAll,
   onToggleChecklistNodes,
   onSelectNode,
   onHide
@@ -43,15 +48,40 @@ export function OutlinePanel({
   const filteredOutline = React.useMemo(() => filterOutlineTree(modeTree, query, tagById), [modeTree, query, tagById]);
   const hasQuery = query.trim().length > 0;
   const visibleTree = filteredOutline.tree;
+  const visibleCollapsibleNodeIds = React.useMemo(() => collectCollapsibleOutlineNodeIds(visibleTree), [visibleTree]);
+  const hasCollapsibleNodes = visibleCollapsibleNodeIds.length > 0;
+  const hasCollapsedVisibleNodes = visibleCollapsibleNodeIds.some(nodeId => collapsedNodeIds.has(nodeId));
   const emptyMessage =
     mode === 'checklist' ? 'No checklist items. Apply tags to outline nodes to create checklist targets.' : 'No nodes';
   return (
     <aside className="outline-panel" data-testid="outline-panel">
       <div className="outline-panel-header">
         <span>{mode === 'checklist' ? 'Checklist' : 'Outline'}</span>
-        <button type="button" data-testid="outline-hide" onClick={onHide} title="Hide outline">
-          x
-        </button>
+        <div className="outline-panel-actions">
+          <button
+            type="button"
+            className="outline-panel-action"
+            data-testid="outline-expand-all"
+            onClick={onExpandAll}
+            disabled={!hasCollapsedVisibleNodes}
+            title="Expand all outline branches"
+          >
+            Expand
+          </button>
+          <button
+            type="button"
+            className="outline-panel-action"
+            data-testid="outline-collapse-all"
+            onClick={() => onCollapseNodes(visibleCollapsibleNodeIds)}
+            disabled={!hasCollapsibleNodes}
+            title="Collapse all visible outline branches"
+          >
+            Collapse
+          </button>
+          <button type="button" data-testid="outline-hide" onClick={onHide} title="Hide outline">
+            x
+          </button>
+        </div>
       </div>
       <div className="outline-mode-tabs" role="tablist" aria-label="Outline mode">
         <button
@@ -115,7 +145,7 @@ export function OutlinePanel({
   );
 }
 
-type OutlineNodesProps = Omit<OutlinePanelProps, 'outlineTree' | 'onHide'> & {
+type OutlineNodesProps = Omit<OutlinePanelProps, 'outlineTree' | 'onHide' | 'onCollapseNodes' | 'onExpandAll'> & {
   items: OutlineTreeNode[];
   forcedExpandedNodeIds: Set<NodeId>;
   matchedNodeIds: Set<NodeId>;
