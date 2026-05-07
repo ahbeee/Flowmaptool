@@ -13,6 +13,7 @@ export type FilterOutlineTreeResult = {
 
 export type OutlineChecklistView = 'all' | 'open' | 'done';
 export type OutlineMode = 'outline' | 'checklist';
+export type OutlineChecklistCounts = Record<OutlineChecklistView, number>;
 
 function nodeSeq(nodeId: NodeId): number {
   const match = /^n(\d+)$/.exec(String(nodeId));
@@ -158,6 +159,32 @@ export function filterOutlineTreeByChecklistView(
   };
 
   return outlineTree.map(visit).filter((item): item is OutlineTreeNode => Boolean(item));
+}
+
+export function getOutlineChecklistCounts(
+  outlineTree: OutlineTreeNode[],
+  checklistTargetsByNodeId: Map<NodeId, NodeId[]>,
+  isChecklistNodeChecked: (nodeId: NodeId) => boolean
+): OutlineChecklistCounts {
+  const checklistTargetNodeIds = new Set<NodeId>();
+  const visit = (item: OutlineTreeNode) => {
+    for (const nodeId of checklistTargetsByNodeId.get(item.node.id) || []) {
+      checklistTargetNodeIds.add(nodeId);
+    }
+    item.children.forEach(visit);
+  };
+  outlineTree.forEach(visit);
+
+  let done = 0;
+  for (const nodeId of checklistTargetNodeIds) {
+    if (isChecklistNodeChecked(nodeId)) done++;
+  }
+  const all = checklistTargetNodeIds.size;
+  return {
+    all,
+    open: all - done,
+    done
+  };
 }
 
 export function toggleCollapsedOutlineNodeIds(collapsedNodeIds: Set<NodeId>, nodeId: NodeId): Set<NodeId> {

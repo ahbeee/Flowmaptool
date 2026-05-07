@@ -8,6 +8,7 @@ import {
   filterOutlineTree,
   filterOutlineTreeByChecklistView,
   filterOutlineTreeByChecklistTargets,
+  getOutlineChecklistCounts,
   toggleCollapsedOutlineNodeIds
 } from '../../src/renderer/src/outline';
 
@@ -105,6 +106,23 @@ describe('outline helpers', () => {
     const doneTree = filterOutlineTreeByChecklistView(checklistTree, targets, isChecked, 'done');
     expect(doneTree.map(item => item.node.id)).toEqual(['n1']);
     expect(doneTree[0].children.map(item => item.node.id)).toEqual(['n3']);
+  });
+
+  it('counts unique checklist targets for checklist view tabs', () => {
+    const doc = fixtureDoc();
+    const tree = buildOutlineTree({
+      ...doc,
+      edges: doc.edges.filter(edge => edge.id !== 'e4')
+    });
+    const targets = buildOutlineChecklistTargetsByNodeId(tree, new Set(['tag-task']));
+    const checklistTree = filterOutlineTreeByChecklistTargets(tree, targets);
+    const isChecked = (nodeId: string) => nodeId === 'n3';
+
+    expect(getOutlineChecklistCounts(checklistTree, targets, isChecked)).toEqual({
+      all: 3,
+      open: 2,
+      done: 1
+    });
   });
 
   it('filters outline nodes by label, tag, and task metadata while preserving context', () => {

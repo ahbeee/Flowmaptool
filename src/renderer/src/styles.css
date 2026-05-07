@@ -358,6 +358,20 @@ select {
 .outline-checklist-view-tab {
   min-height: 24px;
   padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.outline-checklist-view-count {
+  min-width: 18px;
+  border-radius: 999px;
+  padding: 0 5px;
+  background: color-mix(in srgb, var(--flow-panel-muted, #64748b) 14%, var(--flow-panel-surface, #ffffff));
+  color: var(--flow-panel-muted, #475569);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .outline-mode-tab-active,
@@ -366,6 +380,11 @@ select {
   background: color-mix(in srgb, var(--flow-panel-accent, #2563eb) 18%, var(--flow-panel-surface, #ffffff));
   color: var(--flow-panel-text, #1d4ed8);
   font-weight: 700;
+}
+
+.outline-checklist-view-tab-active .outline-checklist-view-count {
+  background: color-mix(in srgb, var(--flow-panel-accent, #2563eb) 20%, var(--flow-panel-surface, #ffffff));
+  color: var(--flow-panel-text, #1d4ed8);
 }
 
 .outline-mode-tab:hover,

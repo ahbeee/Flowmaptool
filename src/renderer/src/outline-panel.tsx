@@ -6,6 +6,7 @@ import {
   filterOutlineTree,
   filterOutlineTreeByChecklistView,
   filterOutlineTreeByChecklistTargets,
+  getOutlineChecklistCounts,
   type OutlineChecklistView,
   type OutlineMode,
   type OutlineTreeNode
@@ -51,6 +52,10 @@ export function OutlinePanel({
     () =>
       mode === 'checklist' ? filterOutlineTreeByChecklistTargets(outlineTree, checklistTargetsByNodeId) : outlineTree,
     [checklistTargetsByNodeId, mode, outlineTree]
+  );
+  const checklistCounts = React.useMemo(
+    () => getOutlineChecklistCounts(modeTree, checklistTargetsByNodeId, isChecklistNodeChecked),
+    [checklistTargetsByNodeId, isChecklistNodeChecked, modeTree]
   );
   const checklistViewTree = React.useMemo(
     () =>
@@ -168,7 +173,10 @@ export function OutlinePanel({
               data-testid={`outline-checklist-view-${view}`}
               onClick={() => setChecklistView(view)}
             >
-              {view === 'all' ? 'All' : view === 'open' ? 'Open' : 'Done'}
+              <span>{view === 'all' ? 'All' : view === 'open' ? 'Open' : 'Done'}</span>
+              <span className="outline-checklist-view-count" data-testid={`outline-checklist-view-${view}-count`}>
+                {checklistCounts[view]}
+              </span>
             </button>
           ))}
         </div>
