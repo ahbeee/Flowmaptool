@@ -187,6 +187,28 @@ test('outline can expand and collapse all visible branches', async ({}, testInfo
   await app.close();
 });
 
+test('outline supports inline label editing and context metadata updates', async ({}, testInfo) => {
+  const { app, window } = await launchAppWithFixture(testInfo, 'outline-inline-edit.qflow', createChecklistFixture());
+
+  await triggerMenuAction(app, 'file:open');
+  await window.getByTestId('outline-node-n4').dblclick();
+  await expect(window.getByTestId('outline-edit-n4')).toBeVisible();
+  await window.getByTestId('outline-edit-n4').fill('Reference backlog');
+  await window.keyboard.press('Enter');
+  await expect(window.getByTestId('outline-node-n4')).toContainText('Reference backlog');
+  await expect(window.getByTestId('node-n4')).toContainText('Reference backlog');
+
+  await window.getByTestId('outline-node-n4').click({ button: 'right' });
+  await expect(window.getByTestId('outline-context-menu')).toBeVisible();
+  await window.getByTestId('outline-context-tag').selectOption('tag-pink');
+  await window.getByTestId('outline-context-status').selectOption('next');
+  await expect(window.getByTestId('outline-node-n4')).toContainText('Pending');
+  await expect(window.getByTestId('outline-node-n4')).toContainText('Next');
+  await expect(window.getByTestId('outline-check-n4')).toBeVisible();
+
+  await app.close();
+});
+
 test('outline checklist state persists after save and reopen', async ({}, testInfo) => {
   const first = await launchAppWithFixture(testInfo, 'checklist-persist.qflow', createChecklistFixture());
   const filePath = first.filePath;

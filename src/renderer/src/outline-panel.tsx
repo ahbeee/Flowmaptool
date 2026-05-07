@@ -1,5 +1,5 @@
 import React from 'react';
-import type { FlowTag, NodeId } from '@shared/graph';
+import type { FlowTag, NodeId, TaskStatus } from '@shared/graph';
 import {
   collectAncestorOutlineNodeIdsForTargets,
   collectCollapsibleOutlineNodeIds,
@@ -11,12 +11,13 @@ import {
   type OutlineMode,
   type OutlineTreeNode
 } from './outline';
-import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from './task-table';
+import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS } from './task-table';
 
 type OutlinePanelProps = {
   outlineTree: OutlineTreeNode[];
   collapsedNodeIds: Set<NodeId>;
   selectedNodeIds: Set<NodeId>;
+  tagOptions: FlowTag[];
   tagById: Map<string, FlowTag>;
   checklistTargetsByNodeId: Map<NodeId, NodeId[]>;
   isChecklistNodeChecked: (nodeId: NodeId) => boolean;
@@ -25,6 +26,9 @@ type OutlinePanelProps = {
   onExpandAll: () => void;
   onToggleChecklistNodes: (nodeIds: NodeId[], checked: boolean) => void;
   onSelectNode: (nodeId: NodeId) => void;
+  onRenameNode: (nodeId: NodeId, label: string) => void;
+  onSetNodeTag: (nodeId: NodeId, tagId: string | undefined) => void;
+  onSetNodeStatus: (nodeId: NodeId, status: TaskStatus) => void;
   onHide: () => void;
 };
 
@@ -32,6 +36,7 @@ export function OutlinePanel({
   outlineTree,
   collapsedNodeIds,
   selectedNodeIds,
+  tagOptions,
   tagById,
   checklistTargetsByNodeId,
   isChecklistNodeChecked,
@@ -40,13 +45,19 @@ export function OutlinePanel({
   onExpandAll,
   onToggleChecklistNodes,
   onSelectNode,
+  onRenameNode,
+  onSetNodeTag,
+  onSetNodeStatus,
   onHide
 }: OutlinePanelProps) {
   const [query, setQuery] = React.useState('');
   const [mode, setMode] = React.useState<OutlineMode>('outline');
   const [checklistView, setChecklistView] = React.useState<OutlineChecklistView>('all');
   const [autoRevealNodeIds, setAutoRevealNodeIds] = React.useState<Set<NodeId>>(() => new Set());
+  const [editingNode, setEditingNode] = React.useState<{ nodeId: NodeId; label: string } | null>(null);
+  const [contextMenu, setContextMenu] = React.useState<{ nodeId: NodeId; x: number; y: number } | null>(null);
   const outlineRef = React.useRef<HTMLElement | null>(null);
+  const contextMenuRef = React.useRef<HTMLDivElement | null>(null);
   const selectedNodeKey = React.useMemo(() => [...selectedNodeIds].sort().join('\n'), [selectedNodeIds]);
   const modeTree = React.useMemo(
     () =>
@@ -94,6 +105,35 @@ export function OutlinePanel({
     const selectedOutlineNode = outlineRef.current?.querySelector('.outline-node-selected');
     selectedOutlineNode?.scrollIntoView({ block: 'nearest' });
   }, [forcedExpandedNodeIds, selectedNodeIds, selectedNodeKey, visibleTree]);
+  React.useEffect(() => {
+    if (!contextMenu) return;
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
+      setContextMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setContextMenu(null);
+    };
+    window.addEventListener('pointerdown', closeOnPointerDown);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('pointerdown', closeOnPointerDown);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [contextMenu]);
+
+  const contextNode = React.useMemo(() => {
+    if (!contextMenu) return undefined;
+    const findNode = (items: OutlineTreeNode[]): OutlineTreeNode | undefined => {
+      for (const item of items) {
+        if (item.node.id === contextMenu.nodeId) return item;
+        const child = findNode(item.children);
+        if (child) return child;
+      }
+      return undefined;
+    };
+    return findNode(outlineTree)?.node;
+  }, [contextMenu, outlineTree]);
 
   const toggleNode = (nodeId: NodeId) => {
     setAutoRevealNodeIds(new Set());
@@ -103,6 +143,27 @@ export function OutlinePanel({
   const collapseVisibleNodes = () => {
     setAutoRevealNodeIds(new Set());
     onCollapseNodes(visibleCollapsibleNodeIds);
+  };
+
+  const startEditingNode = (nodeId: NodeId, label: string) => {
+    setContextMenu(null);
+    setEditingNode({ nodeId, label });
+  };
+
+  const commitOutlineEdit = () => {
+    if (!editingNode) return;
+    const label = editingNode.label.trim();
+    setEditingNode(null);
+    onRenameNode(editingNode.nodeId, label);
+  };
+
+  const cancelOutlineEdit = () => {
+    setEditingNode(null);
+  };
+
+  const openContextMenu = (nodeId: NodeId, x: number, y: number) => {
+    onSelectNode(nodeId);
+    setContextMenu({ nodeId, x, y });
   };
 
   return (
@@ -201,6 +262,7 @@ export function OutlinePanel({
             forcedExpandedNodeIds={forcedExpandedNodeIds}
             matchedNodeIds={filteredOutline.matchedNodeIds}
             selectedAncestorNodeIds={selectedAncestorNodeIds}
+            editingNode={editingNode}
             searchActive={hasQuery}
             selectedNodeIds={selectedNodeIds}
             tagById={tagById}
@@ -209,6 +271,11 @@ export function OutlinePanel({
             onToggleNode={toggleNode}
             onToggleChecklistNodes={onToggleChecklistNodes}
             onSelectNode={onSelectNode}
+            onStartEditingNode={startEditingNode}
+            onSetEditingLabel={label => editingNode && setEditingNode({ ...editingNode, label })}
+            onCommitEditingNode={commitOutlineEdit}
+            onCancelEditingNode={cancelOutlineEdit}
+            onOpenContextMenu={openContextMenu}
           />
         ) : hasQuery ? (
           <p className="outline-empty" data-testid="outline-search-empty">
@@ -218,17 +285,75 @@ export function OutlinePanel({
           <p className="outline-empty">{emptyMessage}</p>
         )}
       </div>
+      {contextMenu && contextNode ? (
+        <div
+          ref={contextMenuRef}
+          className="outline-context-menu"
+          data-testid="outline-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={event => event.preventDefault()}
+        >
+          <label>
+            <span>Tag</span>
+            <select
+              data-testid="outline-context-tag"
+              value={contextNode.style?.tagId || ''}
+              onChange={event => onSetNodeTag(contextNode.id, event.currentTarget.value || undefined)}
+            >
+              <option value="">No tag</option>
+              {tagOptions.map(tag => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Status</span>
+            <select
+              data-testid="outline-context-status"
+              value={contextNode.task?.status || ''}
+              onChange={event => onSetNodeStatus(contextNode.id, event.currentTarget.value as TaskStatus)}
+            >
+              <option value="" disabled>
+                Set status
+              </option>
+              {TASK_STATUSES.map(status => (
+                <option key={status} value={status}>
+                  {TASK_STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
     </aside>
   );
 }
 
-type OutlineNodesProps = Omit<OutlinePanelProps, 'outlineTree' | 'onHide' | 'onCollapseNodes' | 'onExpandAll'> & {
+type OutlineNodesProps = Omit<
+  OutlinePanelProps,
+  | 'outlineTree'
+  | 'tagOptions'
+  | 'onHide'
+  | 'onCollapseNodes'
+  | 'onExpandAll'
+  | 'onRenameNode'
+  | 'onSetNodeTag'
+  | 'onSetNodeStatus'
+> & {
   items: OutlineTreeNode[];
   forcedExpandedNodeIds: Set<NodeId>;
   matchedNodeIds: Set<NodeId>;
   selectedAncestorNodeIds: Set<NodeId>;
+  editingNode: { nodeId: NodeId; label: string } | null;
   searchActive: boolean;
   depth?: number;
+  onStartEditingNode: (nodeId: NodeId, label: string) => void;
+  onSetEditingLabel: (label: string) => void;
+  onCommitEditingNode: () => void;
+  onCancelEditingNode: () => void;
+  onOpenContextMenu: (nodeId: NodeId, x: number, y: number) => void;
 };
 
 function OutlineNodes({
@@ -238,6 +363,7 @@ function OutlineNodes({
   forcedExpandedNodeIds,
   matchedNodeIds,
   selectedAncestorNodeIds,
+  editingNode,
   searchActive,
   selectedNodeIds,
   tagById,
@@ -245,13 +371,19 @@ function OutlineNodes({
   isChecklistNodeChecked,
   onToggleNode,
   onToggleChecklistNodes,
-  onSelectNode
+  onSelectNode,
+  onStartEditingNode,
+  onSetEditingLabel,
+  onCommitEditingNode,
+  onCancelEditingNode,
+  onOpenContextMenu
 }: OutlineNodesProps): React.ReactNode {
   return items.map(item => {
     const hasChildren = item.children.length > 0;
     const collapsed = collapsedNodeIds.has(item.node.id) && !forcedExpandedNodeIds.has(item.node.id);
     const selected = selectedNodeIds.has(item.node.id);
     const selectedAncestor = selectedAncestorNodeIds.has(item.node.id);
+    const editing = editingNode?.nodeId === item.node.id;
     const matched = matchedNodeIds.has(item.node.id);
     const label = item.node.label.trim() || 'Untitled Node';
     const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
@@ -305,44 +437,65 @@ function OutlineNodes({
           ) : (
             <span className="outline-check-placeholder" aria-hidden="true" />
           )}
-          <button
-            type="button"
-            className={nodeButtonClassName}
-            data-testid={`outline-node-${item.node.id}`}
-            onClick={() => onSelectNode(item.node.id)}
-            title={displayLabel}
-          >
-            <span className="outline-node-label">{label}</span>
-            <span className="outline-node-badges" aria-label={`Metadata for ${displayLabel}`}>
-              {tag ? (
-                <span className="outline-node-badge outline-node-tag-badge" style={{ borderColor: tag.color }}>
-                  <span className="outline-node-tag-dot" style={{ backgroundColor: tag.color }} aria-hidden="true" />
-                  {tag.name}
-                </span>
-              ) : null}
-              {task ? (
-                <span className={`outline-node-badge outline-node-status-badge outline-node-status-${task.status}`}>
-                  {TASK_STATUS_LABELS[task.status]}
-                </span>
-              ) : null}
-              {task && task.priority !== 'normal' ? (
-                <span
-                  className={`outline-node-badge outline-node-priority-badge outline-node-priority-${task.priority}`}
-                >
-                  {TASK_PRIORITY_LABELS[task.priority]}
-                </span>
-              ) : null}
-              {task?.assignee ? <span className="outline-node-badge">{task.assignee}</span> : null}
-              {task?.dueDate ? (
-                <span className="outline-node-badge outline-node-due-badge">Due {task.dueDate}</span>
-              ) : null}
-              {canCheck ? (
-                <span className="outline-node-badge outline-node-progress-badge">
-                  {checkedTargetCount}/{checklistTargets.length}
-                </span>
-              ) : null}
-            </span>
-          </button>
+          {editing ? (
+            <input
+              className="outline-node-edit-input"
+              data-testid={`outline-edit-${item.node.id}`}
+              value={editingNode.label}
+              autoFocus
+              onFocus={event => event.currentTarget.select()}
+              onChange={event => onSetEditingLabel(event.currentTarget.value)}
+              onBlur={onCommitEditingNode}
+              onKeyDown={event => {
+                if (event.key === 'Enter') onCommitEditingNode();
+                if (event.key === 'Escape') onCancelEditingNode();
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className={nodeButtonClassName}
+              data-testid={`outline-node-${item.node.id}`}
+              onClick={() => onSelectNode(item.node.id)}
+              onDoubleClick={() => onStartEditingNode(item.node.id, label)}
+              onContextMenu={event => {
+                event.preventDefault();
+                onOpenContextMenu(item.node.id, event.clientX, event.clientY);
+              }}
+              title={displayLabel}
+            >
+              <span className="outline-node-label">{label}</span>
+              <span className="outline-node-badges" aria-label={`Metadata for ${displayLabel}`}>
+                {tag ? (
+                  <span className="outline-node-badge outline-node-tag-badge" style={{ borderColor: tag.color }}>
+                    <span className="outline-node-tag-dot" style={{ backgroundColor: tag.color }} aria-hidden="true" />
+                    {tag.name}
+                  </span>
+                ) : null}
+                {task ? (
+                  <span className={`outline-node-badge outline-node-status-badge outline-node-status-${task.status}`}>
+                    {TASK_STATUS_LABELS[task.status]}
+                  </span>
+                ) : null}
+                {task && TASK_PRIORITIES.includes(task.priority) && task.priority !== 'normal' ? (
+                  <span
+                    className={`outline-node-badge outline-node-priority-badge outline-node-priority-${task.priority}`}
+                  >
+                    {TASK_PRIORITY_LABELS[task.priority]}
+                  </span>
+                ) : null}
+                {task?.assignee ? <span className="outline-node-badge">{task.assignee}</span> : null}
+                {task?.dueDate ? (
+                  <span className="outline-node-badge outline-node-due-badge">Due {task.dueDate}</span>
+                ) : null}
+                {canCheck ? (
+                  <span className="outline-node-badge outline-node-progress-badge">
+                    {checkedTargetCount}/{checklistTargets.length}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          )}
         </div>
         {hasChildren && !collapsed ? (
           <OutlineNodes
@@ -352,6 +505,7 @@ function OutlineNodes({
             forcedExpandedNodeIds={forcedExpandedNodeIds}
             matchedNodeIds={matchedNodeIds}
             selectedAncestorNodeIds={selectedAncestorNodeIds}
+            editingNode={editingNode}
             searchActive={searchActive}
             selectedNodeIds={selectedNodeIds}
             tagById={tagById}
@@ -360,6 +514,11 @@ function OutlineNodes({
             onToggleNode={onToggleNode}
             onToggleChecklistNodes={onToggleChecklistNodes}
             onSelectNode={onSelectNode}
+            onStartEditingNode={onStartEditingNode}
+            onSetEditingLabel={onSetEditingLabel}
+            onCommitEditingNode={onCommitEditingNode}
+            onCancelEditingNode={onCancelEditingNode}
+            onOpenContextMenu={onOpenContextMenu}
           />
         ) : null}
       </React.Fragment>

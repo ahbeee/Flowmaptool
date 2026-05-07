@@ -1249,6 +1249,20 @@ export function App() {
     [updateTaskTableField]
   );
 
+  const renameOutlineNode = React.useCallback(
+    (nodeId: NodeId, label: string) => {
+      commitDoc(prev => applyCommittedNodeLabel(prev, nodeId, label));
+    },
+    [commitDoc]
+  );
+
+  const setOutlineNodeTag = React.useCallback(
+    (nodeId: NodeId, tagId: string | undefined) => {
+      commitDoc(prev => updateNodeStyle(prev, [nodeId], { tagId }));
+    },
+    [commitDoc]
+  );
+
   const updateTaskTableFields = React.useCallback(
     (nodeIds: NodeId[], patch: Partial<NodeTask>) => {
       if (nodeIds.length === 0) return;
@@ -2381,6 +2395,7 @@ export function App() {
                 outlineTree={outlineTree}
                 collapsedNodeIds={collapsedOutlineNodeIds}
                 selectedNodeIds={selectedNodeIdSet}
+                tagOptions={doc.settings.tags}
                 tagById={tagById}
                 checklistTargetsByNodeId={outlineChecklistTargetsByNodeId}
                 isChecklistNodeChecked={isChecklistNodeChecked}
@@ -2389,6 +2404,9 @@ export function App() {
                 onExpandAll={expandAllOutlineNodes}
                 onToggleChecklistNodes={toggleChecklistNodes}
                 onSelectNode={selectOutlineNode}
+                onRenameNode={renameOutlineNode}
+                onSetNodeTag={setOutlineNodeTag}
+                onSetNodeStatus={updateTaskTableStatus}
                 onHide={() => setOutlineVisible(false)}
               />
             )

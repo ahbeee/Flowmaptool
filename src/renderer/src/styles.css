@@ -1058,6 +1058,19 @@ select {
   gap: 6px;
 }
 
+.outline-node-edit-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  border: 1px solid var(--flow-panel-accent, #2563eb);
+  border-radius: 4px;
+  background: var(--flow-panel-surface, #ffffff);
+  color: var(--flow-panel-text, #0f172a);
+  padding: 3px 6px;
+  font-size: 13px;
+  outline: none;
+}
+
 .outline-node-button:hover,
 .outline-node-selected {
   background: color-mix(in srgb, var(--flow-panel-selected, #2563eb) 24%, var(--flow-panel-surface, #ffffff));
@@ -1154,6 +1167,38 @@ select {
 .outline-empty {
   color: var(--flow-panel-muted, #64748b);
   margin: 8px 4px;
+}
+
+.outline-context-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 180px;
+  border: 1px solid var(--flow-panel-border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--flow-panel-surface, #ffffff);
+  box-shadow: 0 12px 30px rgb(15 23 42 / 18%);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.outline-context-menu label {
+  display: grid;
+  gap: 4px;
+  color: var(--flow-panel-muted, #475569);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.outline-context-menu select {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid color-mix(in srgb, var(--flow-panel-accent, #cbd5e1) 45%, transparent);
+  border-radius: 4px;
+  background: var(--flow-panel-surface, #ffffff);
+  color: var(--flow-panel-text, #0f172a);
+  padding: 3px 6px;
+  font-size: 12px;
 }
 
 .right-toolbar-rail {
