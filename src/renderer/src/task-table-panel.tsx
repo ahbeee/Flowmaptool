@@ -969,6 +969,30 @@ function TaskDetailPanel({ row, todayKey, onSelectNode, onUpdateTaskField, onUpd
           </select>
         </label>
         <label>
+          <span>Assignee</span>
+          <input
+            data-testid="task-detail-assignee"
+            value={task?.assignee || ''}
+            onChange={event => onUpdateTaskField(row.node.id, { assignee: event.currentTarget.value || undefined })}
+          />
+        </label>
+        <label>
+          <span>Progress</span>
+          <input
+            data-testid="task-detail-progress"
+            type="number"
+            min={0}
+            max={100}
+            value={task?.progress ?? ''}
+            onChange={event =>
+              onUpdateTaskField(row.node.id, {
+                progress:
+                  event.currentTarget.value === '' ? 0 : Math.max(0, Math.min(100, Number(event.currentTarget.value)))
+              })
+            }
+          />
+        </label>
+        <label>
           <span>Start</span>
           <input
             type="date"

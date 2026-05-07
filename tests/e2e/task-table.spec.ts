@@ -146,6 +146,12 @@ test('task workbench bulk updates selected visible tasks', async () => {
   await expect(window.getByTestId('task-row-n2').locator('input').nth(4)).toHaveValue('');
 
   await window.getByTestId('task-filter-query').fill('');
+  await window.getByTestId('task-row-n2').locator('.task-node-link').click();
+  await window.getByTestId('task-detail-assignee').fill('Mina');
+  await window.getByTestId('task-detail-progress').fill('65');
+  await expect(window.getByTestId('task-row-n2').locator('input').nth(2)).toHaveValue('Mina');
+  await expect(window.getByTestId('task-row-n2').locator('input').nth(1)).toHaveValue('65');
+  await window.getByTestId('task-detail-assignee').fill('Kai');
   await expect(window.getByTestId('task-row-n3').locator('select').nth(1)).toHaveValue('');
   await expect(window.getByTestId('task-row-n3').locator('input').nth(2)).toHaveValue('');
   await expect(window.getByTestId('task-row-n3').locator('input').nth(4)).toHaveValue('');
