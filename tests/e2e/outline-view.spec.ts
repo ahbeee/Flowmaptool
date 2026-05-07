@@ -13,7 +13,20 @@ function createChecklistFixture() {
     nodes: [
       { id: 'n1', label: 'Root Topic' },
       { id: 'n2', label: 'First task' },
-      { id: 'n3', label: 'Second task', style: { tagId: 'tag-pink' } },
+      {
+        id: 'n3',
+        label: 'Second task',
+        style: { tagId: 'tag-pink' },
+        task: {
+          enabled: true,
+          done: false,
+          status: 'next',
+          priority: 'high',
+          progress: 25,
+          assignee: 'Avery',
+          dueDate: '2026-05-10'
+        }
+      },
       { id: 'n4', label: 'Reference only' }
     ],
     edges: [
@@ -129,7 +142,12 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
   await triggerMenuAction(first.app, 'file:open');
   await expect(first.window.getByTestId('outline-check-n1')).toBeVisible();
   await expect(first.window.getByTestId('outline-check-n2')).toBeVisible();
-  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Second task [Pending]');
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Second task');
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Pending');
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Next');
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText('High');
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Avery');
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Due 2026-05-10');
   await expect(first.window.getByTestId('outline-check-n3')).toBeVisible();
   await expect(first.window.getByTestId('outline-check-n4')).toHaveCount(0);
   await first.window.getByTestId('outline-check-n2').check();

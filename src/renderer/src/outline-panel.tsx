@@ -6,6 +6,7 @@ import {
   type OutlineMode,
   type OutlineTreeNode
 } from './outline';
+import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from './task-table';
 
 type OutlinePanelProps = {
   outlineTree: OutlineTreeNode[];
@@ -145,6 +146,7 @@ function OutlineNodes({
     const label = item.node.label.trim() || 'Untitled Node';
     const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
     const displayLabel = `${label}${tag ? ` [${tag.name}]` : ''}`;
+    const task = item.node.task?.enabled ? item.node.task : undefined;
     const checklistTargets = checklistTargetsByNodeId.get(item.node.id) || [];
     const checkedTargetCount = checklistTargets.filter(isChecklistNodeChecked).length;
     const canCheck = checklistTargets.length > 0;
@@ -199,7 +201,36 @@ function OutlineNodes({
             onClick={() => onSelectNode(item.node.id)}
             title={displayLabel}
           >
-            {displayLabel}
+            <span className="outline-node-label">{label}</span>
+            <span className="outline-node-badges" aria-label={`Metadata for ${displayLabel}`}>
+              {tag ? (
+                <span className="outline-node-badge outline-node-tag-badge" style={{ borderColor: tag.color }}>
+                  <span className="outline-node-tag-dot" style={{ backgroundColor: tag.color }} aria-hidden="true" />
+                  {tag.name}
+                </span>
+              ) : null}
+              {task ? (
+                <span className={`outline-node-badge outline-node-status-badge outline-node-status-${task.status}`}>
+                  {TASK_STATUS_LABELS[task.status]}
+                </span>
+              ) : null}
+              {task && task.priority !== 'normal' ? (
+                <span
+                  className={`outline-node-badge outline-node-priority-badge outline-node-priority-${task.priority}`}
+                >
+                  {TASK_PRIORITY_LABELS[task.priority]}
+                </span>
+              ) : null}
+              {task?.assignee ? <span className="outline-node-badge">{task.assignee}</span> : null}
+              {task?.dueDate ? (
+                <span className="outline-node-badge outline-node-due-badge">Due {task.dueDate}</span>
+              ) : null}
+              {canCheck ? (
+                <span className="outline-node-badge outline-node-progress-badge">
+                  {checkedTargetCount}/{checklistTargets.length}
+                </span>
+              ) : null}
+            </span>
           </button>
         </div>
         {hasChildren && !collapsed ? (
