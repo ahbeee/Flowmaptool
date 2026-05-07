@@ -109,6 +109,8 @@ test('task workbench bulk updates selected visible tasks', async () => {
 
   await window.getByTestId('task-bulk-status').selectOption('done');
   await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-status-done/);
+  await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-focused/);
+  await expect(window.getByTestId('task-detail-panel')).toContainText('Review contract');
   await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('done');
   await window.getByTestId('task-bulk-assignee').fill('Kai');
   await window.getByTestId('task-apply-assignee').click();

@@ -685,6 +685,11 @@ select {
   background: #f8fafc;
 }
 
+.task-row-focused {
+  outline: 2px solid #93c5fd;
+  outline-offset: -2px;
+}
+
 .task-row-status-done .task-node-link {
   color: #64748b;
   text-decoration: line-through;

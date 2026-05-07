@@ -110,7 +110,11 @@ export function TaskTablePanel({
   const [bulkAssignee, setBulkAssignee] = React.useState('');
   const [bulkDueDate, setBulkDueDate] = React.useState('');
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<NodeId>>(() => new Set());
-  const selectedRow = sourceRows.find(row => row.node.id === selectedNodeId) || rows[0];
+  const [focusedTaskId, setFocusedTaskId] = React.useState<NodeId>('');
+  const selectedRow =
+    sourceRows.find(row => row.node.id === focusedTaskId) ||
+    sourceRows.find(row => row.node.id === selectedNodeId) ||
+    rows[0];
   const selectedTaskCount = selectedTaskIds.size;
   const visibleSelectedCount = rows.filter(row => selectedTaskIds.has(row.node.id)).length;
   const viewCounts = React.useMemo(
@@ -129,6 +133,7 @@ export function TaskTablePanel({
       const next = new Set([...prev].filter(id => validIds.has(id)));
       return next.size === prev.size ? prev : next;
     });
+    setFocusedTaskId(prev => (prev && !validIds.has(prev) ? '' : prev));
   }, [sourceRows]);
   const submitQuickCapture = (event: React.FormEvent) => {
     event.preventDefault();
@@ -138,6 +143,7 @@ export function TaskTablePanel({
     setQuickCaptureLabel('');
   };
   const selectVisibleTasks = () => {
+    if (rows[0]) setFocusedTaskId(rows[0].node.id);
     setSelectedTaskIds(prev => {
       const next = new Set(prev);
       rows.forEach(row => next.add(row.node.id));
@@ -146,6 +152,7 @@ export function TaskTablePanel({
   };
   const clearSelectedTasks = () => setSelectedTaskIds(new Set());
   const toggleTaskSelection = (nodeId: NodeId, selected: boolean) => {
+    setFocusedTaskId(nodeId);
     setSelectedTaskIds(prev => {
       const next = new Set(prev);
       if (selected) {
@@ -155,6 +162,18 @@ export function TaskTablePanel({
       }
       return next;
     });
+  };
+  const selectTaskNode = (nodeId: NodeId) => {
+    setFocusedTaskId(nodeId);
+    onSelectNode(nodeId);
+  };
+  const updateFocusedTaskField = (nodeId: NodeId, patch: Partial<NodeTask>) => {
+    setFocusedTaskId(nodeId);
+    onUpdateTaskField(nodeId, patch);
+  };
+  const updateFocusedTaskStatus = (nodeId: NodeId, status: TaskStatus) => {
+    setFocusedTaskId(nodeId);
+    onUpdateTaskStatus(nodeId, status);
   };
   const applyBulkStatus = (status: TaskStatus) => {
     if (selectedTaskIds.size === 0) return;
@@ -368,19 +387,20 @@ export function TaskTablePanel({
         onClearQueryState={onClearQueryState}
         onToggleSort={onToggleSort}
         onSetColumnWidths={onSetColumnWidths}
-        onSelectNode={onSelectNode}
+        onSelectNode={selectTaskNode}
+        focusedTaskId={selectedRow?.node.id || ''}
         selectedTaskIds={selectedTaskIds}
         onToggleTaskSelection={toggleTaskSelection}
-        onUpdateTaskField={onUpdateTaskField}
-        onUpdateTaskStatus={onUpdateTaskStatus}
+        onUpdateTaskField={updateFocusedTaskField}
+        onUpdateTaskStatus={updateFocusedTaskStatus}
       />
       {selectedRow ? (
         <TaskDetailPanel
           row={selectedRow}
           todayKey={todayKey}
-          onSelectNode={onSelectNode}
-          onUpdateTaskField={onUpdateTaskField}
-          onUpdateTaskStatus={onUpdateTaskStatus}
+          onSelectNode={selectTaskNode}
+          onUpdateTaskField={updateFocusedTaskField}
+          onUpdateTaskStatus={updateFocusedTaskStatus}
         />
       ) : null}
     </aside>
@@ -405,6 +425,7 @@ function TaskTableBody({
   onToggleSort,
   onSetColumnWidths,
   onSelectNode,
+  focusedTaskId,
   selectedTaskIds,
   onToggleTaskSelection,
   onUpdateTaskField,
@@ -423,6 +444,7 @@ function TaskTableBody({
   | 'onUpdateTaskStatuses'
   | 'selectedNodeId'
 > & {
+  focusedTaskId: NodeId;
   selectedTaskIds: Set<NodeId>;
   onToggleTaskSelection: (nodeId: NodeId, selected: boolean) => void;
 }) {
@@ -655,7 +677,7 @@ function TaskTableBody({
                 return (
                   <tr
                     key={row.node.id}
-                    className={`task-row task-row-status-${status} task-row-due-${dueStatus}`}
+                    className={`task-row task-row-status-${status} task-row-due-${dueStatus}${row.node.id === focusedTaskId ? ' task-row-focused' : ''}`}
                     data-testid={`task-row-${row.node.id}`}
                   >
                     {visibleColumnKeySet.has('task') ? (
