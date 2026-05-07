@@ -67,6 +67,32 @@ test('outline mirrors hierarchy and selection', async () => {
   await app.close();
 });
 
+test('outline search filters matches and expands collapsed parents', async ({}, testInfo) => {
+  const { app, window } = await launchAppWithFixture(testInfo, 'outline-search.qflow', createChecklistFixture());
+
+  await triggerMenuAction(app, 'file:open');
+  await window.getByTestId('outline-toggle-n2').click();
+  await expect(window.getByTestId('outline-node-n3')).toHaveCount(0);
+
+  await window.getByTestId('outline-search').fill('second');
+  await expect(window.getByTestId('outline-node-n1')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n2')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toHaveClass(/outline-node-match/);
+  await expect(window.getByTestId('outline-node-n4')).toHaveCount(0);
+
+  await window.getByTestId('outline-search').fill('pending');
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toHaveClass(/outline-node-match/);
+
+  await window.getByTestId('outline-search').fill('missing');
+  await expect(window.getByTestId('outline-search-empty')).toBeVisible();
+  await window.getByTestId('outline-clear-search').click();
+  await expect(window.getByTestId('outline-node-n1')).toBeVisible();
+
+  await app.close();
+});
+
 test('outline checklist state persists after save and reopen', async ({}, testInfo) => {
   const first = await launchAppWithFixture(testInfo, 'checklist-persist.qflow', createChecklistFixture());
   const filePath = first.filePath;

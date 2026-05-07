@@ -1,8 +1,14 @@
-import type { FlowDoc, FlowEdge, FlowNode, NodeId } from '@shared/graph';
+import type { FlowDoc, FlowEdge, FlowNode, FlowTag, NodeId } from '@shared/graph';
 
 export type OutlineTreeNode = {
   node: FlowNode;
   children: OutlineTreeNode[];
+};
+
+export type FilterOutlineTreeResult = {
+  tree: OutlineTreeNode[];
+  expandedNodeIds: Set<NodeId>;
+  matchedNodeIds: Set<NodeId>;
 };
 
 function nodeSeq(nodeId: NodeId): number {
@@ -118,4 +124,60 @@ export function toggleCollapsedOutlineNodeIds(collapsedNodeIds: Set<NodeId>, nod
     next.add(nodeId);
   }
   return next;
+}
+
+function normalizeOutlineSearchText(value: string | undefined): string {
+  return (value || '').trim().toLocaleLowerCase();
+}
+
+function getOutlineSearchText(node: FlowNode, tagById: Map<string, FlowTag>): string {
+  const tag = node.style?.tagId ? tagById.get(node.style.tagId) : undefined;
+  return [
+    node.label,
+    tag?.name,
+    node.task?.status,
+    node.task?.priority,
+    node.task?.assignee,
+    node.task?.note,
+    node.task?.dueDate
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase();
+}
+
+export function filterOutlineTree(
+  outlineTree: OutlineTreeNode[],
+  query: string,
+  tagById: Map<string, FlowTag>
+): FilterOutlineTreeResult {
+  const normalizedQuery = normalizeOutlineSearchText(query);
+  if (!normalizedQuery) {
+    return {
+      tree: outlineTree,
+      expandedNodeIds: new Set(),
+      matchedNodeIds: new Set()
+    };
+  }
+
+  const expandedNodeIds = new Set<NodeId>();
+  const matchedNodeIds = new Set<NodeId>();
+
+  const visit = (item: OutlineTreeNode): OutlineTreeNode | null => {
+    const children = item.children.map(visit).filter((child): child is OutlineTreeNode => Boolean(child));
+    const matches = getOutlineSearchText(item.node, tagById).includes(normalizedQuery);
+    if (matches) matchedNodeIds.add(item.node.id);
+    if (!matches && children.length === 0) return null;
+    if (children.length > 0 || (matches && item.children.length > 0)) expandedNodeIds.add(item.node.id);
+    return {
+      node: item.node,
+      children: matches ? item.children : children
+    };
+  };
+
+  return {
+    tree: outlineTree.map(visit).filter((item): item is OutlineTreeNode => Boolean(item)),
+    expandedNodeIds,
+    matchedNodeIds
+  };
 }

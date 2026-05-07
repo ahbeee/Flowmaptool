@@ -1,6 +1,6 @@
 import React from 'react';
 import type { FlowTag, NodeId } from '@shared/graph';
-import type { OutlineTreeNode } from './outline';
+import { filterOutlineTree, type OutlineTreeNode } from './outline';
 
 type OutlinePanelProps = {
   outlineTree: OutlineTreeNode[];
@@ -27,6 +27,13 @@ export function OutlinePanel({
   onSelectNode,
   onHide
 }: OutlinePanelProps) {
+  const [query, setQuery] = React.useState('');
+  const filteredOutline = React.useMemo(
+    () => filterOutlineTree(outlineTree, query, tagById),
+    [outlineTree, query, tagById]
+  );
+  const hasQuery = query.trim().length > 0;
+  const visibleTree = filteredOutline.tree;
   return (
     <aside className="outline-panel" data-testid="outline-panel">
       <div className="outline-panel-header">
@@ -35,11 +42,26 @@ export function OutlinePanel({
           x
         </button>
       </div>
+      <div className="outline-search">
+        <input
+          data-testid="outline-search"
+          value={query}
+          onChange={event => setQuery(event.currentTarget.value)}
+          placeholder="Search outline"
+          aria-label="Search outline"
+        />
+        <button type="button" data-testid="outline-clear-search" onClick={() => setQuery('')} disabled={!hasQuery}>
+          Clear
+        </button>
+      </div>
       <div className="outline-tree">
-        {outlineTree.length > 0 ? (
+        {visibleTree.length > 0 ? (
           <OutlineNodes
-            items={outlineTree}
+            items={visibleTree}
             collapsedNodeIds={collapsedNodeIds}
+            forcedExpandedNodeIds={filteredOutline.expandedNodeIds}
+            matchedNodeIds={filteredOutline.matchedNodeIds}
+            searchActive={hasQuery}
             selectedNodeIds={selectedNodeIds}
             tagById={tagById}
             checklistTargetsByNodeId={checklistTargetsByNodeId}
@@ -48,6 +70,10 @@ export function OutlinePanel({
             onToggleChecklistNodes={onToggleChecklistNodes}
             onSelectNode={onSelectNode}
           />
+        ) : hasQuery ? (
+          <p className="outline-empty" data-testid="outline-search-empty">
+            No outline nodes match the search.
+          </p>
         ) : (
           <p className="outline-empty">No nodes</p>
         )}
@@ -58,6 +84,9 @@ export function OutlinePanel({
 
 type OutlineNodesProps = Omit<OutlinePanelProps, 'outlineTree' | 'onHide'> & {
   items: OutlineTreeNode[];
+  forcedExpandedNodeIds: Set<NodeId>;
+  matchedNodeIds: Set<NodeId>;
+  searchActive: boolean;
   depth?: number;
 };
 
@@ -65,6 +94,9 @@ function OutlineNodes({
   items,
   depth = 0,
   collapsedNodeIds,
+  forcedExpandedNodeIds,
+  matchedNodeIds,
+  searchActive,
   selectedNodeIds,
   tagById,
   checklistTargetsByNodeId,
@@ -75,8 +107,9 @@ function OutlineNodes({
 }: OutlineNodesProps): React.ReactNode {
   return items.map(item => {
     const hasChildren = item.children.length > 0;
-    const collapsed = collapsedNodeIds.has(item.node.id);
+    const collapsed = collapsedNodeIds.has(item.node.id) && !forcedExpandedNodeIds.has(item.node.id);
     const selected = selectedNodeIds.has(item.node.id);
+    const matched = matchedNodeIds.has(item.node.id);
     const label = item.node.label.trim() || 'Untitled Node';
     const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
     const displayLabel = `${label}${tag ? ` [${tag.name}]` : ''}`;
@@ -88,6 +121,7 @@ function OutlineNodes({
     const nodeButtonClassName = [
       'outline-node-button',
       selected ? 'outline-node-selected' : '',
+      matched ? 'outline-node-match' : '',
       checked ? 'outline-node-complete' : ''
     ]
       .filter(Boolean)
@@ -105,7 +139,7 @@ function OutlineNodes({
             data-testid={`outline-toggle-${item.node.id}`}
             disabled={!hasChildren}
             onClick={() => onToggleNode(item.node.id)}
-            title={collapsed ? 'Expand' : 'Collapse'}
+            title={searchActive ? 'Search results are expanded' : collapsed ? 'Expand' : 'Collapse'}
           >
             {hasChildren ? (collapsed ? '▸' : '▾') : ''}
           </button>
@@ -141,6 +175,9 @@ function OutlineNodes({
             items={item.children}
             depth={depth + 1}
             collapsedNodeIds={collapsedNodeIds}
+            forcedExpandedNodeIds={forcedExpandedNodeIds}
+            matchedNodeIds={matchedNodeIds}
+            searchActive={searchActive}
             selectedNodeIds={selectedNodeIds}
             tagById={tagById}
             checklistTargetsByNodeId={checklistTargetsByNodeId}

@@ -3,6 +3,7 @@ import type { FlowDoc } from '../../src/shared/graph';
 import {
   buildOutlineChecklistTargetsByNodeId,
   buildOutlineTree,
+  filterOutlineTree,
   toggleCollapsedOutlineNodeIds
 } from '../../src/renderer/src/outline';
 
@@ -67,6 +68,43 @@ describe('outline helpers', () => {
     expect(targets.get('n1')).toEqual(['n3', 'n2']);
     expect(targets.get('n3')).toEqual(['n3']);
     expect(targets.get('n4')).toEqual(['n4']);
+  });
+
+  it('filters outline nodes by label, tag, and task metadata while preserving context', () => {
+    const doc = fixtureDoc();
+    const tree = buildOutlineTree({
+      ...doc,
+      nodes: doc.nodes.map(node =>
+        node.id === 'n5'
+          ? {
+              ...node,
+              task: {
+                enabled: true,
+                done: false,
+                status: 'waiting',
+                priority: 'normal',
+                progress: 0,
+                note: 'Vendor response'
+              }
+            }
+          : node
+      ),
+      edges: doc.edges.filter(edge => edge.id !== 'e4')
+    });
+    const tags = new Map(doc.settings.tags.map(tag => [tag.id, tag]));
+
+    const byLabel = filterOutlineTree(tree, 'cycle', tags);
+    expect(byLabel.tree.map(item => item.node.id)).toEqual(['n1']);
+    expect(byLabel.tree[0].children.map(item => item.node.id)).toEqual(['n3']);
+    expect(byLabel.tree[0].children[0].children.map(item => item.node.id)).toEqual(['n5']);
+    expect([...byLabel.expandedNodeIds]).toEqual(['n3', 'n1']);
+    expect([...byLabel.matchedNodeIds]).toEqual(['n5']);
+
+    const byTag = filterOutlineTree(tree, 'task', tags);
+    expect(byTag.matchedNodeIds).toEqual(new Set(['n3', 'n2', 'n4']));
+
+    const byNote = filterOutlineTree(tree, 'vendor', tags);
+    expect(byNote.matchedNodeIds).toEqual(new Set(['n5']));
   });
 
   it('toggles collapsed outline nodes without mutating the current set', () => {
