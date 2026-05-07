@@ -55,8 +55,8 @@ test('task table derives tagged nodes only and keeps tag read-only', async () =>
 
   await childRow.locator('select').nth(1).selectOption('high');
   await expect(childRow.locator('select').nth(1)).toHaveValue('high');
-  await childRow.locator('input').nth(1).fill('Amy');
-  await childRow.locator('input').nth(4).fill('Follow up');
+  await childRow.locator('input').nth(2).fill('Amy');
+  await childRow.locator('input').nth(5).fill('Follow up');
   await expect(childRow).toContainText('Pending');
 
   await app.close();
@@ -81,6 +81,40 @@ test('task workbench captures inbox tasks and promotes next tasks into today', a
   await capturedRow.locator('select').first().selectOption('next');
   await window.getByTestId('task-view-today').click();
   await expect(panel.locator('tbody tr').filter({ hasText: 'Review inbox' })).toHaveCount(1);
+
+  await app.close();
+});
+
+test('task workbench bulk updates selected visible tasks', async () => {
+  const { app, window } = await launchApp();
+
+  await renameNode(window, 'n1', 'Root Task');
+  await addChild(window, 'n1');
+  await renameNode(window, 'n2', 'Review contract');
+  await applyTag(window, 'n2', 'Pending');
+  await addChild(window, 'n1');
+  await renameNode(window, 'n3', 'Prepare invoice');
+  await applyTag(window, 'n3', 'Pending');
+
+  await window.getByTestId('task-toggle').click();
+  const panel = window.getByTestId('task-panel');
+  await expect(panel.locator('tbody tr')).toHaveCount(2);
+  await expect(window.getByTestId('task-bulk-count')).toContainText('2 visible');
+
+  await window.getByTestId('task-filter-query').fill('contract');
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await window.getByTestId('task-select-visible').click();
+  await expect(window.getByTestId('task-select-n2')).toBeChecked();
+  await expect(window.getByTestId('task-bulk-count')).toContainText('1 selected');
+
+  await window.getByTestId('task-bulk-status').selectOption('done');
+  await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-status-done/);
+  await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('done');
+
+  await window.getByTestId('task-filter-query').fill('');
+  await window.getByTestId('task-view-done').click();
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(panel.locator('tbody tr').first()).toContainText('Review contract');
 
   await app.close();
 });
@@ -160,12 +194,12 @@ test('task table filters by tag and assignee', async () => {
   const panel = window.getByTestId('task-panel');
   const pendingRow = panel.locator('tbody tr').filter({ hasText: 'Pending Zoe Task' });
   const doneRow = panel.locator('tbody tr').filter({ hasText: 'Done Amy Task' });
-  await pendingRow.locator('input').nth(1).fill('Zoe');
-  await pendingRow.locator('input').nth(3).fill(dateKeyFromToday(-1));
-  await doneRow.locator('input').nth(1).fill('Amy');
-  await doneRow.locator('input').nth(3).fill(dateKeyFromToday(3));
+  await pendingRow.locator('input').nth(2).fill('Zoe');
+  await pendingRow.locator('input').nth(4).fill(dateKeyFromToday(-1));
+  await doneRow.locator('input').nth(2).fill('Amy');
+  await doneRow.locator('input').nth(4).fill(dateKeyFromToday(3));
   await expect(pendingRow.locator('td.task-due-cell-overdue')).toHaveCount(1);
-  await expect(pendingRow.locator('input').nth(3)).toHaveAttribute('title', 'Overdue');
+  await expect(pendingRow.locator('input').nth(4)).toHaveAttribute('title', 'Overdue');
 
   await window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
   await expect(panel.locator('tbody tr')).toHaveCount(1);

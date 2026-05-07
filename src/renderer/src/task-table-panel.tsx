@@ -60,6 +60,7 @@ type TaskTablePanelProps = {
   onSelectNode: (nodeId: NodeId) => void;
   onUpdateTaskField: (nodeId: NodeId, patch: Partial<NodeTask>) => void;
   onUpdateTaskStatus: (nodeId: NodeId, status: TaskStatus) => void;
+  onUpdateTaskStatuses: (nodeIds: NodeId[], status: TaskStatus) => void;
   onQuickCapture: (label: string) => void;
   selectedNodeId: NodeId;
 };
@@ -91,11 +92,15 @@ export function TaskTablePanel({
   onSelectNode,
   onUpdateTaskField,
   onUpdateTaskStatus,
+  onUpdateTaskStatuses,
   onQuickCapture,
   selectedNodeId
 }: TaskTablePanelProps) {
   const [quickCaptureLabel, setQuickCaptureLabel] = React.useState('');
+  const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<NodeId>>(() => new Set());
   const selectedRow = sourceRows.find(row => row.node.id === selectedNodeId) || rows[0];
+  const selectedTaskCount = selectedTaskIds.size;
+  const visibleSelectedCount = rows.filter(row => selectedTaskIds.has(row.node.id)).length;
   const viewCounts = React.useMemo(
     () =>
       Object.fromEntries(
@@ -106,12 +111,42 @@ export function TaskTablePanel({
       ) as Record<TaskTableView, number>,
     [sourceRows, todayKey]
   );
+  React.useEffect(() => {
+    const validIds = new Set(sourceRows.map(row => row.node.id));
+    setSelectedTaskIds(prev => {
+      const next = new Set([...prev].filter(id => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [sourceRows]);
   const submitQuickCapture = (event: React.FormEvent) => {
     event.preventDefault();
     const label = quickCaptureLabel.trim();
     if (!label) return;
     onQuickCapture(label);
     setQuickCaptureLabel('');
+  };
+  const selectVisibleTasks = () => {
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev);
+      rows.forEach(row => next.add(row.node.id));
+      return next;
+    });
+  };
+  const clearSelectedTasks = () => setSelectedTaskIds(new Set());
+  const toggleTaskSelection = (nodeId: NodeId, selected: boolean) => {
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(nodeId);
+      } else {
+        next.delete(nodeId);
+      }
+      return next;
+    });
+  };
+  const applyBulkStatus = (status: TaskStatus) => {
+    if (selectedTaskIds.size === 0) return;
+    onUpdateTaskStatuses([...selectedTaskIds], status);
   };
 
   return (
@@ -200,6 +235,47 @@ export function TaskTablePanel({
           </button>
         ))}
       </div>
+      <div className="task-bulk-actions">
+        <span data-testid="task-bulk-count">
+          {selectedTaskCount === 0
+            ? `${rows.length} visible`
+            : `${selectedTaskCount} selected${visibleSelectedCount !== selectedTaskCount ? `, ${visibleSelectedCount} visible` : ''}`}
+        </span>
+        <button
+          type="button"
+          data-testid="task-select-visible"
+          onClick={selectVisibleTasks}
+          disabled={rows.length === 0}
+        >
+          Select visible
+        </button>
+        <button
+          type="button"
+          data-testid="task-clear-selection"
+          onClick={clearSelectedTasks}
+          disabled={selectedTaskCount === 0}
+        >
+          Clear
+        </button>
+        <select
+          data-testid="task-bulk-status"
+          value=""
+          onChange={event => {
+            const status = event.currentTarget.value as TaskStatus;
+            if (status) applyBulkStatus(status);
+            event.currentTarget.value = '';
+          }}
+          disabled={selectedTaskCount === 0}
+          aria-label="Set selected task status"
+        >
+          <option value="">Set status</option>
+          {TASK_STATUSES.map(option => (
+            <option key={option} value={option}>
+              {TASK_STATUS_LABELS[option]}
+            </option>
+          ))}
+        </select>
+      </div>
       <TaskTableBody
         density={density}
         filters={filters}
@@ -218,6 +294,8 @@ export function TaskTablePanel({
         onToggleSort={onToggleSort}
         onSetColumnWidths={onSetColumnWidths}
         onSelectNode={onSelectNode}
+        selectedTaskIds={selectedTaskIds}
+        onToggleTaskSelection={toggleTaskSelection}
         onUpdateTaskField={onUpdateTaskField}
         onUpdateTaskStatus={onUpdateTaskStatus}
       />
@@ -252,6 +330,8 @@ function TaskTableBody({
   onToggleSort,
   onSetColumnWidths,
   onSelectNode,
+  selectedTaskIds,
+  onToggleTaskSelection,
   onUpdateTaskField,
   onUpdateTaskStatus
 }: Omit<
@@ -264,8 +344,12 @@ function TaskTableBody({
   | 'onToggleExpanded'
   | 'onHide'
   | 'onQuickCapture'
+  | 'onUpdateTaskStatuses'
   | 'selectedNodeId'
->) {
+> & {
+  selectedTaskIds: Set<NodeId>;
+  onToggleTaskSelection: (nodeId: NodeId, selected: boolean) => void;
+}) {
   const tableRef = React.useRef<HTMLTableElement | null>(null);
   const hasCustomColumnWidths = visibleColumns.some(column => columnWidths[column.key] !== undefined);
   const tableWidth = hasCustomColumnWidths
@@ -500,9 +584,20 @@ function TaskTableBody({
                   >
                     {visibleColumnKeySet.has('task') ? (
                       <td>
-                        <button type="button" className="task-node-link" onClick={() => onSelectNode(row.node.id)}>
-                          {label}
-                        </button>
+                        <div className="task-node-cell">
+                          <input
+                            type="checkbox"
+                            className="task-row-checkbox"
+                            data-testid={`task-select-${row.node.id}`}
+                            checked={selectedTaskIds.has(row.node.id)}
+                            aria-label={`Select ${label}`}
+                            onClick={event => event.stopPropagation()}
+                            onChange={event => onToggleTaskSelection(row.node.id, event.currentTarget.checked)}
+                          />
+                          <button type="button" className="task-node-link" onClick={() => onSelectNode(row.node.id)}>
+                            {label}
+                          </button>
+                        </div>
                       </td>
                     ) : null}
                     {visibleColumnKeySet.has('status') ? (
