@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FlowTag, NodeId, NodeTask, TaskPriority, TaskStatus } from '@shared/graph';
 import {
+  addDaysToTaskDateKey,
   doesTaskTableRowMatchView,
   getTaskNodeLabel,
   getTaskStatus,
@@ -31,6 +32,13 @@ const TASK_TABLE_VIEWS: Array<{ key: TaskTableView; label: string }> = [
   { key: 'backlog', label: 'Backlog' },
   { key: 'done', label: 'Done' },
   { key: 'all', label: 'All' }
+];
+
+const TASK_DUE_PRESETS: Array<{ key: string; label: string; offsetDays?: number }> = [
+  { key: 'today', label: 'Today', offsetDays: 0 },
+  { key: 'tomorrow', label: 'Tomorrow', offsetDays: 1 },
+  { key: 'next-week', label: 'Next week', offsetDays: 7 },
+  { key: 'none', label: 'No due' }
 ];
 
 type TaskTablePanelProps = {
@@ -159,6 +167,12 @@ export function TaskTablePanel({
   const applyBulkDueDate = () => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskFields([...selectedTaskIds], { dueDate: bulkDueDate || undefined });
+  };
+  const applyBulkDuePreset = (offsetDays: number | undefined) => {
+    if (selectedTaskIds.size === 0) return;
+    const dueDate = offsetDays === undefined ? undefined : addDaysToTaskDateKey(todayKey, offsetDays);
+    setBulkDueDate(dueDate || '');
+    onUpdateTaskFields([...selectedTaskIds], { dueDate });
   };
 
   return (
@@ -322,6 +336,19 @@ export function TaskTablePanel({
           >
             Apply
           </button>
+        </div>
+        <div className="task-due-presets" aria-label="Bulk due date presets">
+          {TASK_DUE_PRESETS.map(option => (
+            <button
+              key={option.key}
+              type="button"
+              data-testid={`task-bulk-due-${option.key}`}
+              onClick={() => applyBulkDuePreset(option.offsetDays)}
+              disabled={selectedTaskCount === 0}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
       <TaskTableBody
@@ -782,6 +809,11 @@ function TaskDetailPanel({ row, todayKey, onSelectNode, onUpdateTaskField, onUpd
   const task = row.node.task;
   const status = getTaskStatus(row.node);
   const dueStatus = getTaskTableDueStatus(task?.dueDate, todayKey);
+  const setDuePreset = (offsetDays: number | undefined) => {
+    onUpdateTaskField(row.node.id, {
+      dueDate: offsetDays === undefined ? undefined : addDaysToTaskDateKey(todayKey, offsetDays)
+    });
+  };
   return (
     <section className="task-detail-panel" data-testid="task-detail-panel">
       <div className="task-detail-header">
@@ -841,6 +873,18 @@ function TaskDetailPanel({ row, todayKey, onSelectNode, onUpdateTaskField, onUpd
             onChange={event => onUpdateTaskField(row.node.id, { dueDate: event.currentTarget.value || undefined })}
           />
         </label>
+      </div>
+      <div className="task-detail-presets" aria-label="Task due date presets">
+        {TASK_DUE_PRESETS.map(option => (
+          <button
+            key={option.key}
+            type="button"
+            data-testid={`task-detail-due-${option.key}`}
+            onClick={() => setDuePreset(option.offsetDays)}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
       <label className="task-detail-notes">
         <span>Notes</span>

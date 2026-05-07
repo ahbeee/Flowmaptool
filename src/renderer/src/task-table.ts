@@ -249,7 +249,7 @@ export function getTaskTableTodayKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-function addDaysToDateKey(dateKey: string, days: number): string {
+export function addDaysToTaskDateKey(dateKey: string, days: number): string {
   const [year, month, day] = dateKey.split('-').map(Number);
   return getTaskTableTodayKey(new Date(year, month - 1, day + days));
 }
@@ -262,7 +262,7 @@ export function getTaskTableDueStatus(
   if (!normalizedDueDate) return 'none';
   if (normalizedDueDate < todayKey) return 'overdue';
   if (normalizedDueDate === todayKey) return 'today';
-  if (normalizedDueDate <= addDaysToDateKey(todayKey, 7)) return 'soon';
+  if (normalizedDueDate <= addDaysToTaskDateKey(todayKey, 7)) return 'soon';
   return 'none';
 }
 
@@ -271,7 +271,7 @@ function doesDueDateMatchFilter(dueDate: string | undefined, dueFilter: TaskTabl
   if (dueFilter === 'none') return !normalizedDueDate;
   if (!normalizedDueDate) return false;
   if (dueFilter === 'overdue' || dueFilter === 'today') return getTaskTableDueStatus(dueDate, todayKey) === dueFilter;
-  return normalizedDueDate >= todayKey && normalizedDueDate <= addDaysToDateKey(todayKey, 7);
+  return normalizedDueDate >= todayKey && normalizedDueDate <= addDaysToTaskDateKey(todayKey, 7);
 }
 
 export function doesTaskTableRowMatchFilters(
@@ -314,7 +314,7 @@ export function doesTaskTableRowMatchView(
     );
   }
   if (view === 'upcoming') {
-    return dueDate !== undefined && dueDate > todayKey && dueDate <= addDaysToDateKey(todayKey, 7);
+    return dueDate !== undefined && dueDate > todayKey && dueDate <= addDaysToTaskDateKey(todayKey, 7);
   }
   return !dueDate && (status === 'inbox' || status === 'waiting');
 }

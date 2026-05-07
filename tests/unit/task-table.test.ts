@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FlowTag } from '../../src/shared/graph';
 import type { OutlineTreeNode } from '../../src/renderer/src/outline';
 import {
+  addDaysToTaskDateKey,
   buildTaskTableRows,
   clampTaskTableColumnWidth,
   DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
@@ -126,6 +127,8 @@ describe('task table helpers', () => {
   });
 
   it('classifies due dates for task table status styling', () => {
+    expect(addDaysToTaskDateKey('2026-05-04', 1)).toBe('2026-05-05');
+    expect(addDaysToTaskDateKey('2026-12-31', 1)).toBe('2027-01-01');
     expect(getTaskTableDueStatus('2026-05-03', '2026-05-04')).toBe('overdue');
     expect(getTaskTableDueStatus('2026-05-04', '2026-05-04')).toBe('today');
     expect(getTaskTableDueStatus('2026-05-05', '2026-05-04')).toBe('soon');
