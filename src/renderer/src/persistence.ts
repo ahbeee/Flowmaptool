@@ -174,6 +174,7 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
     : [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS];
 
   const rawFilters = isRecord(value.filters) ? value.filters : {};
+  const query = typeof rawFilters.query === 'string' && rawFilters.query.trim() ? rawFilters.query.trim() : undefined;
   const tagId = typeof rawFilters.tagId === 'string' && rawFilters.tagId.trim() ? rawFilters.tagId.trim() : undefined;
   const assignee =
     typeof rawFilters.assignee === 'string' && rawFilters.assignee.trim() ? rawFilters.assignee.trim() : undefined;
@@ -191,6 +192,7 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
   return {
     sort: sanitizeTaskTableSort(value.sort, visibleColumnKeys),
     filters: {
+      ...(query ? { query } : {}),
       ...(tagId ? { tagId } : {}),
       ...(assignee ? { assignee } : {}),
       ...(due ? { due } : {})

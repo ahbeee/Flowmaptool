@@ -47,6 +47,7 @@ export type TaskTableDueStatus = 'overdue' | 'today' | 'soon' | 'none';
 export type TaskTableDensity = 'comfortable' | 'compact';
 export type TaskTableView = 'all' | 'today' | 'upcoming' | 'backlog' | 'done';
 export type TaskTableFilters = {
+  query?: string;
   tagId?: string;
   assignee?: string;
   due?: TaskTableDueFilter;
@@ -207,15 +208,33 @@ export function getNextTaskTableSort(current: TaskTableSort | undefined, key: Ta
 }
 
 export function normalizeTaskTableFilters(filters: TaskTableFilters | undefined): TaskTableFilters {
+  const query = filters?.query?.trim();
   const tagId = filters?.tagId?.trim();
   const assignee = filters?.assignee?.trim();
   const rawDue = filters?.due;
   const due = TASK_TABLE_DUE_FILTERS.some(option => option.key === rawDue) ? rawDue : undefined;
   return {
+    ...(query ? { query } : {}),
     ...(tagId ? { tagId } : {}),
     ...(assignee ? { assignee } : {}),
     ...(due ? { due } : {})
   };
+}
+
+function doesTaskTableRowMatchSearch(row: TaskTableRow, query: string): boolean {
+  const haystack = [
+    getTaskNodeLabel(row.node),
+    row.category,
+    row.tagName,
+    row.node.task?.assignee,
+    row.node.task?.note,
+    row.node.task?.priority,
+    getTaskStatus(row.node)
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase();
+  return haystack.includes(query.toLocaleLowerCase());
 }
 
 function normalizeDateKey(value: string | undefined): string | undefined {
@@ -261,6 +280,7 @@ export function doesTaskTableRowMatchFilters(
   todayKey = getTaskTableTodayKey()
 ): boolean {
   const normalized = normalizeTaskTableFilters(filters);
+  if (normalized.query && !doesTaskTableRowMatchSearch(row, normalized.query)) return false;
   if (normalized.tagId && row.tagId !== normalized.tagId) return false;
   if (normalized.assignee) {
     const rowAssignee = normalizeTaskSortString(row.node.task?.assignee);

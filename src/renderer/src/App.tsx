@@ -1369,7 +1369,7 @@ export function App() {
   );
 
   const setTaskTableFilter = React.useCallback(
-    (key: 'tagId' | 'assignee' | 'due', value: string) => {
+    (key: 'query' | 'tagId' | 'assignee' | 'due', value: string) => {
       updateActiveTab(tab => {
         const nextFilters = { ...tab.taskTable.filters, [key]: value || undefined };
         if (!nextFilters[key]) delete nextFilters[key];

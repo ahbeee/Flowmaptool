@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FlowTag, NodeId, NodeTask, TaskPriority, TaskStatus } from '@shared/graph';
 import {
+  doesTaskTableRowMatchView,
   getTaskNodeLabel,
   getTaskStatus,
   getTaskTableDueStatus,
@@ -47,7 +48,7 @@ type TaskTablePanelProps = {
   columnWidths: TaskTableColumnWidthMap;
   todayKey: string;
   hasQueryState: boolean;
-  onSetFilter: (key: 'tagId' | 'assignee' | 'due', value: string) => void;
+  onSetFilter: (key: 'query' | 'tagId' | 'assignee' | 'due', value: string) => void;
   onClearQueryState: () => void;
   onToggleSort: (key: TaskTableSortKey) => void;
   onToggleColumn: (key: TaskTableColumnKey) => void;
@@ -95,6 +96,16 @@ export function TaskTablePanel({
 }: TaskTablePanelProps) {
   const [quickCaptureLabel, setQuickCaptureLabel] = React.useState('');
   const selectedRow = sourceRows.find(row => row.node.id === selectedNodeId) || rows[0];
+  const viewCounts = React.useMemo(
+    () =>
+      Object.fromEntries(
+        TASK_TABLE_VIEWS.map(option => [
+          option.key,
+          sourceRows.filter(row => doesTaskTableRowMatchView(row, option.key, todayKey)).length
+        ])
+      ) as Record<TaskTableView, number>,
+    [sourceRows, todayKey]
+  );
   const submitQuickCapture = (event: React.FormEvent) => {
     event.preventDefault();
     const label = quickCaptureLabel.trim();
@@ -184,7 +195,8 @@ export function TaskTablePanel({
             data-testid={`task-view-${option.key}`}
             onClick={() => onSetView(option.key)}
           >
-            {option.label}
+            <span>{option.label}</span>
+            <span className="task-view-count">{viewCounts[option.key]}</span>
           </button>
         ))}
       </div>
@@ -335,6 +347,15 @@ function TaskTableBody({
   return (
     <>
       <div className="task-table-filter-row">
+        <label className="task-search-filter">
+          <span>Search</span>
+          <input
+            data-testid="task-filter-query"
+            value={filters.query || ''}
+            onChange={event => onSetFilter('query', event.currentTarget.value)}
+            placeholder="Task, path, tag, note"
+          />
+        </label>
         <label>
           <span>Tag</span>
           <select

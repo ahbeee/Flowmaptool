@@ -171,6 +171,14 @@ test('task table filters by tag and assignee', async () => {
   await expect(panel.locator('tbody tr')).toHaveCount(1);
   await expect(panel.locator('tbody tr').first()).toContainText('Pending Zoe Task');
 
+  await window.getByTestId('task-filter-query').fill('zoe');
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(panel.locator('tbody tr').first()).toContainText('Pending Zoe Task');
+
+  await window.getByTestId('task-filter-query').fill('missing');
+  await expect(panel).toContainText('No task table rows match the current filters.');
+  await window.getByTestId('task-filter-query').fill('');
+
   await window.getByTestId('task-filter-assignee').selectOption('Zoe');
   await expect(panel.locator('tbody tr')).toHaveCount(1);
   await expect(panel.locator('tbody tr').first()).toContainText('Pending Zoe Task');
@@ -198,6 +206,7 @@ test('task table filters by tag and assignee', async () => {
   );
   await window.getByTestId('task-clear-query').click();
   await expect(window.getByTestId('task-filter-tag')).toHaveValue('');
+  await expect(window.getByTestId('task-filter-query')).toHaveValue('');
   await expect(window.getByTestId('task-filter-assignee')).toHaveValue('');
   await expect(window.getByTestId('task-filter-due')).toHaveValue('');
   await expect(window.getByTestId('task-sort-task').locator('xpath=ancestor::th')).toHaveAttribute('aria-sort', 'none');
@@ -216,6 +225,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   await first.window.getByTestId('task-columns-toggle').click();
   await first.window.getByTestId('task-columns-menu').getByLabel('Category').uncheck();
   await first.window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
+  await first.window.getByTestId('task-filter-query').fill('Root');
   await first.window.getByTestId('task-filter-due').selectOption('none');
   await first.window.getByTestId('task-density').selectOption('compact');
   await first.window.getByTestId('task-sort-due').click();
@@ -231,7 +241,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   const saved = JSON.parse(await readFile(filePath, 'utf-8')) as PersistedQflowFile;
   expect(saved.ui?.taskTable).toEqual({
     sort: { key: 'due', direction: 'desc' },
-    filters: { tagId: 'tag-pink', due: 'none' },
+    filters: { query: 'Root', tagId: 'tag-pink', due: 'none' },
     visibleColumnKeys: ['task', 'status', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
     columnWidths: {},
     expanded: true,
@@ -246,6 +256,7 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   const reopenedPanel = second.window.getByTestId('task-panel');
   await expect(second.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
   await expect(second.window.getByTestId('task-filter-tag')).toHaveValue('tag-pink');
+  await expect(second.window.getByTestId('task-filter-query')).toHaveValue('Root');
   await expect(second.window.getByTestId('task-filter-due')).toHaveValue('none');
   await expect(second.window.getByTestId('task-density')).toHaveValue('compact');
   await expect(second.window.getByTestId('task-view-all')).toHaveAttribute('aria-selected', 'true');

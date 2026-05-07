@@ -99,7 +99,10 @@ describe('task table helpers', () => {
     expect(getTaskNodeLabel({ id: 'n1', label: '   ' })).toBe('Untitled Node');
   });
 
-  it('filters task rows by tag and assignee', () => {
+  it('filters task rows by search, tag, and assignee', () => {
+    expect(buildTaskTableRows(tree(), tagById, undefined, { query: 'brav' }).map(row => row.node.id)).toEqual(['n2']);
+    expect(buildTaskTableRows(tree(), tagById, undefined, { query: 'done' }).map(row => row.node.id)).toEqual(['n3']);
+    expect(buildTaskTableRows(tree(), tagById, undefined, { query: 'root zoe' }).map(row => row.node.id)).toEqual([]);
     expect(buildTaskTableRows(tree(), tagById, undefined, { tagId: 'tag-pending' }).map(row => row.node.id)).toEqual([
       'n2'
     ]);
