@@ -109,11 +109,15 @@ test('task workbench bulk updates selected visible tasks', async () => {
   await expect(window.getByTestId('task-bulk-count')).toContainText('1 selected');
   await expect(window.getByTestId('task-workbench-message')).toContainText('Selected 1 task visible');
 
-  await window.getByTestId('task-bulk-status').selectOption('done');
+  await window.getByTestId('task-mark-done').click();
   await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-status-done/);
   await expect(window.getByTestId('task-workbench-message')).toContainText('Updated status for 1 task');
   await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-focused/);
   await expect(window.getByTestId('task-detail-panel')).toContainText('Review contract');
+  await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('done');
+  await window.getByTestId('task-reopen').click();
+  await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('inbox');
+  await window.getByTestId('task-bulk-status').selectOption('done');
   await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('done');
   await window.getByTestId('task-bulk-priority').selectOption('critical');
   await expect(window.getByTestId('task-row-n2').locator('select').nth(1)).toHaveValue('critical');

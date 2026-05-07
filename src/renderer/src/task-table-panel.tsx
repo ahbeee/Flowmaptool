@@ -190,6 +190,8 @@ export function TaskTablePanel({
     onUpdateTaskStatuses([...selectedTaskIds], status);
     setWorkbenchMessage(`Updated status for ${formatTaskCount(selectedTaskIds.size)}`);
   };
+  const markSelectedDone = () => applyBulkStatus('done');
+  const reopenSelectedTasks = () => applyBulkStatus('inbox');
   const applyBulkPriority = (priority: TaskPriority) => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskFields([...selectedTaskIds], { priority });
@@ -323,6 +325,22 @@ export function TaskTablePanel({
           disabled={selectedTaskCount === 0}
         >
           Clear
+        </button>
+        <button
+          type="button"
+          data-testid="task-mark-done"
+          onClick={markSelectedDone}
+          disabled={selectedTaskCount === 0}
+        >
+          Mark done
+        </button>
+        <button
+          type="button"
+          data-testid="task-reopen"
+          onClick={reopenSelectedTasks}
+          disabled={selectedTaskCount === 0}
+        >
+          Reopen
         </button>
         <select
           data-testid="task-bulk-status"
