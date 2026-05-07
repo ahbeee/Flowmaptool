@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FlowTag, NodeId } from '@shared/graph';
 import {
+  collectAncestorOutlineNodeIdsForTargets,
   collectCollapsibleOutlineNodeIds,
   filterOutlineTree,
   filterOutlineTreeByChecklistTargets,
@@ -40,6 +41,9 @@ export function OutlinePanel({
 }: OutlinePanelProps) {
   const [query, setQuery] = React.useState('');
   const [mode, setMode] = React.useState<OutlineMode>('outline');
+  const [autoRevealNodeIds, setAutoRevealNodeIds] = React.useState<Set<NodeId>>(() => new Set());
+  const outlineRef = React.useRef<HTMLElement | null>(null);
+  const selectedNodeKey = React.useMemo(() => [...selectedNodeIds].sort().join('\n'), [selectedNodeIds]);
   const modeTree = React.useMemo(
     () =>
       mode === 'checklist' ? filterOutlineTreeByChecklistTargets(outlineTree, checklistTargetsByNodeId) : outlineTree,
@@ -49,12 +53,34 @@ export function OutlinePanel({
   const hasQuery = query.trim().length > 0;
   const visibleTree = filteredOutline.tree;
   const visibleCollapsibleNodeIds = React.useMemo(() => collectCollapsibleOutlineNodeIds(visibleTree), [visibleTree]);
+  const forcedExpandedNodeIds = React.useMemo(() => {
+    const selectedAncestorNodeIds = collectAncestorOutlineNodeIdsForTargets(visibleTree, autoRevealNodeIds);
+    return new Set([...filteredOutline.expandedNodeIds, ...selectedAncestorNodeIds]);
+  }, [autoRevealNodeIds, filteredOutline.expandedNodeIds, visibleTree]);
   const hasCollapsibleNodes = visibleCollapsibleNodeIds.length > 0;
   const hasCollapsedVisibleNodes = visibleCollapsibleNodeIds.some(nodeId => collapsedNodeIds.has(nodeId));
   const emptyMessage =
     mode === 'checklist' ? 'No checklist items. Apply tags to outline nodes to create checklist targets.' : 'No nodes';
+  React.useEffect(() => {
+    setAutoRevealNodeIds(new Set(selectedNodeIds));
+  }, [selectedNodeKey]);
+  React.useEffect(() => {
+    const selectedOutlineNode = outlineRef.current?.querySelector('.outline-node-selected');
+    selectedOutlineNode?.scrollIntoView({ block: 'nearest' });
+  }, [forcedExpandedNodeIds, selectedNodeIds, selectedNodeKey, visibleTree]);
+
+  const toggleNode = (nodeId: NodeId) => {
+    setAutoRevealNodeIds(new Set());
+    onToggleNode(nodeId);
+  };
+
+  const collapseVisibleNodes = () => {
+    setAutoRevealNodeIds(new Set());
+    onCollapseNodes(visibleCollapsibleNodeIds);
+  };
+
   return (
-    <aside className="outline-panel" data-testid="outline-panel">
+    <aside ref={outlineRef} className="outline-panel" data-testid="outline-panel">
       <div className="outline-panel-header">
         <span>{mode === 'checklist' ? 'Checklist' : 'Outline'}</span>
         <div className="outline-panel-actions">
@@ -72,7 +98,7 @@ export function OutlinePanel({
             type="button"
             className="outline-panel-action"
             data-testid="outline-collapse-all"
-            onClick={() => onCollapseNodes(visibleCollapsibleNodeIds)}
+            onClick={collapseVisibleNodes}
             disabled={!hasCollapsibleNodes}
             title="Collapse all visible outline branches"
           >
@@ -122,14 +148,14 @@ export function OutlinePanel({
           <OutlineNodes
             items={visibleTree}
             collapsedNodeIds={collapsedNodeIds}
-            forcedExpandedNodeIds={filteredOutline.expandedNodeIds}
+            forcedExpandedNodeIds={forcedExpandedNodeIds}
             matchedNodeIds={filteredOutline.matchedNodeIds}
             searchActive={hasQuery}
             selectedNodeIds={selectedNodeIds}
             tagById={tagById}
             checklistTargetsByNodeId={checklistTargetsByNodeId}
             isChecklistNodeChecked={isChecklistNodeChecked}
-            onToggleNode={onToggleNode}
+            onToggleNode={toggleNode}
             onToggleChecklistNodes={onToggleChecklistNodes}
             onSelectNode={onSelectNode}
           />

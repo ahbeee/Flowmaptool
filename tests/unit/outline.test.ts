@@ -3,6 +3,7 @@ import type { FlowDoc } from '../../src/shared/graph';
 import {
   buildOutlineChecklistTargetsByNodeId,
   buildOutlineTree,
+  collectAncestorOutlineNodeIdsForTargets,
   collectCollapsibleOutlineNodeIds,
   filterOutlineTree,
   filterOutlineTreeByChecklistTargets,
@@ -141,5 +142,16 @@ describe('outline helpers', () => {
     });
 
     expect(collectCollapsibleOutlineNodeIds(tree)).toEqual(['n1', 'n3']);
+  });
+
+  it('collects ancestors for selected outline targets', () => {
+    const doc = fixtureDoc();
+    const tree = buildOutlineTree({
+      ...doc,
+      edges: doc.edges.filter(edge => edge.id !== 'e4')
+    });
+
+    expect([...collectAncestorOutlineNodeIdsForTargets(tree, new Set(['n5']))]).toEqual(['n1', 'n3']);
+    expect([...collectAncestorOutlineNodeIdsForTargets(tree, new Set(['n1']))]).toEqual([]);
   });
 });

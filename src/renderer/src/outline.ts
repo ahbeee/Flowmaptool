@@ -156,6 +156,24 @@ export function collectCollapsibleOutlineNodeIds(tree: OutlineTreeNode[]): NodeI
   return nodeIds;
 }
 
+export function collectAncestorOutlineNodeIdsForTargets(
+  tree: OutlineTreeNode[],
+  targetNodeIds: Set<NodeId>
+): Set<NodeId> {
+  const ancestorNodeIds = new Set<NodeId>();
+  const visit = (item: OutlineTreeNode, ancestors: NodeId[]): boolean => {
+    const childMatches = item.children.some(child => visit(child, [...ancestors, item.node.id]));
+    const matches = targetNodeIds.has(item.node.id);
+    if (matches || childMatches) {
+      ancestors.forEach(nodeId => ancestorNodeIds.add(nodeId));
+      return true;
+    }
+    return false;
+  };
+  tree.forEach(item => visit(item, []));
+  return ancestorNodeIds;
+}
+
 function normalizeOutlineSearchText(value: string | undefined): string {
   return (value || '').trim().toLocaleLowerCase();
 }

@@ -151,6 +151,11 @@ test('outline can expand and collapse all visible branches', async ({}, testInfo
   await expect(window.getByTestId('outline-node-n4')).toHaveCount(0);
   await expect(window.getByTestId('outline-expand-all')).toBeEnabled();
 
+  await window.getByTestId('node-n3').click();
+  await expect(window.getByTestId('outline-node-n2')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toHaveClass(/outline-node-selected/);
+
   await window.getByTestId('outline-expand-all').click();
   await expect(window.getByTestId('outline-node-n2')).toBeVisible();
   await expect(window.getByTestId('outline-node-n3')).toBeVisible();
