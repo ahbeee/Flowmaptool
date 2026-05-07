@@ -47,7 +47,10 @@ Smoke test the portable artifact at minimum:
 - Confirm the app opens without console or startup errors.
 - Create a new document.
 - Add a child node and edit its label.
-- Apply a tag and confirm the node appears in the Outline and Task Table.
+- Edit a node label from the Outline.
+- Apply a tag from the Outline context menu and confirm the node appears in the Checklist view and Task Table.
+- Set a task status from the Outline context menu and confirm the status badge updates.
+- Switch Checklist filters between all, open, and done; confirm counts update after toggling completion.
 - Toggle Task Table columns and confirm the Task column remains visible.
 - Save a `.qflow` file.
 - Reopen the saved file.

@@ -47,8 +47,8 @@ Renderer-only pure helpers live under `src/renderer/src`:
 - `canvas-edges-layer.tsx`: canvas edge SVG rendering, connect preview, route guide display, and bend handle entry points. Edge selection, hit testing, routing state mutation, and drag lifecycle ownership stay in `App.tsx`.
 - `canvas-nodes-layer.tsx`: canvas node rendering, inline node label editing, tag marker display, and connect handle entry points. Drag, edit, and connect state ownership stay in `App.tsx`.
 - `canvas-overlays-layer.tsx`: canvas-only overlay rendering for marquee selection and drag insert previews.
-- `outline.ts`: outline tree construction and checklist completion target derivation.
-- `outline-panel.tsx`: Outline tree rendering, checklist controls, collapsed state display, and node selection entry points. It receives tree data and callbacks from `App.tsx`.
+- `outline.ts`: outline tree construction, search filtering, checklist target derivation, checklist view filtering, checklist counts, and outline ancestry helpers.
+- `outline-panel.tsx`: Outline and Checklist rendering, search controls, checklist filters/counts, collapsed state display, inline label editing, context tag/status actions, metadata badges, and node selection entry points. It receives tree data and mutation callbacks from `App.tsx`.
 - `panel-resizer.tsx`: accessible side panel resize separator rendering. Resize math and state ownership stay in `App.tsx` and `side-panel-resize.ts`.
 - `task-table.ts`: Task Workbench row derivation from tagged outline nodes, labels, views, columns, visibility, filtering, sorting, and due-date status helpers.
 - `task-table-panel.tsx`: Task Workbench rendering, quick capture, bulk actions, detail editing, and table-specific controls. It receives rows, UI preferences, and callbacks from `App.tsx`; document mutation and tab state ownership stay in `App.tsx`.
