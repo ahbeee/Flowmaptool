@@ -112,8 +112,11 @@ test('task workbench bulk updates selected visible tasks', async () => {
   await expect(window.getByTestId('task-bulk-count')).toContainText('2 visible');
   await expect(window.getByTestId('task-workbench-message')).toContainText('2 tasks in current view');
 
+  await window.getByTestId('task-select-visible').click();
+  await expect(window.getByTestId('task-bulk-count')).toContainText('2 selected');
   await window.getByTestId('task-filter-query').fill('contract');
   await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(window.getByTestId('task-bulk-count')).toContainText('2 selected, 1 visible');
   await window.getByTestId('task-select-visible').click();
   await expect(window.getByTestId('task-select-n2')).toBeChecked();
   await expect(window.getByTestId('task-bulk-count')).toContainText('1 selected');

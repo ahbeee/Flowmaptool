@@ -151,11 +151,7 @@ export function TaskTablePanel({
   };
   const selectVisibleTasks = () => {
     if (rows[0]) setFocusedTaskId(rows[0].node.id);
-    setSelectedTaskIds(prev => {
-      const next = new Set(prev);
-      rows.forEach(row => next.add(row.node.id));
-      return next;
-    });
+    setSelectedTaskIds(new Set(rows.map(row => row.node.id)));
     setWorkbenchMessage(`Selected ${formatTaskCount(rows.length)} visible`);
   };
   const clearSelectedTasks = () => {
