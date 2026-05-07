@@ -4,7 +4,9 @@ import {
   collectAncestorOutlineNodeIdsForTargets,
   collectCollapsibleOutlineNodeIds,
   filterOutlineTree,
+  filterOutlineTreeByChecklistView,
   filterOutlineTreeByChecklistTargets,
+  type OutlineChecklistView,
   type OutlineMode,
   type OutlineTreeNode
 } from './outline';
@@ -41,6 +43,7 @@ export function OutlinePanel({
 }: OutlinePanelProps) {
   const [query, setQuery] = React.useState('');
   const [mode, setMode] = React.useState<OutlineMode>('outline');
+  const [checklistView, setChecklistView] = React.useState<OutlineChecklistView>('all');
   const [autoRevealNodeIds, setAutoRevealNodeIds] = React.useState<Set<NodeId>>(() => new Set());
   const outlineRef = React.useRef<HTMLElement | null>(null);
   const selectedNodeKey = React.useMemo(() => [...selectedNodeIds].sort().join('\n'), [selectedNodeIds]);
@@ -49,7 +52,17 @@ export function OutlinePanel({
       mode === 'checklist' ? filterOutlineTreeByChecklistTargets(outlineTree, checklistTargetsByNodeId) : outlineTree,
     [checklistTargetsByNodeId, mode, outlineTree]
   );
-  const filteredOutline = React.useMemo(() => filterOutlineTree(modeTree, query, tagById), [modeTree, query, tagById]);
+  const checklistViewTree = React.useMemo(
+    () =>
+      mode === 'checklist'
+        ? filterOutlineTreeByChecklistView(modeTree, checklistTargetsByNodeId, isChecklistNodeChecked, checklistView)
+        : modeTree,
+    [checklistTargetsByNodeId, checklistView, isChecklistNodeChecked, mode, modeTree]
+  );
+  const filteredOutline = React.useMemo(
+    () => filterOutlineTree(checklistViewTree, query, tagById),
+    [checklistViewTree, query, tagById]
+  );
   const hasQuery = query.trim().length > 0;
   const visibleTree = filteredOutline.tree;
   const visibleCollapsibleNodeIds = React.useMemo(() => collectCollapsibleOutlineNodeIds(visibleTree), [visibleTree]);
@@ -64,7 +77,11 @@ export function OutlinePanel({
   const hasCollapsibleNodes = visibleCollapsibleNodeIds.length > 0;
   const hasCollapsedVisibleNodes = visibleCollapsibleNodeIds.some(nodeId => collapsedNodeIds.has(nodeId));
   const emptyMessage =
-    mode === 'checklist' ? 'No checklist items. Apply tags to outline nodes to create checklist targets.' : 'No nodes';
+    mode === 'checklist'
+      ? checklistView === 'all'
+        ? 'No checklist items. Apply tags to outline nodes to create checklist targets.'
+        : `No ${checklistView} checklist items.`
+      : 'No nodes';
   React.useEffect(() => {
     setAutoRevealNodeIds(new Set(selectedNodeIds));
   }, [selectedNodeKey]);
@@ -135,6 +152,27 @@ export function OutlinePanel({
           Checklist
         </button>
       </div>
+      {mode === 'checklist' ? (
+        <div className="outline-checklist-view-tabs" role="tablist" aria-label="Checklist view">
+          {(['all', 'open', 'done'] as const).map(view => (
+            <button
+              key={view}
+              type="button"
+              role="tab"
+              aria-selected={checklistView === view}
+              className={
+                checklistView === view
+                  ? 'outline-checklist-view-tab outline-checklist-view-tab-active'
+                  : 'outline-checklist-view-tab'
+              }
+              data-testid={`outline-checklist-view-${view}`}
+              onClick={() => setChecklistView(view)}
+            >
+              {view === 'all' ? 'All' : view === 'open' ? 'Open' : 'Done'}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="outline-search">
         <input
           data-testid="outline-search"

@@ -11,6 +11,7 @@ export type FilterOutlineTreeResult = {
   matchedNodeIds: Set<NodeId>;
 };
 
+export type OutlineChecklistView = 'all' | 'open' | 'done';
 export type OutlineMode = 'outline' | 'checklist';
 
 function nodeSeq(nodeId: NodeId): number {
@@ -126,6 +127,30 @@ export function filterOutlineTreeByChecklistTargets(
     const children = item.children.map(visit).filter((child): child is OutlineTreeNode => Boolean(child));
     const hasChecklistTargets = (checklistTargetsByNodeId.get(item.node.id) || []).length > 0;
     if (!hasChecklistTargets && children.length === 0) return null;
+    return {
+      node: item.node,
+      children
+    };
+  };
+
+  return outlineTree.map(visit).filter((item): item is OutlineTreeNode => Boolean(item));
+}
+
+export function filterOutlineTreeByChecklistView(
+  outlineTree: OutlineTreeNode[],
+  checklistTargetsByNodeId: Map<NodeId, NodeId[]>,
+  isChecklistNodeChecked: (nodeId: NodeId) => boolean,
+  view: OutlineChecklistView
+): OutlineTreeNode[] {
+  if (view === 'all') return outlineTree;
+
+  const visit = (item: OutlineTreeNode): OutlineTreeNode | null => {
+    const children = item.children.map(visit).filter((child): child is OutlineTreeNode => Boolean(child));
+    const checklistTargets = checklistTargetsByNodeId.get(item.node.id) || [];
+    const hasChecklistTargets = checklistTargets.length > 0;
+    const done = hasChecklistTargets && checklistTargets.every(isChecklistNodeChecked);
+    const matches = hasChecklistTargets && (view === 'done' ? done : !done);
+    if (!matches && children.length === 0) return null;
     return {
       node: item.node,
       children

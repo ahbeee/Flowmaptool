@@ -6,6 +6,7 @@ import {
   collectAncestorOutlineNodeIdsForTargets,
   collectCollapsibleOutlineNodeIds,
   filterOutlineTree,
+  filterOutlineTreeByChecklistView,
   filterOutlineTreeByChecklistTargets,
   toggleCollapsedOutlineNodeIds
 } from '../../src/renderer/src/outline';
@@ -85,6 +86,25 @@ describe('outline helpers', () => {
     expect(checklistTree.map(item => item.node.id)).toEqual(['n1', 'n4']);
     expect(checklistTree[0].children.map(item => item.node.id)).toEqual(['n3', 'n2']);
     expect(checklistTree[0].children[0].children).toEqual([]);
+  });
+
+  it('filters checklist branches by open and done state while preserving context', () => {
+    const doc = fixtureDoc();
+    const tree = buildOutlineTree({
+      ...doc,
+      edges: doc.edges.filter(edge => edge.id !== 'e4')
+    });
+    const targets = buildOutlineChecklistTargetsByNodeId(tree, new Set(['tag-task']));
+    const checklistTree = filterOutlineTreeByChecklistTargets(tree, targets);
+    const isChecked = (nodeId: string) => nodeId === 'n3';
+
+    const openTree = filterOutlineTreeByChecklistView(checklistTree, targets, isChecked, 'open');
+    expect(openTree.map(item => item.node.id)).toEqual(['n1', 'n4']);
+    expect(openTree[0].children.map(item => item.node.id)).toEqual(['n2']);
+
+    const doneTree = filterOutlineTreeByChecklistView(checklistTree, targets, isChecked, 'done');
+    expect(doneTree.map(item => item.node.id)).toEqual(['n1']);
+    expect(doneTree[0].children.map(item => item.node.id)).toEqual(['n3']);
   });
 
   it('filters outline nodes by label, tag, and task metadata while preserving context', () => {

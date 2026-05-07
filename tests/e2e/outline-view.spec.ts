@@ -125,6 +125,15 @@ test('outline can focus checklist branches separately from the full hierarchy', 
   await expect(window.getByTestId('outline-node-n4')).toHaveCount(0);
   await expect(window.getByTestId('outline-check-n2')).toBeVisible();
 
+  await window.getByTestId('outline-check-n3').check();
+  await window.getByTestId('outline-checklist-view-open').click();
+  await expect(window.getByTestId('outline-node-n2')).toHaveCount(0);
+  await window.getByTestId('outline-checklist-view-done').click();
+  await expect(window.getByTestId('outline-node-n1')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n2')).toBeVisible();
+  await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await window.getByTestId('outline-checklist-view-all').click();
+
   await window.getByTestId('outline-search').fill('second');
   await expect(window.getByTestId('outline-node-n3')).toBeVisible();
   await expect(window.getByTestId('outline-node-n3')).toHaveClass(/outline-node-match/);
