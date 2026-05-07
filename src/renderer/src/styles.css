@@ -1031,6 +1031,11 @@ select {
   color: var(--flow-panel-text, #0f172a);
 }
 
+.outline-node-ancestor {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--flow-panel-selected, #2563eb) 48%, transparent);
+  background: color-mix(in srgb, var(--flow-panel-selected, #2563eb) 10%, var(--flow-panel-surface, #ffffff));
+}
+
 .outline-node-match {
   box-shadow: inset 3px 0 0 var(--flow-panel-accent, #2563eb);
   background: color-mix(in srgb, var(--flow-panel-accent, #2563eb) 12%, var(--flow-panel-surface, #ffffff));

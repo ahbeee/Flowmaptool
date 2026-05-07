@@ -53,9 +53,13 @@ export function OutlinePanel({
   const hasQuery = query.trim().length > 0;
   const visibleTree = filteredOutline.tree;
   const visibleCollapsibleNodeIds = React.useMemo(() => collectCollapsibleOutlineNodeIds(visibleTree), [visibleTree]);
+  const selectedAncestorNodeIds = React.useMemo(
+    () => collectAncestorOutlineNodeIdsForTargets(visibleTree, selectedNodeIds),
+    [selectedNodeIds, selectedNodeKey, visibleTree]
+  );
   const forcedExpandedNodeIds = React.useMemo(() => {
-    const selectedAncestorNodeIds = collectAncestorOutlineNodeIdsForTargets(visibleTree, autoRevealNodeIds);
-    return new Set([...filteredOutline.expandedNodeIds, ...selectedAncestorNodeIds]);
+    const autoRevealAncestorNodeIds = collectAncestorOutlineNodeIdsForTargets(visibleTree, autoRevealNodeIds);
+    return new Set([...filteredOutline.expandedNodeIds, ...autoRevealAncestorNodeIds]);
   }, [autoRevealNodeIds, filteredOutline.expandedNodeIds, visibleTree]);
   const hasCollapsibleNodes = visibleCollapsibleNodeIds.length > 0;
   const hasCollapsedVisibleNodes = visibleCollapsibleNodeIds.some(nodeId => collapsedNodeIds.has(nodeId));
@@ -150,6 +154,7 @@ export function OutlinePanel({
             collapsedNodeIds={collapsedNodeIds}
             forcedExpandedNodeIds={forcedExpandedNodeIds}
             matchedNodeIds={filteredOutline.matchedNodeIds}
+            selectedAncestorNodeIds={selectedAncestorNodeIds}
             searchActive={hasQuery}
             selectedNodeIds={selectedNodeIds}
             tagById={tagById}
@@ -175,6 +180,7 @@ type OutlineNodesProps = Omit<OutlinePanelProps, 'outlineTree' | 'onHide' | 'onC
   items: OutlineTreeNode[];
   forcedExpandedNodeIds: Set<NodeId>;
   matchedNodeIds: Set<NodeId>;
+  selectedAncestorNodeIds: Set<NodeId>;
   searchActive: boolean;
   depth?: number;
 };
@@ -185,6 +191,7 @@ function OutlineNodes({
   collapsedNodeIds,
   forcedExpandedNodeIds,
   matchedNodeIds,
+  selectedAncestorNodeIds,
   searchActive,
   selectedNodeIds,
   tagById,
@@ -198,6 +205,7 @@ function OutlineNodes({
     const hasChildren = item.children.length > 0;
     const collapsed = collapsedNodeIds.has(item.node.id) && !forcedExpandedNodeIds.has(item.node.id);
     const selected = selectedNodeIds.has(item.node.id);
+    const selectedAncestor = selectedAncestorNodeIds.has(item.node.id);
     const matched = matchedNodeIds.has(item.node.id);
     const label = item.node.label.trim() || 'Untitled Node';
     const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
@@ -211,6 +219,7 @@ function OutlineNodes({
     const nodeButtonClassName = [
       'outline-node-button',
       selected ? 'outline-node-selected' : '',
+      selectedAncestor ? 'outline-node-ancestor' : '',
       matched ? 'outline-node-match' : '',
       checked ? 'outline-node-complete' : ''
     ]
@@ -296,6 +305,7 @@ function OutlineNodes({
             collapsedNodeIds={collapsedNodeIds}
             forcedExpandedNodeIds={forcedExpandedNodeIds}
             matchedNodeIds={matchedNodeIds}
+            selectedAncestorNodeIds={selectedAncestorNodeIds}
             searchActive={searchActive}
             selectedNodeIds={selectedNodeIds}
             tagById={tagById}
