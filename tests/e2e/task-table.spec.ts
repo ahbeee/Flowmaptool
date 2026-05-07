@@ -100,24 +100,30 @@ test('task workbench bulk updates selected visible tasks', async () => {
   const panel = window.getByTestId('task-panel');
   await expect(panel.locator('tbody tr')).toHaveCount(2);
   await expect(window.getByTestId('task-bulk-count')).toContainText('2 visible');
+  await expect(window.getByTestId('task-workbench-message')).toContainText('2 tasks in current view');
 
   await window.getByTestId('task-filter-query').fill('contract');
   await expect(panel.locator('tbody tr')).toHaveCount(1);
   await window.getByTestId('task-select-visible').click();
   await expect(window.getByTestId('task-select-n2')).toBeChecked();
   await expect(window.getByTestId('task-bulk-count')).toContainText('1 selected');
+  await expect(window.getByTestId('task-workbench-message')).toContainText('Selected 1 task visible');
 
   await window.getByTestId('task-bulk-status').selectOption('done');
   await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-status-done/);
+  await expect(window.getByTestId('task-workbench-message')).toContainText('Updated status for 1 task');
   await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-focused/);
   await expect(window.getByTestId('task-detail-panel')).toContainText('Review contract');
   await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('done');
   await window.getByTestId('task-bulk-priority').selectOption('critical');
   await expect(window.getByTestId('task-row-n2').locator('select').nth(1)).toHaveValue('critical');
+  await expect(window.getByTestId('task-workbench-message')).toContainText('Updated priority for 1 task');
   await window.getByTestId('task-bulk-assignee').fill('Kai');
   await window.getByTestId('task-apply-assignee').click();
+  await expect(window.getByTestId('task-workbench-message')).toContainText('Updated assignee for 1 task');
   await window.getByTestId('task-bulk-due').fill(dateKeyFromToday(2));
   await window.getByTestId('task-apply-due').click();
+  await expect(window.getByTestId('task-workbench-message')).toContainText('Updated due date for 1 task');
   await expect(window.getByTestId('task-row-n2').locator('input').nth(2)).toHaveValue('Kai');
   await expect(window.getByTestId('task-row-n2').locator('input').nth(4)).toHaveValue(dateKeyFromToday(2));
   await window.getByTestId('task-bulk-due-tomorrow').click();

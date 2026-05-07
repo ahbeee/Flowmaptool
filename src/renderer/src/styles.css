@@ -352,6 +352,17 @@ select {
   background: #f8fafc;
 }
 
+.task-workbench-message {
+  min-height: 22px;
+  margin: 0 2px 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
 .task-view-tabs {
   display: flex;
   gap: 4px;

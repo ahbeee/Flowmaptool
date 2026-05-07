@@ -41,6 +41,10 @@ const TASK_DUE_PRESETS: Array<{ key: string; label: string; offsetDays?: number 
   { key: 'none', label: 'No due' }
 ];
 
+function formatTaskCount(count: number): string {
+  return `${count} task${count === 1 ? '' : 's'}`;
+}
+
 type TaskTablePanelProps = {
   expanded: boolean;
   view: TaskTableView;
@@ -109,6 +113,7 @@ export function TaskTablePanel({
   const [quickCaptureLabel, setQuickCaptureLabel] = React.useState('');
   const [bulkAssignee, setBulkAssignee] = React.useState('');
   const [bulkDueDate, setBulkDueDate] = React.useState('');
+  const [workbenchMessage, setWorkbenchMessage] = React.useState('');
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<NodeId>>(() => new Set());
   const [focusedTaskId, setFocusedTaskId] = React.useState<NodeId>('');
   const selectedRow =
@@ -141,6 +146,7 @@ export function TaskTablePanel({
     if (!label) return;
     onQuickCapture(label);
     setQuickCaptureLabel('');
+    setWorkbenchMessage(`Captured "${label}"`);
   };
   const selectVisibleTasks = () => {
     if (rows[0]) setFocusedTaskId(rows[0].node.id);
@@ -149,8 +155,12 @@ export function TaskTablePanel({
       rows.forEach(row => next.add(row.node.id));
       return next;
     });
+    setWorkbenchMessage(`Selected ${formatTaskCount(rows.length)} visible`);
   };
-  const clearSelectedTasks = () => setSelectedTaskIds(new Set());
+  const clearSelectedTasks = () => {
+    setSelectedTaskIds(new Set());
+    setWorkbenchMessage('Cleared task selection');
+  };
   const toggleTaskSelection = (nodeId: NodeId, selected: boolean) => {
     setFocusedTaskId(nodeId);
     setSelectedTaskIds(prev => {
@@ -178,24 +188,29 @@ export function TaskTablePanel({
   const applyBulkStatus = (status: TaskStatus) => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskStatuses([...selectedTaskIds], status);
+    setWorkbenchMessage(`Updated status for ${formatTaskCount(selectedTaskIds.size)}`);
   };
   const applyBulkPriority = (priority: TaskPriority) => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskFields([...selectedTaskIds], { priority });
+    setWorkbenchMessage(`Updated priority for ${formatTaskCount(selectedTaskIds.size)}`);
   };
   const applyBulkAssignee = () => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskFields([...selectedTaskIds], { assignee: bulkAssignee.trim() || undefined });
+    setWorkbenchMessage(`Updated assignee for ${formatTaskCount(selectedTaskIds.size)}`);
   };
   const applyBulkDueDate = () => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskFields([...selectedTaskIds], { dueDate: bulkDueDate || undefined });
+    setWorkbenchMessage(`Updated due date for ${formatTaskCount(selectedTaskIds.size)}`);
   };
   const applyBulkDuePreset = (offsetDays: number | undefined) => {
     if (selectedTaskIds.size === 0) return;
     const dueDate = offsetDays === undefined ? undefined : addDaysToTaskDateKey(todayKey, offsetDays);
     setBulkDueDate(dueDate || '');
     onUpdateTaskFields([...selectedTaskIds], { dueDate });
+    setWorkbenchMessage(`Updated due date for ${formatTaskCount(selectedTaskIds.size)}`);
   };
 
   return (
@@ -268,6 +283,9 @@ export function TaskTablePanel({
           Add
         </button>
       </form>
+      <div className="task-workbench-message" data-testid="task-workbench-message" aria-live="polite">
+        {workbenchMessage || `${rows.length} task${rows.length === 1 ? '' : 's'} in current view`}
+      </div>
       <div className="task-view-tabs" role="tablist" aria-label="Task views">
         {TASK_TABLE_VIEWS.map(option => (
           <button
