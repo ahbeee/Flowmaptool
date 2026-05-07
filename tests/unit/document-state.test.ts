@@ -60,7 +60,6 @@ describe('document state helpers', () => {
           'notes'
         ],
         expanded: false,
-        density: 'comfortable',
         view: 'all'
       },
       interactionHistory: { past: [], future: [] }
@@ -138,7 +137,6 @@ describe('document state helpers', () => {
           'notes'
         ],
         expanded: false,
-        density: 'comfortable',
         view: 'all'
       },
       nodeOffsetsByDirection: { horizontal: {}, vertical: {} },

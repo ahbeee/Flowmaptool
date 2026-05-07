@@ -107,7 +107,6 @@ export function createDefaultDocFixture(overrides: DefaultDocFixtureOverrides = 
         ],
         columnWidths: {},
         expanded: false,
-        density: 'comfortable',
         view: 'all'
       },
       ...ui

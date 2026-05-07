@@ -84,6 +84,9 @@ test('map style toolbar applies theme and default shape to new nodes', async () 
 
   const root = window.getByTestId('node-n1');
   await expect(root).toHaveCSS('background-color', 'rgb(16, 32, 39)');
+  await expect(window.getByTestId('outline-panel')).toHaveCSS('background-color', 'rgb(209, 213, 219)');
+  await window.getByTestId('task-toggle').evaluate((button: HTMLElement) => button.click());
+  await expect(window.getByTestId('task-panel')).toHaveCSS('background-color', 'rgb(209, 213, 219)');
   await root.click();
   await window.keyboard.press('Tab');
   await window.keyboard.press('Escape');

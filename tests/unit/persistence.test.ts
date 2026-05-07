@@ -50,7 +50,6 @@ describe('qflow persistence helpers', () => {
         visibleColumnKeys: ['task', 'priority', 'due'],
         columnWidths: { task: 240, due: 160 },
         expanded: true,
-        density: 'compact',
         view: 'upcoming'
       }
     });
@@ -71,7 +70,6 @@ describe('qflow persistence helpers', () => {
       visibleColumnKeys: ['task', 'priority', 'due'],
       columnWidths: { task: 240, due: 160 },
       expanded: true,
-      density: 'compact',
       view: 'upcoming'
     });
   });
@@ -102,7 +100,6 @@ describe('qflow persistence helpers', () => {
       visibleColumnKeys: ['task', 'notes'],
       columnWidths: { task: 72, notes: 520 },
       expanded: false,
-      density: 'comfortable',
       view: 'all'
     });
   });

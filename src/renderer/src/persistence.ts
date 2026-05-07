@@ -6,13 +6,11 @@ import {
   DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
   getVisibleTaskTableColumns,
   TASK_TABLE_COLUMNS,
-  TASK_TABLE_DENSITY_OPTIONS,
   TASK_TABLE_DUE_FILTERS,
   type TaskTableView,
   sanitizeTaskTableColumnWidths,
   type TaskTableColumnKey,
   type TaskTableColumnWidthMap,
-  type TaskTableDensity,
   type TaskTableFilters,
   type TaskTableSort
 } from './task-table';
@@ -30,7 +28,6 @@ export type PersistedTaskTableUiState = {
   visibleColumnKeys: TaskTableColumnKey[];
   columnWidths: TaskTableColumnWidthMap;
   expanded: boolean;
-  density: TaskTableDensity;
   view: TaskTableView;
 };
 
@@ -82,7 +79,6 @@ export function defaultTaskTableUiState(): PersistedTaskTableUiState {
     visibleColumnKeys: [...DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS],
     columnWidths: {},
     expanded: false,
-    density: 'comfortable',
     view: 'all'
   };
 }
@@ -179,7 +175,6 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
   const assignee =
     typeof rawFilters.assignee === 'string' && rawFilters.assignee.trim() ? rawFilters.assignee.trim() : undefined;
   const due = TASK_TABLE_DUE_FILTERS.find(option => option.key === rawFilters.due)?.key;
-  const density = TASK_TABLE_DENSITY_OPTIONS.find(option => option.key === value.density)?.key || 'comfortable';
   const view =
     value.view === 'all' ||
     value.view === 'overdue' ||
@@ -201,7 +196,6 @@ export function sanitizeTaskTableUiState(value: unknown): PersistedTaskTableUiSt
     visibleColumnKeys,
     columnWidths: sanitizeTaskTableColumnWidths(value.columnWidths),
     expanded: value.expanded === true,
-    density,
     view
   };
 }

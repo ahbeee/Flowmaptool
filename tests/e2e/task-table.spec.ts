@@ -328,12 +328,12 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
   await first.window.getByTestId('task-filter-tag').selectOption({ label: 'Pending' });
   await first.window.getByTestId('task-filter-query').fill('Root');
   await first.window.getByTestId('task-filter-due').selectOption('none');
-  await first.window.getByTestId('task-density').selectOption('compact');
   await first.window.getByTestId('task-sort-due').click();
   await first.window.getByTestId('task-sort-due').click();
   await first.window.getByTestId('task-expand-toggle').click();
   await expect(first.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
-  await expect(first.window.locator('.task-table')).toHaveClass(/task-table-compact/);
+  await expect(first.window.locator('.canvas-workspace')).not.toHaveClass(/canvas-workspace-toolbar-visible/);
+  await expect(first.window.locator('.right-toolbar-rail')).toHaveCount(0);
 
   await triggerMenuAction(first.app, 'file:save');
   await expect(first.window.getByTestId('file-status')).toContainText('Saved');
@@ -346,7 +346,6 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
     visibleColumnKeys: ['task', 'status', 'priority', 'progress', 'assignee', 'start', 'due', 'tag', 'notes'],
     columnWidths: {},
     expanded: true,
-    density: 'compact',
     view: 'all'
   });
 
@@ -356,12 +355,12 @@ test('task table preferences persist after save and reopen', async ({}, testInfo
 
   const reopenedPanel = second.window.getByTestId('task-panel');
   await expect(second.window.locator('.canvas-workspace')).toHaveClass(/canvas-workspace-task-expanded/);
+  await expect(second.window.locator('.right-toolbar-rail')).toHaveCount(0);
   await expect(second.window.getByTestId('task-filter-tag')).toHaveValue('tag-pink');
   await expect(second.window.getByTestId('task-filter-query')).toHaveValue('Root');
   await expect(second.window.getByTestId('task-filter-due')).toHaveValue('none');
-  await expect(second.window.getByTestId('task-density')).toHaveValue('compact');
+  await expect(second.window.getByTestId('task-density')).toHaveCount(0);
   await expect(second.window.getByTestId('task-view-all')).toHaveAttribute('aria-selected', 'true');
-  await expect(reopenedPanel.locator('.task-table')).toHaveClass(/task-table-compact/);
   await expect(reopenedPanel.locator('th').filter({ hasText: 'Category' })).toHaveCount(0);
   await expect(second.window.getByTestId('task-sort-due').locator('xpath=ancestor::th')).toHaveAttribute(
     'aria-sort',

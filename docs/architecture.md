@@ -50,11 +50,11 @@ Renderer-only pure helpers live under `src/renderer/src`:
 - `outline.ts`: outline tree construction and checklist completion target derivation.
 - `outline-panel.tsx`: Outline tree rendering, checklist controls, collapsed state display, and node selection entry points. It receives tree data and callbacks from `App.tsx`.
 - `panel-resizer.tsx`: accessible side panel resize separator rendering. Resize math and state ownership stay in `App.tsx` and `side-panel-resize.ts`.
-- `task-table.ts`: Task Workbench row derivation from tagged outline nodes, labels, views, columns, visibility, filtering, sorting, density options, and due-date status helpers.
+- `task-table.ts`: Task Workbench row derivation from tagged outline nodes, labels, views, columns, visibility, filtering, sorting, and due-date status helpers.
 - `task-table-panel.tsx`: Task Workbench rendering, quick capture, bulk actions, detail editing, and table-specific controls. It receives rows, UI preferences, and callbacks from `App.tsx`; document mutation and tab state ownership stay in `App.tsx`.
 - `toolbar-panel.tsx`: right-side Map, Node, and Line toolbar rendering. It receives style summaries, settings, and mutation callbacks from `App.tsx`.
 
-Task Workbench UI preferences are persisted in the `.qflow` wrapper `ui.taskTable` object, not in the core `FlowDoc`. This currently includes view, sort, filters, visible columns, column widths, expanded mode, and density. Keep future table-only preferences in that wrapper unless they become durable task metadata.
+Task Workbench UI preferences are persisted in the `.qflow` wrapper `ui.taskTable` object, not in the core `FlowDoc`. This currently includes view, sort, filters, visible columns, column widths, and expanded mode. Keep future table-only preferences in that wrapper unless they become durable task metadata.
 
 New pure renderer logic should usually be extracted into small modules like these before adding more code to `App.tsx`.
 

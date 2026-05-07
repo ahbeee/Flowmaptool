@@ -13,12 +13,10 @@ import {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_TABLE_COLUMNS,
-  TASK_TABLE_DENSITY_OPTIONS,
   TASK_TABLE_DUE_FILTERS,
   type TaskTableColumn,
   type TaskTableColumnKey,
   type TaskTableColumnWidthMap,
-  type TaskTableDensity,
   type TaskTableFilters,
   type TaskTableRow,
   type TaskTableSort,
@@ -49,7 +47,6 @@ function formatTaskCount(count: number): string {
 type TaskTablePanelProps = {
   expanded: boolean;
   view: TaskTableView;
-  density: TaskTableDensity;
   filters: TaskTableFilters;
   sort: TaskTableSort | undefined;
   rows: TaskTableRow[];
@@ -66,7 +63,6 @@ type TaskTablePanelProps = {
   onToggleSort: (key: TaskTableSortKey) => void;
   onToggleColumn: (key: TaskTableColumnKey) => void;
   onSetColumnWidths: (widths: TaskTableColumnWidthMap) => void;
-  onSetDensity: (density: TaskTableDensity) => void;
   onSetView: (view: TaskTableView) => void;
   onToggleExpanded: () => void;
   onHide: () => void;
@@ -82,7 +78,6 @@ type TaskTablePanelProps = {
 export function TaskTablePanel({
   expanded,
   view,
-  density,
   filters,
   sort,
   rows,
@@ -99,7 +94,6 @@ export function TaskTablePanel({
   onToggleSort,
   onToggleColumn,
   onSetColumnWidths,
-  onSetDensity,
   onSetView,
   onToggleExpanded,
   onHide,
@@ -241,20 +235,6 @@ export function TaskTablePanel({
               })}
             </div>
           </details>
-          <select
-            className="outline-panel-action task-density-select"
-            data-testid="task-density"
-            value={density}
-            onChange={event => onSetDensity(event.currentTarget.value as TaskTableDensity)}
-            aria-label="Task table density"
-            title="Task table density"
-          >
-            {TASK_TABLE_DENSITY_OPTIONS.map(option => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
           <button
             type="button"
             className="outline-panel-action"
@@ -426,7 +406,6 @@ export function TaskTablePanel({
         </div>
       </div>
       <TaskTableBody
-        density={density}
         filters={filters}
         sort={sort}
         rows={rows}
@@ -463,7 +442,6 @@ export function TaskTablePanel({
 }
 
 function TaskTableBody({
-  density,
   filters,
   sort,
   rows,
@@ -490,7 +468,6 @@ function TaskTableBody({
   | 'expanded'
   | 'view'
   | 'onToggleColumn'
-  | 'onSetDensity'
   | 'onSetView'
   | 'onToggleExpanded'
   | 'onHide'
@@ -658,7 +635,7 @@ function TaskTableBody({
         ) : (
           <table
             ref={tableRef}
-            className={`task-table task-table-${density}`}
+            className="task-table"
             style={tableWidth ? { width: tableWidth, minWidth: tableWidth } : undefined}
           >
             <colgroup>

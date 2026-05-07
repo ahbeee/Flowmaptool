@@ -156,7 +156,6 @@ import {
   clampTaskTableColumnWidth,
   type TaskTableColumnKey,
   type TaskTableColumnWidthMap,
-  type TaskTableDensity,
   type TaskTableSortKey,
   type TaskTableView
 } from './task-table';
@@ -1341,26 +1340,17 @@ export function App() {
 
   const setTaskTableExpanded = React.useCallback(
     (expanded: boolean | ((current: boolean) => boolean)) => {
-      updateActiveTab(tab => ({
-        ...tab,
-        taskTable: {
-          ...tab.taskTable,
-          expanded: typeof expanded === 'function' ? expanded(tab.taskTable.expanded) : expanded
-        }
-      }));
-    },
-    [updateActiveTab]
-  );
-
-  const setTaskTableDensity = React.useCallback(
-    (density: TaskTableDensity) => {
-      updateActiveTab(tab => ({
-        ...tab,
-        taskTable: {
-          ...tab.taskTable,
-          density
-        }
-      }));
+      updateActiveTab(tab => {
+        const nextExpanded = typeof expanded === 'function' ? expanded(tab.taskTable.expanded) : expanded;
+        return {
+          ...tab,
+          toolbarVisible: nextExpanded ? false : tab.toolbarVisible,
+          taskTable: {
+            ...tab.taskTable,
+            expanded: nextExpanded
+          }
+        };
+      });
     },
     [updateActiveTab]
   );
@@ -2300,7 +2290,14 @@ export function App() {
     .filter(Boolean)
     .join(' ');
   const workspaceStyle = {
-    ['--side-panel-width' as string]: `${sidePanelWidth}px`
+    ['--side-panel-width' as string]: `${sidePanelWidth}px`,
+    ['--flow-panel-surface' as string]: activeTheme.nodeBg,
+    ['--flow-panel-canvas' as string]: activeTheme.canvas,
+    ['--flow-panel-text' as string]: activeTheme.nodeText,
+    ['--flow-panel-muted' as string]: activeTheme.edge,
+    ['--flow-panel-accent' as string]: activeTheme.edge,
+    ['--flow-panel-selected' as string]: activeTheme.rootBg,
+    ['--flow-panel-selected-text' as string]: activeTheme.rootText
   } as React.CSSProperties;
   const toggleOutlinePanel = React.useCallback(() => {
     setTaskTableVisible(false);
@@ -2341,7 +2338,6 @@ export function App() {
               <TaskTablePanel
                 expanded={taskTableExpanded}
                 view={taskTableView}
-                density={activeTab.taskTable.density}
                 filters={activeTab.taskTable.filters}
                 sort={taskTableSort}
                 rows={taskTableRows}
@@ -2358,7 +2354,6 @@ export function App() {
                 onToggleSort={toggleTaskTableSort}
                 onToggleColumn={toggleTaskTableColumn}
                 onSetColumnWidths={setTaskTableColumnWidths}
-                onSetDensity={setTaskTableDensity}
                 onSetView={setTaskTableView}
                 onToggleExpanded={() => setTaskTableExpanded(prev => !prev)}
                 onHide={() => {
