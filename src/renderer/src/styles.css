@@ -393,8 +393,8 @@ select {
 }
 
 .task-bulk-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto minmax(112px, auto);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 0 2px 8px;
@@ -403,8 +403,14 @@ select {
   font-weight: 700;
 }
 
+.task-bulk-actions > span {
+  flex: 1 1 100%;
+}
+
 .task-bulk-actions button,
+.task-bulk-actions input,
 .task-bulk-actions select {
+  flex: 0 0 auto;
   min-height: 24px;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
@@ -419,6 +425,7 @@ select {
 }
 
 .task-bulk-actions button:disabled,
+.task-bulk-actions input:disabled,
 .task-bulk-actions select:disabled {
   color: #94a3b8;
   cursor: default;
@@ -426,6 +433,19 @@ select {
 
 .task-bulk-actions button:not(:disabled):hover {
   background: #f8fafc;
+}
+
+.task-bulk-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  flex: 1 1 145px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.task-bulk-field input {
+  width: 100%;
+  min-width: 0;
 }
 
 .task-table-filter-row {

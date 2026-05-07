@@ -1242,29 +1242,32 @@ export function App() {
     [updateTaskTableField]
   );
 
+  const updateTaskTableFields = React.useCallback(
+    (nodeIds: NodeId[], patch: Partial<NodeTask>) => {
+      if (nodeIds.length === 0) return;
+      commitDoc(prev => updateNodeTask(prev, nodeIds, { enabled: true, ...patch }));
+    },
+    [commitDoc]
+  );
+
   const updateTaskTableStatuses = React.useCallback(
     (nodeIds: NodeId[], status: TaskStatus) => {
       if (nodeIds.length === 0) return;
-      commitDoc(prev =>
-        updateNodeTask(
-          prev,
-          nodeIds,
-          status === 'done'
-            ? {
-                enabled: true,
-                status,
-                done: true,
-                progress: 100
-              }
-            : {
-                enabled: true,
-                status,
-                done: false
-              }
-        )
+      updateTaskTableFields(
+        nodeIds,
+        status === 'done'
+          ? {
+              status,
+              done: true,
+              progress: 100
+            }
+          : {
+              status,
+              done: false
+            }
       );
     },
-    [commitDoc]
+    [updateTaskTableFields]
   );
 
   const quickCaptureTask = React.useCallback(
@@ -2364,6 +2367,7 @@ export function App() {
                 }}
                 onSelectNode={selectOutlineNode}
                 onUpdateTaskField={updateTaskTableField}
+                onUpdateTaskFields={updateTaskTableFields}
                 onUpdateTaskStatus={updateTaskTableStatus}
                 onUpdateTaskStatuses={updateTaskTableStatuses}
                 onQuickCapture={quickCaptureTask}

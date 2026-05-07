@@ -59,6 +59,7 @@ type TaskTablePanelProps = {
   onHide: () => void;
   onSelectNode: (nodeId: NodeId) => void;
   onUpdateTaskField: (nodeId: NodeId, patch: Partial<NodeTask>) => void;
+  onUpdateTaskFields: (nodeIds: NodeId[], patch: Partial<NodeTask>) => void;
   onUpdateTaskStatus: (nodeId: NodeId, status: TaskStatus) => void;
   onUpdateTaskStatuses: (nodeIds: NodeId[], status: TaskStatus) => void;
   onQuickCapture: (label: string) => void;
@@ -91,12 +92,15 @@ export function TaskTablePanel({
   onHide,
   onSelectNode,
   onUpdateTaskField,
+  onUpdateTaskFields,
   onUpdateTaskStatus,
   onUpdateTaskStatuses,
   onQuickCapture,
   selectedNodeId
 }: TaskTablePanelProps) {
   const [quickCaptureLabel, setQuickCaptureLabel] = React.useState('');
+  const [bulkAssignee, setBulkAssignee] = React.useState('');
+  const [bulkDueDate, setBulkDueDate] = React.useState('');
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<NodeId>>(() => new Set());
   const selectedRow = sourceRows.find(row => row.node.id === selectedNodeId) || rows[0];
   const selectedTaskCount = selectedTaskIds.size;
@@ -147,6 +151,14 @@ export function TaskTablePanel({
   const applyBulkStatus = (status: TaskStatus) => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskStatuses([...selectedTaskIds], status);
+  };
+  const applyBulkAssignee = () => {
+    if (selectedTaskIds.size === 0) return;
+    onUpdateTaskFields([...selectedTaskIds], { assignee: bulkAssignee.trim() || undefined });
+  };
+  const applyBulkDueDate = () => {
+    if (selectedTaskIds.size === 0) return;
+    onUpdateTaskFields([...selectedTaskIds], { dueDate: bulkDueDate || undefined });
   };
 
   return (
@@ -275,6 +287,42 @@ export function TaskTablePanel({
             </option>
           ))}
         </select>
+        <div className="task-bulk-field">
+          <input
+            data-testid="task-bulk-assignee"
+            value={bulkAssignee}
+            onChange={event => setBulkAssignee(event.currentTarget.value)}
+            placeholder="Assignee"
+            aria-label="Bulk assignee"
+            disabled={selectedTaskCount === 0}
+          />
+          <button
+            type="button"
+            data-testid="task-apply-assignee"
+            onClick={applyBulkAssignee}
+            disabled={selectedTaskCount === 0}
+          >
+            Apply
+          </button>
+        </div>
+        <div className="task-bulk-field">
+          <input
+            type="date"
+            data-testid="task-bulk-due"
+            value={bulkDueDate}
+            onChange={event => setBulkDueDate(event.currentTarget.value)}
+            aria-label="Bulk due date"
+            disabled={selectedTaskCount === 0}
+          />
+          <button
+            type="button"
+            data-testid="task-apply-due"
+            onClick={applyBulkDueDate}
+            disabled={selectedTaskCount === 0}
+          >
+            Apply
+          </button>
+        </div>
       </div>
       <TaskTableBody
         density={density}
@@ -344,6 +392,7 @@ function TaskTableBody({
   | 'onToggleExpanded'
   | 'onHide'
   | 'onQuickCapture'
+  | 'onUpdateTaskFields'
   | 'onUpdateTaskStatuses'
   | 'selectedNodeId'
 > & {

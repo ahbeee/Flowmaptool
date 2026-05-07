@@ -110,8 +110,20 @@ test('task workbench bulk updates selected visible tasks', async () => {
   await window.getByTestId('task-bulk-status').selectOption('done');
   await expect(window.getByTestId('task-row-n2')).toHaveClass(/task-row-status-done/);
   await expect(window.getByTestId('task-row-n2').locator('select').first()).toHaveValue('done');
+  await window.getByTestId('task-bulk-assignee').fill('Kai');
+  await window.getByTestId('task-apply-assignee').click();
+  await window.getByTestId('task-bulk-due').fill(dateKeyFromToday(2));
+  await window.getByTestId('task-apply-due').click();
+  await expect(window.getByTestId('task-row-n2').locator('input').nth(2)).toHaveValue('Kai');
+  await expect(window.getByTestId('task-row-n2').locator('input').nth(4)).toHaveValue(dateKeyFromToday(2));
 
   await window.getByTestId('task-filter-query').fill('');
+  await expect(window.getByTestId('task-row-n3').locator('input').nth(2)).toHaveValue('');
+  await expect(window.getByTestId('task-row-n3').locator('input').nth(4)).toHaveValue('');
+  await window.getByTestId('task-filter-assignee').selectOption('Kai');
+  await expect(panel.locator('tbody tr')).toHaveCount(1);
+  await expect(panel.locator('tbody tr').first()).toContainText('Review contract');
+  await window.getByTestId('task-filter-assignee').selectOption('');
   await window.getByTestId('task-view-done').click();
   await expect(panel.locator('tbody tr')).toHaveCount(1);
   await expect(panel.locator('tbody tr').first()).toContainText('Review contract');
