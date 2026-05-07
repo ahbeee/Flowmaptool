@@ -179,6 +179,10 @@ export function TaskTablePanel({
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskStatuses([...selectedTaskIds], status);
   };
+  const applyBulkPriority = (priority: TaskPriority) => {
+    if (selectedTaskIds.size === 0) return;
+    onUpdateTaskFields([...selectedTaskIds], { priority });
+  };
   const applyBulkAssignee = () => {
     if (selectedTaskIds.size === 0) return;
     onUpdateTaskFields([...selectedTaskIds], { assignee: bulkAssignee.trim() || undefined });
@@ -317,6 +321,24 @@ export function TaskTablePanel({
           {TASK_STATUSES.map(option => (
             <option key={option} value={option}>
               {TASK_STATUS_LABELS[option]}
+            </option>
+          ))}
+        </select>
+        <select
+          data-testid="task-bulk-priority"
+          value=""
+          onChange={event => {
+            const priority = event.currentTarget.value as TaskPriority;
+            if (priority) applyBulkPriority(priority);
+            event.currentTarget.value = '';
+          }}
+          disabled={selectedTaskCount === 0}
+          aria-label="Set selected task priority"
+        >
+          <option value="">Set priority</option>
+          {TASK_PRIORITIES.map(priority => (
+            <option key={priority} value={priority}>
+              {TASK_PRIORITY_LABELS[priority]}
             </option>
           ))}
         </select>
