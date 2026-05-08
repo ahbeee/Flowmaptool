@@ -271,6 +271,7 @@ export function OutlinePanel({
             matchedNodeIds={filteredOutline.matchedNodeIds}
             selectedAncestorNodeIds={selectedAncestorNodeIds}
             editingNode={editingNode}
+            checklistMode={mode === 'checklist'}
             searchActive={hasQuery}
             selectedNodeIds={selectedNodeIds}
             todayKey={todayKey}
@@ -356,6 +357,7 @@ type OutlineNodesProps = Omit<
   matchedNodeIds: Set<NodeId>;
   selectedAncestorNodeIds: Set<NodeId>;
   editingNode: { nodeId: NodeId; label: string } | null;
+  checklistMode: boolean;
   searchActive: boolean;
   depth?: number;
   todayKey: string;
@@ -374,6 +376,7 @@ function OutlineNodes({
   matchedNodeIds,
   selectedAncestorNodeIds,
   editingNode,
+  checklistMode,
   searchActive,
   selectedNodeIds,
   todayKey,
@@ -404,8 +407,10 @@ function OutlineNodes({
     const checklistTargets = checklistTargetsByNodeId.get(item.node.id) || [];
     const checkedTargetCount = checklistTargets.filter(isChecklistNodeChecked).length;
     const canCheck = checklistTargets.length > 0;
-    const checked = canCheck && checkedTargetCount === checklistTargets.length;
-    const indeterminate = canCheck && checkedTargetCount > 0 && checkedTargetCount < checklistTargets.length;
+    const showChecklistControls = checklistMode && canCheck;
+    const checked = showChecklistControls && checkedTargetCount === checklistTargets.length;
+    const indeterminate =
+      showChecklistControls && checkedTargetCount > 0 && checkedTargetCount < checklistTargets.length;
     const nodeButtonClassName = [
       'outline-node-button',
       selected ? 'outline-node-selected' : '',
@@ -432,7 +437,7 @@ function OutlineNodes({
           >
             {hasChildren ? (collapsed ? '▸' : '▾') : ''}
           </button>
-          {canCheck ? (
+          {showChecklistControls ? (
             <input
               ref={input => {
                 if (input) input.indeterminate = indeterminate;
@@ -446,9 +451,7 @@ function OutlineNodes({
               title={checked ? 'Mark related tasks not done' : 'Mark related tasks done'}
               aria-label={`${checked ? 'Mark related tasks not done' : 'Mark related tasks done'}: ${displayLabel}`}
             />
-          ) : (
-            <span className="outline-check-placeholder" aria-hidden="true" />
-          )}
+          ) : null}
           {editing ? (
             <input
               className="outline-node-edit-input"
@@ -502,7 +505,7 @@ function OutlineNodes({
                     {dueLabel}
                   </span>
                 ) : null}
-                {canCheck ? (
+                {checklistMode && canCheck ? (
                   <span className="outline-node-badge outline-node-progress-badge">
                     {checkedTargetCount}/{checklistTargets.length}
                   </span>
@@ -520,6 +523,7 @@ function OutlineNodes({
             matchedNodeIds={matchedNodeIds}
             selectedAncestorNodeIds={selectedAncestorNodeIds}
             editingNode={editingNode}
+            checklistMode={checklistMode}
             searchActive={searchActive}
             selectedNodeIds={selectedNodeIds}
             todayKey={todayKey}

@@ -119,6 +119,8 @@ test('outline can focus checklist branches separately from the full hierarchy', 
   await triggerMenuAction(app, 'file:open');
   await expect(window.getByTestId('outline-mode-outline')).toHaveAttribute('aria-selected', 'true');
   await expect(window.getByTestId('outline-node-n4')).toBeVisible();
+  await expect(window.getByTestId('outline-check-n2')).toHaveCount(0);
+  await expect(window.getByTestId('outline-check-n3')).toHaveCount(0);
 
   await window.getByTestId('outline-mode-checklist').click();
   await expect(window.getByTestId('outline-mode-checklist')).toHaveAttribute('aria-selected', 'true');
@@ -127,6 +129,7 @@ test('outline can focus checklist branches separately from the full hierarchy', 
   await expect(window.getByTestId('outline-node-n3')).toBeVisible();
   await expect(window.getByTestId('outline-node-n4')).toHaveCount(0);
   await expect(window.getByTestId('outline-check-n2')).toBeVisible();
+  await expect(window.getByTestId('outline-check-n3')).toBeVisible();
   await expect(window.getByTestId('outline-checklist-view-all-count')).toContainText('1');
   await expect(window.getByTestId('outline-checklist-view-open-count')).toContainText('1');
   await expect(window.getByTestId('outline-checklist-view-done-count')).toContainText('0');
@@ -148,6 +151,7 @@ test('outline can focus checklist branches separately from the full hierarchy', 
   await window.getByTestId('outline-mode-outline').click();
   await expect(window.getByTestId('outline-search')).toHaveValue('second');
   await expect(window.getByTestId('outline-node-n3')).toBeVisible();
+  await expect(window.getByTestId('outline-check-n3')).toHaveCount(0);
 
   await app.close();
 });
@@ -207,6 +211,8 @@ test('outline supports inline label editing and context metadata updates', async
   await window.getByTestId('outline-context-status').selectOption('next');
   await expect(window.getByTestId('outline-node-n4')).toContainText('Pending');
   await expect(window.getByTestId('outline-node-n4')).toContainText('Next');
+  await expect(window.getByTestId('outline-check-n4')).toHaveCount(0);
+  await window.getByTestId('outline-mode-checklist').click();
   await expect(window.getByTestId('outline-check-n4')).toBeVisible();
 
   await app.close();
@@ -217,6 +223,8 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
   const filePath = first.filePath;
 
   await triggerMenuAction(first.app, 'file:open');
+  await expect(first.window.getByTestId('outline-check-n1')).toHaveCount(0);
+  await first.window.getByTestId('outline-mode-checklist').click();
   await expect(first.window.getByTestId('outline-check-n1')).toBeVisible();
   await expect(first.window.getByTestId('outline-check-n2')).toBeVisible();
   await expect(first.window.getByTestId('outline-node-n3')).toContainText('Second task');
@@ -242,6 +250,7 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
 
   const second = await launchWithOpenPath(filePath);
   await triggerMenuAction(second.app, 'file:open');
+  await second.window.getByTestId('outline-mode-checklist').click();
   await expect(second.window.getByTestId('outline-check-n2')).toBeChecked();
   await expect(second.window.getByTestId('outline-check-n3')).toBeChecked();
   await expect(second.window.getByTestId('outline-node-n2')).toHaveClass(/outline-node-complete/);
