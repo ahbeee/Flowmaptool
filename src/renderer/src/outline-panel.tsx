@@ -11,12 +11,19 @@ import {
   type OutlineMode,
   type OutlineTreeNode
 } from './outline';
-import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS } from './task-table';
+import {
+  TASK_PRIORITIES,
+  TASK_PRIORITY_LABELS,
+  TASK_STATUSES,
+  TASK_STATUS_LABELS,
+  getTaskDueRelativeLabel
+} from './task-table';
 
 type OutlinePanelProps = {
   outlineTree: OutlineTreeNode[];
   collapsedNodeIds: Set<NodeId>;
   selectedNodeIds: Set<NodeId>;
+  todayKey: string;
   tagOptions: FlowTag[];
   tagById: Map<string, FlowTag>;
   checklistTargetsByNodeId: Map<NodeId, NodeId[]>;
@@ -36,6 +43,7 @@ export function OutlinePanel({
   outlineTree,
   collapsedNodeIds,
   selectedNodeIds,
+  todayKey,
   tagOptions,
   tagById,
   checklistTargetsByNodeId,
@@ -265,6 +273,7 @@ export function OutlinePanel({
             editingNode={editingNode}
             searchActive={hasQuery}
             selectedNodeIds={selectedNodeIds}
+            todayKey={todayKey}
             tagById={tagById}
             checklistTargetsByNodeId={checklistTargetsByNodeId}
             isChecklistNodeChecked={isChecklistNodeChecked}
@@ -349,6 +358,7 @@ type OutlineNodesProps = Omit<
   editingNode: { nodeId: NodeId; label: string } | null;
   searchActive: boolean;
   depth?: number;
+  todayKey: string;
   onStartEditingNode: (nodeId: NodeId, label: string) => void;
   onSetEditingLabel: (label: string) => void;
   onCommitEditingNode: () => void;
@@ -366,6 +376,7 @@ function OutlineNodes({
   editingNode,
   searchActive,
   selectedNodeIds,
+  todayKey,
   tagById,
   checklistTargetsByNodeId,
   isChecklistNodeChecked,
@@ -389,6 +400,7 @@ function OutlineNodes({
     const tag = item.node.style?.tagId ? tagById.get(item.node.style.tagId) : undefined;
     const displayLabel = `${label}${tag ? ` [${tag.name}]` : ''}`;
     const task = item.node.task?.enabled ? item.node.task : undefined;
+    const dueLabel = getTaskDueRelativeLabel(task?.dueDate, todayKey);
     const checklistTargets = checklistTargetsByNodeId.get(item.node.id) || [];
     const checkedTargetCount = checklistTargets.filter(isChecklistNodeChecked).length;
     const canCheck = checklistTargets.length > 0;
@@ -485,8 +497,10 @@ function OutlineNodes({
                   </span>
                 ) : null}
                 {task?.assignee ? <span className="outline-node-badge">{task.assignee}</span> : null}
-                {task?.dueDate ? (
-                  <span className="outline-node-badge outline-node-due-badge">Due {task.dueDate}</span>
+                {task?.dueDate && dueLabel ? (
+                  <span className="outline-node-badge outline-node-due-badge" title={`Due ${task.dueDate}`}>
+                    {dueLabel}
+                  </span>
                 ) : null}
                 {canCheck ? (
                   <span className="outline-node-badge outline-node-progress-badge">
@@ -508,6 +522,7 @@ function OutlineNodes({
             editingNode={editingNode}
             searchActive={searchActive}
             selectedNodeIds={selectedNodeIds}
+            todayKey={todayKey}
             tagById={tagById}
             checklistTargetsByNodeId={checklistTargetsByNodeId}
             isChecklistNodeChecked={isChecklistNodeChecked}

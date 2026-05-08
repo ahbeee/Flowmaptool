@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { getTaskDueRelativeLabel, getTaskTableTodayKey } from '../../src/renderer/src/task-table';
 import { createDefaultDocFixture, launchApp, launchAppWithFixture, triggerMenuAction } from './helpers';
 
 async function launchWithOpenPath(filePath: string) {
@@ -46,6 +47,8 @@ function createChecklistFixture() {
     }
   });
 }
+
+const relativeFixtureDueLabel = getTaskDueRelativeLabel('2026-05-10', getTaskTableTodayKey());
 
 test('outline mirrors hierarchy and selection', async () => {
   const { app, window } = await launchApp();
@@ -221,7 +224,7 @@ test('outline checklist state persists after save and reopen', async ({}, testIn
   await expect(first.window.getByTestId('outline-node-n3')).toContainText('Next');
   await expect(first.window.getByTestId('outline-node-n3')).toContainText('High');
   await expect(first.window.getByTestId('outline-node-n3')).toContainText('Avery');
-  await expect(first.window.getByTestId('outline-node-n3')).toContainText('Due 2026-05-10');
+  await expect(first.window.getByTestId('outline-node-n3')).toContainText(relativeFixtureDueLabel || 'Due 2026-05-10');
   await expect(first.window.getByTestId('outline-check-n3')).toBeVisible();
   await expect(first.window.getByTestId('outline-check-n4')).toHaveCount(0);
   await first.window.getByTestId('outline-check-n2').check();

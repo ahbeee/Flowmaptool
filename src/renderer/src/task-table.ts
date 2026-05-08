@@ -249,6 +249,28 @@ export function addDaysToTaskDateKey(dateKey: string, days: number): string {
   return getTaskTableTodayKey(new Date(year, month - 1, day + days));
 }
 
+function taskDateKeyToUtcMs(dateKey: string): number {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+export function getTaskDueRelativeLabel(
+  dueDate: string | undefined,
+  todayKey = getTaskTableTodayKey()
+): string | undefined {
+  const normalizedDueDate = normalizeDateKey(dueDate);
+  const normalizedToday = normalizeDateKey(todayKey);
+  if (!normalizedDueDate || !normalizedToday) return undefined;
+
+  const daysUntilDue = Math.round(
+    (taskDateKeyToUtcMs(normalizedDueDate) - taskDateKeyToUtcMs(normalizedToday)) / 86_400_000
+  );
+  if (daysUntilDue < 0) return `Overdue ${Math.abs(daysUntilDue)}d`;
+  if (daysUntilDue === 0) return 'Today';
+  if (daysUntilDue === 1) return 'Tomorrow';
+  return `In ${daysUntilDue}d`;
+}
+
 export function getTaskTableDueStatus(
   dueDate: string | undefined,
   todayKey = getTaskTableTodayKey()

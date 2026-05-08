@@ -8,6 +8,7 @@ import {
   DEFAULT_VISIBLE_TASK_TABLE_COLUMN_KEYS,
   doesTaskTableRowMatchView,
   getTaskTableColumnWidth,
+  getTaskDueRelativeLabel,
   getNextTaskTableSort,
   getNextVisibleTaskTableColumnKeys,
   getTaskNodeLabel,
@@ -129,6 +130,11 @@ describe('task table helpers', () => {
   it('classifies due dates for task table status styling', () => {
     expect(addDaysToTaskDateKey('2026-05-04', 1)).toBe('2026-05-05');
     expect(addDaysToTaskDateKey('2026-12-31', 1)).toBe('2027-01-01');
+    expect(getTaskDueRelativeLabel('2026-05-03', '2026-05-04')).toBe('Overdue 1d');
+    expect(getTaskDueRelativeLabel('2026-05-04', '2026-05-04')).toBe('Today');
+    expect(getTaskDueRelativeLabel('2026-05-05', '2026-05-04')).toBe('Tomorrow');
+    expect(getTaskDueRelativeLabel('2026-05-11', '2026-05-04')).toBe('In 7d');
+    expect(getTaskDueRelativeLabel('bad', '2026-05-04')).toBeUndefined();
     expect(getTaskTableDueStatus('2026-05-03', '2026-05-04')).toBe('overdue');
     expect(getTaskTableDueStatus('2026-05-04', '2026-05-04')).toBe('today');
     expect(getTaskTableDueStatus('2026-05-05', '2026-05-04')).toBe('soon');

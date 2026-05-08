@@ -2395,6 +2395,7 @@ export function App() {
                 outlineTree={outlineTree}
                 collapsedNodeIds={collapsedOutlineNodeIds}
                 selectedNodeIds={selectedNodeIdSet}
+                todayKey={taskTableTodayKey}
                 tagOptions={doc.settings.tags}
                 tagById={tagById}
                 checklistTargetsByNodeId={outlineChecklistTargetsByNodeId}
