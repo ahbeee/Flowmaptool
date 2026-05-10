@@ -32,6 +32,7 @@ import {
   getLayoutSecondaryGap,
   layoutFlow,
   type LayoutDirection,
+  type LayoutSpacing,
   type NodeSize,
   type NodeSizeMap
 } from '@shared/layout';
@@ -102,6 +103,7 @@ import {
   planEdgeSegmentDragFinish,
   planEdgeSegmentDragMove
 } from './edge-route-dragging';
+import { adjustRouteForEndpointChange } from './edge-route-preservation';
 import { basename } from './export-utils';
 import { analyzeLayoutEdges, type LayoutEdgeAnalysis } from './graph-analysis';
 import {
@@ -145,7 +147,7 @@ import {
   type EdgeRoute,
   type EdgeRouteMap
 } from './persistence';
-import { pointInsideBox, segmentIntersectsBox, segmentsIntersect, type Point } from './routing-geometry';
+import { pointInsideBox, segmentIntersectsBox, segmentsIntersect, type NodeBox, type Point } from './routing-geometry';
 import {
   buildTaskTableRows,
   getNextVisibleTaskTableColumnKeys,
@@ -208,6 +210,148 @@ type DragPointerLikeEvent = {
   clientY: number;
   target?: EventTarget | null;
 };
+type DocumentLayoutSnapshot = {
+  nodeSizeMap: NodeSizeMap;
+  renderedPositionMap: Map<NodeId, LayoutPoint>;
+  layoutEdgeIds: Set<string>;
+  rootNodeIds: Set<NodeId>;
+  nodeBoxMap: Map<NodeId, NodeBox>;
+};
+
+function buildEstimatedNodeSizeMap(doc: FlowDoc): NodeSizeMap {
+  const sizes: NodeSizeMap = {};
+  for (const node of doc.nodes) {
+    sizes[node.id] = estimateNodeSize(node.label, node.style);
+  }
+  return sizes;
+}
+
+function getDocumentLayoutSpacing(doc: FlowDoc, direction: LayoutDirection): LayoutSpacing {
+  return direction === 'horizontal'
+    ? {
+        primary: doc.settings.spacing.horizontal,
+        secondary: doc.settings.spacing.vertical
+      }
+    : {
+        primary: doc.settings.spacing.vertical,
+        secondary: doc.settings.spacing.horizontal
+      };
+}
+
+function buildDocumentLayoutSnapshot(
+  doc: FlowDoc,
+  direction: LayoutDirection,
+  nodeOffsets: NodeOffsetMap
+): DocumentLayoutSnapshot {
+  const layoutEdgeAnalysis = analyzeLayoutEdges(doc);
+  const layoutDoc = { ...doc, edges: layoutEdgeAnalysis.layoutEdges };
+  const nodeSizeMap = buildEstimatedNodeSizeMap(doc);
+  const layout = layoutFlow(layoutDoc, direction, nodeSizeMap, getDocumentLayoutSpacing(doc, direction));
+  const renderedPositionMap = buildRenderedPositionMap(layout.positions, nodeOffsets);
+  return {
+    nodeSizeMap,
+    renderedPositionMap,
+    layoutEdgeIds: layoutEdgeAnalysis.layoutEdgeIds,
+    rootNodeIds: layoutEdgeAnalysis.rootNodeIds,
+    nodeBoxMap: buildNodeBoxMap(doc.nodes, renderedPositionMap, nodeSizeMap, DEFAULT_NODE_SIZE)
+  };
+}
+
+function collectChangedEdgeIds(beforeDoc: FlowDoc, afterDoc: FlowDoc): Set<string> {
+  const beforeEdges = new Map(beforeDoc.edges.map(edge => [edge.id, edge]));
+  const afterEdges = new Map(afterDoc.edges.map(edge => [edge.id, edge]));
+  const changedEdgeIds = new Set<string>();
+  const sameAnchors = (left: EdgeAnchors | undefined, right: EdgeAnchors | undefined) =>
+    JSON.stringify(left || null) === JSON.stringify(right || null);
+  for (const [edgeId, beforeEdge] of beforeEdges) {
+    const afterEdge = afterEdges.get(edgeId);
+    if (
+      !afterEdge ||
+      beforeEdge.from !== afterEdge.from ||
+      beforeEdge.to !== afterEdge.to ||
+      beforeEdge.role !== afterEdge.role ||
+      !sameAnchors(beforeEdge.anchors, afterEdge.anchors)
+    ) {
+      changedEdgeIds.add(edgeId);
+    }
+  }
+  for (const edgeId of afterEdges.keys()) {
+    if (!beforeEdges.has(edgeId)) changedEdgeIds.add(edgeId);
+  }
+  return changedEdgeIds;
+}
+
+function edgeIdentityMatches(beforeEdge: FlowEdge | undefined, afterEdge: FlowEdge | undefined): boolean {
+  if (!beforeEdge || !afterEdge) return false;
+  return (
+    beforeEdge.from === afterEdge.from &&
+    beforeEdge.to === afterEdge.to &&
+    beforeEdge.role === afterEdge.role &&
+    JSON.stringify(beforeEdge.anchors || null) === JSON.stringify(afterEdge.anchors || null)
+  );
+}
+
+function getSnapshotEdgeEndpoints(
+  edge: FlowEdge,
+  snapshot: DocumentLayoutSnapshot,
+  direction: LayoutDirection
+): { from: Point; to: Point } | null {
+  const fromPos = snapshot.renderedPositionMap.get(edge.from);
+  const toPos = snapshot.renderedPositionMap.get(edge.to);
+  if (!fromPos || !toPos) return null;
+  return getEdgeRenderEndpoints(
+    edge,
+    fromPos,
+    toPos,
+    direction,
+    snapshot.nodeSizeMap[edge.from] || DEFAULT_NODE_SIZE,
+    snapshot.nodeSizeMap[edge.to] || DEFAULT_NODE_SIZE,
+    snapshot.layoutEdgeIds.has(edge.id),
+    snapshot.rootNodeIds.has(edge.to)
+  );
+}
+
+function adjustEdgeUiForLayoutMutation<T extends TabDocument>(
+  host: T,
+  beforeDoc: FlowDoc,
+  afterDoc: FlowDoc,
+  direction: LayoutDirection,
+  nodeOffsets: NodeOffsetMap
+): T {
+  const routes = host.edgeRoutesByDirection[direction];
+  if (Object.keys(routes).length === 0) return host;
+  const beforeEdges = new Map(beforeDoc.edges.map(edge => [edge.id, edge]));
+  const afterEdges = new Map(afterDoc.edges.map(edge => [edge.id, edge]));
+  const beforeSnapshot = buildDocumentLayoutSnapshot(beforeDoc, direction, nodeOffsets);
+  const afterSnapshot = buildDocumentLayoutSnapshot(afterDoc, direction, nodeOffsets);
+  let changed = false;
+  const nextRoutes: EdgeRouteMap = { ...routes };
+
+  for (const [edgeId, route] of Object.entries(routes)) {
+    const beforeEdge = beforeEdges.get(edgeId);
+    const afterEdge = afterEdges.get(edgeId);
+    if (!edgeIdentityMatches(beforeEdge, afterEdge) || !beforeEdge || !afterEdge) continue;
+    const beforeEndpoints = getSnapshotEdgeEndpoints(beforeEdge, beforeSnapshot, direction);
+    const afterEndpoints = getSnapshotEdgeEndpoints(afterEdge, afterSnapshot, direction);
+    if (!beforeEndpoints || !afterEndpoints) continue;
+    const nextRoute = adjustRouteForEndpointChange(route, beforeEndpoints, afterEndpoints, direction);
+    if (nextRoute !== route) {
+      nextRoutes[edgeId] = nextRoute;
+      changed = true;
+    }
+  }
+
+  return changed
+    ? {
+        ...host,
+        edgeRoutesByDirection: {
+          ...host.edgeRoutesByDirection,
+          [direction]: nextRoutes
+        }
+      }
+    : host;
+}
+
 export function App() {
   const [tabs, setTabs] = React.useState<TabDocument[]>([createTabDocument('tab-1', 'Untitled 1')]);
   const [activeTabId, setActiveTabId] = React.useState('tab-1');
@@ -573,7 +717,16 @@ export function App() {
       updateActiveTab(tab => {
         const nextDoc = ensureDocHasNode(recipe(tab.history.present));
         const nextHistory = commitHistory(tab.history, nextDoc);
-        return clearEdgeUiForLayoutMutation(commitDocHistoryToHost(tab, nextHistory), tab.history.present, nextDoc);
+        const nextHost = adjustEdgeUiForLayoutMutation(
+          commitDocHistoryToHost(tab, nextHistory),
+          tab.history.present,
+          nextDoc,
+          tab.layoutDirection,
+          tab.nodeOffsetsByDirection[tab.layoutDirection]
+        );
+        return clearEdgeUiForLayoutMutation(nextHost, tab.history.present, nextDoc, {
+          affectedEdgeIds: collectChangedEdgeIds(tab.history.present, nextDoc)
+        });
       });
       setFileMessage('Edited');
     },

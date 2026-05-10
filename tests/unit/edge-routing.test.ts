@@ -10,6 +10,7 @@ import {
   routeForwardIncomingConverge,
   routeFromSnappedDraggedControl
 } from '../../src/renderer/src/edge-routing';
+import { routeObstacleCount } from '../../src/renderer/src/routing-geometry';
 import type { FlowEdge } from '../../src/shared/graph';
 
 const nodeSize = { width: 70, height: 28 };
@@ -59,7 +60,7 @@ describe('edge routing helpers', () => {
     expect(backRoute?.points.length).toBeGreaterThan(1);
   });
 
-  it('prefers the adjacent sibling gap for horizontal back edges', () => {
+  it('prefers an inner sibling gap and locally detours around the target node for horizontal back edges', () => {
     const boxes = new Map([
       ['root', { left: 0, right: 140, top: 260, bottom: 328 }],
       ['above', { left: 620, right: 900, top: 120, bottom: 188 }],
@@ -79,12 +80,10 @@ describe('edge routing helpers', () => {
       { from: 'back', to: 'front' }
     );
 
-    expect(route?.points).toEqual([
-      { x: 776, y: 238 },
-      { x: 776, y: 308 },
-      { x: -36, y: 308 },
-      { x: -36, y: 294 }
-    ]);
+    const points = [{ x: 740, y: 238 }, ...(route?.points || []), { x: 0, y: 294 }];
+
+    expect(routeObstacleCount(points, 'source', 'root', boxes)).toBe(0);
+    expect(route?.points.some(point => point.y > 272 && point.y < 328)).toBe(true);
   });
 
   it('snaps dragged route controls to clear lanes', () => {
@@ -108,6 +107,76 @@ describe('edge routing helpers', () => {
     expect(route.points).toHaveLength(4);
     expect(Math.abs(route.points[1].y)).toBeGreaterThan(10);
     expect(Math.abs(route.points[2].y)).toBeGreaterThan(10);
+  });
+
+  it('allows snapped routes through the midpoint of a zero-height vertical gap', () => {
+    const boxes = new Map([
+      ['from', { left: -70, right: 0, top: 86, bottom: 114 }],
+      ['to', { left: 300, right: 370, top: 86, bottom: 114 }],
+      ['above', { left: 100, right: 200, top: 50, bottom: 100 }],
+      ['below', { left: 100, right: 200, top: 100, bottom: 150 }]
+    ]);
+
+    const route = routeFromSnappedDraggedControl(
+      { x: 0, y: 100 },
+      { x: 300, y: 100 },
+      'horizontal',
+      { x: 150, y: 101 },
+      'from',
+      'to',
+      boxes,
+      { primary: 48, secondary: 0 }
+    );
+
+    expect(route.points.some(point => point.y === 100)).toBe(true);
+  });
+
+  it('scores endpoint body crossings so back edges can detour before entering a node', () => {
+    const boxes = new Map([
+      ['root', { left: 0, right: 100, top: 75, bottom: 125 }],
+      ['source', { left: 300, right: 370, top: 76, bottom: 104 }],
+      ['below', { left: 300, right: 370, top: 104, bottom: 132 }]
+    ]);
+
+    const route = computeAutoEdgeRoute(
+      { x: 370, y: 90 },
+      { x: 0, y: 100 },
+      'horizontal',
+      'source',
+      'root',
+      boxes,
+      0,
+      { primary: 48, secondary: 0 },
+      { from: 'back', to: 'front' }
+    );
+    const points = [{ x: 370, y: 90 }, ...(route?.points || []), { x: 0, y: 100 }];
+
+    expect(routeObstacleCount(points, 'source', 'root', boxes)).toBe(0);
+  });
+
+  it('lets dragged route controls keep an inner lane by adding local endpoint detours', () => {
+    const boxes = new Map([
+      ['root', { left: 0, right: 100, top: 75, bottom: 125 }],
+      ['source', { left: 300, right: 370, top: 76, bottom: 104 }],
+      ['below', { left: 300, right: 370, top: 104, bottom: 132 }]
+    ]);
+
+    const route = routeFromSnappedDraggedControl(
+      { x: 370, y: 90 },
+      { x: 0, y: 100 },
+      'horizontal',
+      { x: 180, y: 100 },
+      'source',
+      'root',
+      boxes,
+      { primary: 48, secondary: 0 },
+      { from: 'back', to: 'front' },
+      { source: 24, target: 24 }
+    );
+    const points = [{ x: 370, y: 90 }, ...route.points, { x: 0, y: 100 }];
+
+    expect(routeObstacleCount(points, 'source', 'root', boxes)).toBe(0);
+    expect(route.points.some(point => point.y === 100)).toBe(true);
   });
 
   it('identifies forward incoming manual edges and creates converge routes', () => {

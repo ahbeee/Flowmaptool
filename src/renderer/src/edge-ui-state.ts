@@ -1,4 +1,4 @@
-import type { FlowDoc, NodeId } from '@shared/graph';
+import type { EdgeId, FlowDoc, FlowEdge, NodeId } from '@shared/graph';
 import { redoHistory, undoHistory, type HistoryState } from '../../shared/history';
 import type { EdgeBendMap, EdgeBendsByDirection, EdgeRouteMap, EdgeRoutesByDirection } from './persistence';
 
@@ -17,6 +17,10 @@ export type InteractionHistory = {
 type EdgeUiHost = {
   edgeBendsByDirection: EdgeBendsByDirection;
   edgeRoutesByDirection: EdgeRoutesByDirection;
+};
+
+export type ClearEdgeUiForLayoutMutationOptions = {
+  affectedEdgeIds?: Set<EdgeId>;
 };
 
 type InteractionHost = EdgeUiHost & {
@@ -135,15 +139,22 @@ function docLayoutSignature(doc: FlowDoc): string {
       label: node.label,
       style: node.style
     })),
-    edges: doc.edges.map(edge => ({
-      id: edge.id,
-      from: edge.from,
-      to: edge.to,
-      role: edge.role,
-      anchors: edge.anchors
-    })),
     spacing: doc.settings.spacing
   });
+}
+
+function docEdgeSignature(doc: FlowDoc): Map<EdgeId, Pick<FlowEdge, 'from' | 'to' | 'role' | 'anchors'>> {
+  return new Map(
+    doc.edges.map(edge => [
+      edge.id,
+      {
+        from: edge.from,
+        to: edge.to,
+        role: edge.role,
+        anchors: edge.anchors
+      }
+    ])
+  );
 }
 
 function hasAnyEdgeUiState(snapshot: EdgeUiSnapshot): boolean {
@@ -155,14 +166,121 @@ function hasAnyEdgeUiState(snapshot: EdgeUiSnapshot): boolean {
   );
 }
 
-export function clearEdgeUiForLayoutMutation<T extends EdgeUiHost>(host: T, beforeDoc: FlowDoc, afterDoc: FlowDoc): T {
-  if (beforeDoc === afterDoc || docLayoutSignature(beforeDoc) === docLayoutSignature(afterDoc)) return host;
-  if (!hasAnyEdgeUiState(host)) return host;
+function clearAllEdgeUi<T extends EdgeUiHost>(host: T): T {
   return {
     ...host,
     edgeBendsByDirection: { horizontal: {}, vertical: {} },
     edgeRoutesByDirection: { horizontal: {}, vertical: {} }
   };
+}
+
+function pruneEdgeUiByIds<T extends EdgeUiHost>(host: T, removedEdgeIds: Set<EdgeId>): T {
+  if (removedEdgeIds.size === 0) return host;
+  let changed = false;
+  const pruneBends = (bends: EdgeBendMap): EdgeBendMap => {
+    const next = Object.fromEntries(Object.entries(bends).filter(([edgeId]) => !removedEdgeIds.has(edgeId)));
+    if (Object.keys(next).length !== Object.keys(bends).length) changed = true;
+    return next;
+  };
+  const pruneRoutes = (routes: EdgeRouteMap): EdgeRouteMap => {
+    const next = Object.fromEntries(Object.entries(routes).filter(([edgeId]) => !removedEdgeIds.has(edgeId)));
+    if (Object.keys(next).length !== Object.keys(routes).length) changed = true;
+    return next;
+  };
+  const nextHost = {
+    ...host,
+    edgeBendsByDirection: {
+      horizontal: pruneBends(host.edgeBendsByDirection.horizontal),
+      vertical: pruneBends(host.edgeBendsByDirection.vertical)
+    },
+    edgeRoutesByDirection: {
+      horizontal: pruneRoutes(host.edgeRoutesByDirection.horizontal),
+      vertical: pruneRoutes(host.edgeRoutesByDirection.vertical)
+    }
+  };
+  return changed ? nextHost : host;
+}
+
+export function clearEdgeUiForLayoutMutation<T extends EdgeUiHost>(
+  host: T,
+  beforeDoc: FlowDoc,
+  afterDoc: FlowDoc,
+  options: ClearEdgeUiForLayoutMutationOptions = {}
+): T {
+  if (beforeDoc === afterDoc) return host;
+  if (!hasAnyEdgeUiState(host)) return host;
+  if (docLayoutSignature(beforeDoc) !== docLayoutSignature(afterDoc) && options.affectedEdgeIds) {
+    return pruneEdgeUiByIds(host, options.affectedEdgeIds);
+  }
+  if (docLayoutSignature(beforeDoc) === docLayoutSignature(afterDoc)) {
+    const beforeEdges = docEdgeSignature(beforeDoc);
+    const afterEdges = docEdgeSignature(afterDoc);
+    const changedEdges = new Set<EdgeId>();
+    for (const [edgeId, beforeEdge] of beforeEdges) {
+      const afterEdge = afterEdges.get(edgeId);
+      if (
+        !afterEdge ||
+        beforeEdge.from !== afterEdge.from ||
+        beforeEdge.to !== afterEdge.to ||
+        beforeEdge.role !== afterEdge.role ||
+        JSON.stringify(beforeEdge.anchors || null) !== JSON.stringify(afterEdge.anchors || null)
+      ) {
+        changedEdges.add(edgeId);
+      }
+    }
+    for (const [edgeId, afterEdge] of afterEdges) {
+      const beforeEdge = beforeEdges.get(edgeId);
+      if (!beforeEdge) changedEdges.add(edgeId);
+    }
+    const hasLayoutEdgeChange = [...changedEdges].some(edgeId => {
+      const beforeEdge = beforeEdges.get(edgeId);
+      const afterEdge = afterEdges.get(edgeId);
+      if (!beforeEdge) return afterEdge?.role !== 'manual';
+      if (!afterEdge) return beforeEdge.role !== 'manual';
+      return beforeEdge.role !== 'manual' || afterEdge.role !== 'manual';
+    });
+    if (hasLayoutEdgeChange) {
+      return clearAllEdgeUi(host);
+    }
+
+    const keptEdgeIds = new Set<EdgeId>();
+    let changed = false;
+    for (const afterEdge of afterDoc.edges) {
+      const beforeEdge = beforeEdges.get(afterEdge.id);
+      if (
+        beforeEdge &&
+        beforeEdge.from === afterEdge.from &&
+        beforeEdge.to === afterEdge.to &&
+        beforeEdge.role === afterEdge.role &&
+        JSON.stringify(beforeEdge.anchors || null) === JSON.stringify(afterEdge.anchors || null)
+      ) {
+        keptEdgeIds.add(afterEdge.id);
+      }
+    }
+    const pruneBends = (bends: EdgeBendMap): EdgeBendMap => {
+      const next = Object.fromEntries(Object.entries(bends).filter(([edgeId]) => keptEdgeIds.has(edgeId)));
+      if (Object.keys(next).length !== Object.keys(bends).length) changed = true;
+      return next;
+    };
+    const pruneRoutes = (routes: EdgeRouteMap): EdgeRouteMap => {
+      const next = Object.fromEntries(Object.entries(routes).filter(([edgeId]) => keptEdgeIds.has(edgeId)));
+      if (Object.keys(next).length !== Object.keys(routes).length) changed = true;
+      return next;
+    };
+    const nextHost = {
+      ...host,
+      edgeBendsByDirection: {
+        horizontal: pruneBends(host.edgeBendsByDirection.horizontal),
+        vertical: pruneBends(host.edgeBendsByDirection.vertical)
+      },
+      edgeRoutesByDirection: {
+        horizontal: pruneRoutes(host.edgeRoutesByDirection.horizontal),
+        vertical: pruneRoutes(host.edgeRoutesByDirection.vertical)
+      }
+    };
+    return changed ? nextHost : host;
+  }
+  return clearAllEdgeUi(host);
 }
 
 export function pushInteractionPast(

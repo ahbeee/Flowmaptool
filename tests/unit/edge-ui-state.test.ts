@@ -114,6 +114,51 @@ describe('edge UI state helpers', () => {
     ).toBe(host);
   });
 
+  it('preserves unchanged edge UI when unrelated manual edges are added', () => {
+    const doc = createTwoEdgeDoc();
+    const host = {
+      edgeBendsByDirection: { horizontal: { e1: { x: 10, y: 20 } }, vertical: {} },
+      edgeRoutesByDirection: { horizontal: { e2: { points: [{ x: 30, y: 40 }] } }, vertical: {} }
+    };
+    const nextDoc = addEdge(doc, 'n3', 'n1', 'manual', { from: 'back', to: 'front' });
+
+    expect(clearEdgeUiForLayoutMutation(host, doc, nextDoc)).toBe(host);
+  });
+
+  it('prunes edge UI only for removed or changed edges when node layout is unchanged', () => {
+    const doc = addEdge(createTwoEdgeDoc(), 'n3', 'n1', 'manual', { from: 'back', to: 'front' });
+    const host = {
+      edgeBendsByDirection: { horizontal: { e1: { x: 10, y: 20 } }, vertical: {} },
+      edgeRoutesByDirection: { horizontal: { e3: { points: [{ x: 30, y: 40 }] } }, vertical: {} }
+    };
+    const nextDoc = {
+      ...doc,
+      edges: doc.edges.map(edge => (edge.id === 'e3' ? { ...edge, anchors: { from: 'front' as const } } : edge))
+    };
+
+    expect(clearEdgeUiForLayoutMutation(host, doc, nextDoc)).toEqual({
+      edgeBendsByDirection: { horizontal: { e1: { x: 10, y: 20 } }, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    });
+  });
+
+  it('prunes only affected edge UI for node layout mutations when affected edges are known', () => {
+    const doc = createTwoEdgeDoc();
+    const host = {
+      edgeBendsByDirection: { horizontal: { e1: { x: 10, y: 20 } }, vertical: {} },
+      edgeRoutesByDirection: { horizontal: { e2: { points: [{ x: 30, y: 40 }] } }, vertical: {} }
+    };
+    const nextDoc = {
+      ...doc,
+      nodes: doc.nodes.map(node => (node.id === 'n3' ? { ...node, label: 'A longer label' } : node))
+    };
+
+    expect(clearEdgeUiForLayoutMutation(host, doc, nextDoc, { affectedEdgeIds: new Set(['e2']) })).toEqual({
+      edgeBendsByDirection: { horizontal: { e1: { x: 10, y: 20 } }, vertical: {} },
+      edgeRoutesByDirection: { horizontal: {}, vertical: {} }
+    });
+  });
+
   it('keeps interaction history bounded', () => {
     expect(emptyInteractionHistory()).toEqual({ past: [], future: [] });
     const past = [{ kind: 'doc' as const }, { kind: 'doc' as const }];

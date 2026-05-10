@@ -102,15 +102,15 @@ export function segmentBoxDistance(from: Point, to: Point, box: NodeBox): number
 
 export function routeObstacleCount(
   points: Point[],
-  fromId: NodeId,
-  toId: NodeId,
+  _fromId: NodeId,
+  _toId: NodeId,
   nodeBoxes: Map<NodeId, NodeBox>
 ): number {
   let count = 0;
-  const obstacles = [...nodeBoxes.entries()].filter(([id]) => id !== fromId && id !== toId);
+  const obstacles = [...nodeBoxes.values()];
   for (let i = 0; i < points.length - 1; i++) {
-    for (const [, box] of obstacles) {
-      if (segmentIntersectsBox(points[i], points[i + 1], box)) count += 1;
+    for (const box of obstacles) {
+      if (segmentIntersectsBox(points[i], points[i + 1], box, -0.5)) count += 1;
     }
   }
   return count;

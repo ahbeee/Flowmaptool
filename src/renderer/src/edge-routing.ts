@@ -287,7 +287,7 @@ function getPreferredBackEdgeLanes(
       ? [box.top - secondaryClearance - lanePadding]
       : [box.left - secondaryClearance - lanePadding];
   }
-  const adjacentGapLanes = getAdjacentGapLanes(box, boxes, direction, 8);
+  const adjacentGapLanes = getAdjacentGapLanes(box, boxes, direction, 0);
   if (adjacentGapLanes.length > 0) {
     return adjacentGapLanes.sort((left, right) => Math.abs(left - referenceLane) - Math.abs(right - referenceLane));
   }
@@ -436,19 +436,45 @@ export function computeAutoEdgeRoute(
         ...sourcePreferredLanes,
         ...targetPreferredLanes
       ]);
-      const routes = laneCandidates.map(lane => ({
-        laneDistance:
-          Math.min(...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred))) * 2 +
-          Math.min(...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))),
-        points: [
-          from,
-          { x: sourceExitX, y: from.y },
-          { x: sourceExitX, y: lane },
-          { x: targetEntryX, y: lane },
-          { x: targetEntryX, y: to.y },
-          to
-        ]
-      }));
+      const directLane = from.y + (to.y - from.y) / 2;
+      const useEndpointPreferredLane = Math.abs(from.y - to.y) <= secondaryClearance;
+      const routes = laneCandidates.flatMap(lane => {
+        const laneDistance = useEndpointPreferredLane
+          ? Math.min(...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred))) * 2 +
+            Math.min(...targetPreferredLanes.map(preferred => Math.abs(lane - preferred)))
+          : Math.abs(lane - directLane);
+        const baseRoute = {
+          laneDistance,
+          points: [
+            from,
+            { x: sourceExitX, y: from.y },
+            { x: sourceExitX, y: lane },
+            { x: targetEntryX, y: lane },
+            { x: targetEntryX, y: to.y },
+            to
+          ]
+        };
+        if (!targetBox || lane < targetBox.top || lane > targetBox.bottom) return [baseRoute];
+
+        const targetSkirtX =
+          targetEntryX <= targetBox.left ? targetBox.right + primaryClearance : targetBox.left - primaryClearance;
+        return [
+          baseRoute,
+          ...[targetBox.top - secondaryClearance, targetBox.bottom + secondaryClearance].map(detourLane => ({
+            laneDistance,
+            points: [
+              from,
+              { x: sourceExitX, y: from.y },
+              { x: sourceExitX, y: lane },
+              { x: targetSkirtX, y: lane },
+              { x: targetSkirtX, y: detourLane },
+              { x: targetEntryX, y: detourLane },
+              { x: targetEntryX, y: to.y },
+              to
+            ]
+          }))
+        ];
+      });
       return chooseBestSnappedRoute(routes, fromId, toId, nodeBoxes);
     }
 
@@ -514,19 +540,45 @@ export function computeAutoEdgeRoute(
       ...sourcePreferredLanes,
       ...targetPreferredLanes
     ]);
-    const routes = laneCandidates.map(lane => ({
-      laneDistance:
-        Math.min(...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred))) * 2 +
-        Math.min(...targetPreferredLanes.map(preferred => Math.abs(lane - preferred))),
-      points: [
-        from,
-        { x: from.x, y: sourceExitY },
-        { x: lane, y: sourceExitY },
-        { x: lane, y: targetEntryY },
-        { x: to.x, y: targetEntryY },
-        to
-      ]
-    }));
+    const directLane = from.x + (to.x - from.x) / 2;
+    const useEndpointPreferredLane = Math.abs(from.x - to.x) <= secondaryClearance;
+    const routes = laneCandidates.flatMap(lane => {
+      const laneDistance = useEndpointPreferredLane
+        ? Math.min(...sourcePreferredLanes.map(preferred => Math.abs(lane - preferred))) * 2 +
+          Math.min(...targetPreferredLanes.map(preferred => Math.abs(lane - preferred)))
+        : Math.abs(lane - directLane);
+      const baseRoute = {
+        laneDistance,
+        points: [
+          from,
+          { x: from.x, y: sourceExitY },
+          { x: lane, y: sourceExitY },
+          { x: lane, y: targetEntryY },
+          { x: to.x, y: targetEntryY },
+          to
+        ]
+      };
+      if (!targetBox || lane < targetBox.left || lane > targetBox.right) return [baseRoute];
+
+      const targetSkirtY =
+        targetEntryY <= targetBox.top ? targetBox.bottom + primaryClearance : targetBox.top - primaryClearance;
+      return [
+        baseRoute,
+        ...[targetBox.left - secondaryClearance, targetBox.right + secondaryClearance].map(detourLane => ({
+          laneDistance,
+          points: [
+            from,
+            { x: from.x, y: sourceExitY },
+            { x: lane, y: sourceExitY },
+            { x: lane, y: targetSkirtY },
+            { x: detourLane, y: targetSkirtY },
+            { x: detourLane, y: targetEntryY },
+            { x: to.x, y: targetEntryY },
+            to
+          ]
+        }))
+      ];
+    });
     return chooseBestSnappedRoute(routes, fromId, toId, nodeBoxes);
   }
 
@@ -612,6 +664,33 @@ function uniqueSortedNumbers(values: number[]): number[] {
   return result;
 }
 
+function getPairGapLaneCandidates(boxes: NodeBox[], direction: LayoutDirection): number[] {
+  const candidates: number[] = [];
+  for (let leftIndex = 0; leftIndex < boxes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < boxes.length; rightIndex += 1) {
+      const left = boxes[leftIndex];
+      const right = boxes[rightIndex];
+      if (direction === 'horizontal') {
+        const overlapsPrimaryAxis = left.right >= right.left && right.right >= left.left;
+        if (!overlapsPrimaryAxis) continue;
+        const upper = left.bottom <= right.top ? left : right.bottom <= left.top ? right : undefined;
+        const lower = upper === left ? right : upper === right ? left : undefined;
+        if (!upper || !lower) continue;
+        candidates.push(upper.bottom + (lower.top - upper.bottom) / 2);
+        continue;
+      }
+
+      const overlapsPrimaryAxis = left.bottom >= right.top && right.bottom >= left.top;
+      if (!overlapsPrimaryAxis) continue;
+      const leading = left.right <= right.left ? left : right.right <= left.left ? right : undefined;
+      const trailing = leading === left ? right : leading === right ? left : undefined;
+      if (!leading || !trailing) continue;
+      candidates.push(leading.right + (trailing.left - leading.right) / 2);
+    }
+  }
+  return candidates;
+}
+
 function getDraggedRouteLaneCandidates(
   from: Point,
   to: Point,
@@ -631,6 +710,7 @@ function getDraggedRouteLaneCandidates(
     for (const box of boxes) {
       candidates.push(box.top - secondary, box.bottom + secondary);
     }
+    candidates.push(...getPairGapLaneCandidates(boxes, direction));
     for (let index = 1; index < boxes.length; index += 1) {
       const previous = boxes[index - 1];
       const current = boxes[index];
@@ -648,6 +728,7 @@ function getDraggedRouteLaneCandidates(
   for (const box of boxes) {
     candidates.push(box.left - secondary, box.right + secondary);
   }
+  candidates.push(...getPairGapLaneCandidates(boxes, direction));
   for (let index = 1; index < boxes.length; index += 1) {
     const previous = boxes[index - 1];
     const current = boxes[index];
@@ -703,6 +784,142 @@ function routeFromDraggedControl(
   };
 }
 
+function valueInsideRange(value: number, min: number, max: number): boolean {
+  return value >= min && value <= max;
+}
+
+function segmentCrossesBoxPrimaryAxis(start: number, end: number, min: number, max: number): boolean {
+  return Math.min(start, end) < max && Math.max(start, end) > min;
+}
+
+function routeFromDraggedControlCandidates(
+  from: Point,
+  to: Point,
+  direction: LayoutDirection,
+  pointer: Point,
+  fromId: NodeId,
+  toId: NodeId,
+  nodeBoxes: Map<NodeId, NodeBox>,
+  spacing: RouteSpacing,
+  anchors?: EdgeAnchors,
+  endpointOffsets?: DraggedRouteEndpointOffsets
+): EdgeRoute[] {
+  const routes: EdgeRoute[] = [];
+  const { secondary } = getRouteSpacingOffsets(spacing);
+
+  if (direction === 'horizontal') {
+    const distance = Math.max(48, Math.abs(to.x - from.x));
+    const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
+    const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
+    const sourceOffset = getDraggedRouteOffset(distance, endpointOffsets?.source);
+    const targetOffset = getDraggedRouteOffset(distance, endpointOffsets?.target);
+    const entryX = from.x + sourceSign * sourceOffset;
+    const exitX = to.x + targetSign * targetOffset;
+    const lane = pointer.y;
+    const sourceBox = nodeBoxes.get(fromId);
+    const targetBox = nodeBoxes.get(toId);
+    const sourceDetours =
+      sourceBox &&
+      valueInsideRange(lane, sourceBox.top, sourceBox.bottom) &&
+      segmentCrossesBoxPrimaryAxis(entryX, exitX, sourceBox.left, sourceBox.right)
+        ? [sourceBox.top - secondary, sourceBox.bottom + secondary]
+        : [undefined];
+    const targetDetours =
+      targetBox &&
+      valueInsideRange(lane, targetBox.top, targetBox.bottom) &&
+      segmentCrossesBoxPrimaryAxis(entryX, exitX, targetBox.left, targetBox.right)
+        ? [targetBox.top - secondary, targetBox.bottom + secondary]
+        : [undefined];
+    const sourceSkirtX =
+      sourceBox && entryX >= sourceBox.right
+        ? sourceBox.left - sourceOffset
+        : (sourceBox?.right ?? entryX) + sourceOffset;
+    const targetSkirtX =
+      targetBox && exitX <= targetBox.left ? targetBox.right + targetOffset : (targetBox?.left ?? exitX) - targetOffset;
+
+    for (const sourceDetour of sourceDetours) {
+      for (const targetDetour of targetDetours) {
+        routes.push({
+          points: compactRoutePoints([
+            { x: entryX, y: from.y },
+            ...(typeof sourceDetour === 'number'
+              ? [
+                  { x: entryX, y: sourceDetour },
+                  { x: sourceSkirtX, y: sourceDetour },
+                  { x: sourceSkirtX, y: lane }
+                ]
+              : [{ x: entryX, y: lane }]),
+            ...(typeof targetDetour === 'number'
+              ? [
+                  { x: targetSkirtX, y: lane },
+                  { x: targetSkirtX, y: targetDetour },
+                  { x: exitX, y: targetDetour }
+                ]
+              : [{ x: exitX, y: lane }]),
+            { x: exitX, y: to.y }
+          ])
+        });
+      }
+    }
+    return routes;
+  }
+
+  const distance = Math.max(48, Math.abs(to.y - from.y));
+  const sourceSign = getRouteTangentSign(anchors?.from, 'source', direction, from, to);
+  const targetSign = getRouteTangentSign(anchors?.to, 'target', direction, from, to);
+  const sourceOffset = getDraggedRouteOffset(distance, endpointOffsets?.source);
+  const targetOffset = getDraggedRouteOffset(distance, endpointOffsets?.target);
+  const entryY = from.y + sourceSign * sourceOffset;
+  const exitY = to.y + targetSign * targetOffset;
+  const lane = pointer.x;
+  const sourceBox = nodeBoxes.get(fromId);
+  const targetBox = nodeBoxes.get(toId);
+  const sourceDetours =
+    sourceBox &&
+    valueInsideRange(lane, sourceBox.left, sourceBox.right) &&
+    segmentCrossesBoxPrimaryAxis(entryY, exitY, sourceBox.top, sourceBox.bottom)
+      ? [sourceBox.left - secondary, sourceBox.right + secondary]
+      : [undefined];
+  const targetDetours =
+    targetBox &&
+    valueInsideRange(lane, targetBox.left, targetBox.right) &&
+    segmentCrossesBoxPrimaryAxis(entryY, exitY, targetBox.top, targetBox.bottom)
+      ? [targetBox.left - secondary, targetBox.right + secondary]
+      : [undefined];
+  const sourceSkirtY =
+    sourceBox && entryY >= sourceBox.bottom
+      ? sourceBox.top - sourceOffset
+      : (sourceBox?.bottom ?? entryY) + sourceOffset;
+  const targetSkirtY =
+    targetBox && exitY <= targetBox.top ? targetBox.bottom + targetOffset : (targetBox?.top ?? exitY) - targetOffset;
+
+  for (const sourceDetour of sourceDetours) {
+    for (const targetDetour of targetDetours) {
+      routes.push({
+        points: compactRoutePoints([
+          { x: from.x, y: entryY },
+          ...(typeof sourceDetour === 'number'
+            ? [
+                { x: sourceDetour, y: entryY },
+                { x: sourceDetour, y: sourceSkirtY },
+                { x: lane, y: sourceSkirtY }
+              ]
+            : [{ x: lane, y: entryY }]),
+          ...(typeof targetDetour === 'number'
+            ? [
+                { x: lane, y: targetSkirtY },
+                { x: targetDetour, y: targetSkirtY },
+                { x: targetDetour, y: exitY }
+              ]
+            : [{ x: lane, y: exitY }]),
+          { x: to.x, y: exitY }
+        ])
+      });
+    }
+  }
+  return routes;
+}
+
 export function routeFromSnappedDraggedControl(
   from: Point,
   to: Point,
@@ -717,18 +934,30 @@ export function routeFromSnappedDraggedControl(
 ): EdgeRoute {
   const candidates = getDraggedRouteLaneCandidates(from, to, direction, pointer, nodeBoxes, spacing, false);
   const pointerLane = direction === 'horizontal' ? pointer.y : pointer.x;
-  const snappedCandidates = candidates.map(lane => {
+  const snappedCandidates = candidates.flatMap(lane => {
     const snappedPointer = direction === 'horizontal' ? { x: pointer.x, y: lane } : { x: lane, y: pointer.y };
-    const route = routeFromDraggedControl(from, to, direction, snappedPointer, anchors, endpointOffsets);
-    const points = [from, ...route.points, to];
-    return {
-      route,
-      laneDistance: Math.abs(lane - pointerLane),
-      obstacleCount: routeObstacleCount(points, fromId, toId, nodeBoxes),
-      clearancePenalty: Math.min(50000, routeClearancePenalty(points, fromId, toId, nodeBoxes)),
-      turns: routeTurnCount(points),
-      length: routeLength(points)
-    };
+    return routeFromDraggedControlCandidates(
+      from,
+      to,
+      direction,
+      snappedPointer,
+      fromId,
+      toId,
+      nodeBoxes,
+      spacing,
+      anchors,
+      endpointOffsets
+    ).map(route => {
+      const points = [from, ...route.points, to];
+      return {
+        route,
+        laneDistance: Math.abs(lane - pointerLane),
+        obstacleCount: routeObstacleCount(points, fromId, toId, nodeBoxes),
+        clearancePenalty: Math.min(50000, routeClearancePenalty(points, fromId, toId, nodeBoxes)),
+        turns: routeTurnCount(points),
+        length: routeLength(points)
+      };
+    });
   });
   const scoredRoutes = snappedCandidates.sort(
     (left, right) =>

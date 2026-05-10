@@ -35,6 +35,17 @@ describe('routing geometry helpers', () => {
 
     expect(routeObstacleCount(through, 'source', 'target', boxes)).toBe(1);
     expect(routeObstacleCount(around, 'source', 'target', boxes)).toBe(0);
+    expect(
+      routeObstacleCount(
+        [
+          { x: 0, y: 0 },
+          { x: 110, y: 0 }
+        ],
+        'source',
+        'target',
+        boxes
+      )
+    ).toBe(2);
     expect(routeClearancePenalty(through, 'source', 'target', boxes)).toBeGreaterThan(
       routeClearancePenalty(around, 'source', 'target', boxes)
     );
